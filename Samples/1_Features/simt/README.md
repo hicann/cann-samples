@@ -177,7 +177,7 @@ inline __simt_vf__ __aicore__ __launch_bounds__(MAX_THREADNUM) void gather_funct
     }
 }
 ```
-注：__launch_bounds__是个可选参数，用于控制这个simt函数可启动的最大线程数。其影响每个线程可获取的寄存器数量，开的线程越多，每个线程可使用的寄存器越少。改参数若不设置，默认为1024。
+注：__launch_bounds__是个可选参数，用于控制这个simt函数可启动的最大线程数。其影响每个线程可获取的寄存器数量，开的线程越多，每个线程可使用的寄存器越少。该参数若不设置，默认为1024。
 * gather的simt函数调用
 ```
 template <typename DATA_TYPE, typename INDICES_TYPE>
@@ -193,4 +193,4 @@ __global__ __aicore__ __vector__ void gather(__gm__ DATA_TYPE *x, __gm__ INDICES
 ```
 
 ## 4. 结论
-SIMT支持线程**直接访问Global Memory**, 允许一条指令对多数据分开寻址，无需开发者费力将数据拼凑成合适的矢量，并嗯那个通过硬件自动的warp调度来完成计算和访存的流水掩盖，在使用上比SIMD更加灵活，非常适合处理离散访存等场景。
+SIMT支持线程**直接访问Global Memory**, 允许一条指令对多数据分开寻址，无需开发者费力将数据拼凑成合适的矢量，并通过硬件自动的warp调度来完成计算和访存的流水掩盖，在使用上比SIMD更加灵活，非常适合处理离散访存等场景。
