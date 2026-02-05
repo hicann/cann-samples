@@ -1,0 +1,8 @@
+eigen:
+  version: 3.4.0
+googletest:
+  version: v1.14.0
+makeself:
+  version: release-2.5.0-patch1
+json:
+  version: v3.11.3
