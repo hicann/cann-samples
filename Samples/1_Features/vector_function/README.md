@@ -208,3 +208,7 @@ __aicore__ void gelu_compute(...) {
 2. 移除PipeBarrier（8个→0个）
 3. 寄存器重用（xReg多次使用）
 4. 硬件自动管理指令依赖
+
+## 支持架构
+
+NPU ARCH 3510

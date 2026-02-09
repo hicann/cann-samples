@@ -9,7 +9,9 @@ ops-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture 
 
 ## 📝环境部署
 
-单击[下载链接](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/9.0.0/)，根据实际产品型号和环境架构，获取```Ascend-cann-toolkit_${cann_version}_linux-${arch}.run```、```Ascend-cann-${soc_name}-ops_${cann_version}_linux-${arch}.run```。其中ops包是运行态依赖，若仅编译算子，可以不安装此包。
+**请获取最新版本的CANN toolkit包以获得完整的体验。**
+
+单击[下载链接](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/9.0.0/)，根据实际环境架构，获取```Ascend-cann-toolkit_${cann_version}_linux-${arch}.run```。
 
 1. **安装社区CANN toolkit包**
 
@@ -22,20 +24,6 @@ ops-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture 
     - \$\{cann\_version\}：表示CANN包版本号。
     - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
     - \$\{install\_path\}：表示指定安装路径，默认安装在`/usr/local/Ascend`目录。
-
-2. **安装社区版CANN ops包（运行态依赖）**
-
-    运行算子时必须安装本包，若仅编译算子，可跳过本操作。
-
-    ```bash
-    # 确保安装包具有可执行权限
-    chmod +x Ascend-cann-${soc_name}-ops_${cann_version}_linux-${arch}.run
-    # 安装命令
-    ./Ascend-cann-${soc_name}-ops_${cann_version}_linux-${arch}.run --install --install-path=${install_path}
-    ```
-    
-    - \$\{soc\_name\}：表示NPU型号名称，即\$\{soc\_version\}删除“ascend”后剩余的内容。
-    - \$\{install\_path\}：表示指定安装路径，需要与toolkit包安装在相同路径，默认安装在`/usr/local/Ascend`目录。
 
 ## ⚡️快速入门
 

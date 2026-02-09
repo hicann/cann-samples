@@ -194,3 +194,7 @@ __global__ __aicore__ __vector__ void gather(__gm__ DATA_TYPE *x, __gm__ INDICES
 
 ## 4. 结论
 SIMT支持线程**直接访问Global Memory**, 允许一条指令对多数据分开寻址，无需开发者费力将数据拼凑成合适的矢量，并通过硬件自动的warp调度来完成计算和访存的流水掩盖，在使用上比SIMD更加灵活，非常适合处理离散访存等场景。
+
+## 5. 支持架构
+
+NPU ARCH 3510
