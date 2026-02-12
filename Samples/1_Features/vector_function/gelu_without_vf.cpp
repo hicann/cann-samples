@@ -20,7 +20,7 @@
 #include <vector>
 #include <random>
 
-__aicore__ void gelu_compute(const AscendC::LocalTensor<float> &xLocal, const AscendC::LocalTensor<float> &yLocal,
+__aicore__ inline void gelu_compute(const AscendC::LocalTensor<float> &xLocal, const AscendC::LocalTensor<float> &yLocal,
     const AscendC::LocalTensor<float> &xCube, const AscendC::LocalTensor<float> &tLocal, int64_t n)
 {
     const float NEG_SQRT_EIGHT_OVER_PI = -1.595769121 * 0.044715;
@@ -43,7 +43,7 @@ __aicore__ void gelu_compute(const AscendC::LocalTensor<float> &xLocal, const As
     AscendC::PipeBarrier<PIPE_V>();
 }
 
-__global__ __aicore__ void gelu_kernel(
+__global__ __aicore__ __vector__ void gelu_kernel(
     GM_ADDR x, GM_ADDR y, int64_t totalLength, int64_t blockLength, uint32_t tileSize)
 {
     constexpr static int64_t PIPELINE_DEPTH = 2;
@@ -155,13 +155,13 @@ int main()
     aclrtMemcpy(d_input, size, input.data(), size, ACL_MEMCPY_HOST_TO_DEVICE);
 
     // Call Gelu Kernel
-    int64_t blockDim, blockLength, tileSize;
-    blockDim = 1;
+    int64_t numBlocks, blockLength, tileSize;
+    numBlocks = 1;
     blockLength = numElements;
     tileSize = 32 * 1024;
     aclrtSynchronizeStream(stream);
     for (int64_t i = 0; i < 5; ++i) {
-        gelu_kernel<<<blockDim, nullptr, stream>>>(d_input, d_result, numElements, blockLength, tileSize);
+        gelu_kernel<<<numBlocks, nullptr, stream>>>(d_input, d_result, numElements, blockLength, tileSize);
     }
     aclrtSynchronizeStream(stream);
 

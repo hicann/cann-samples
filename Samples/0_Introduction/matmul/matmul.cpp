@@ -384,8 +384,8 @@ int main(int argc, char* argv[])
     // 调用算子Kernel
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     CHECK_COND(ascendcPlatform != nullptr, "get ascendcPlatform failed.", return 1);
-    uint32_t blockDim = ascendcPlatform->GetCoreNumAic();
-    matmul::MatmulKernel<float><<<blockDim, nullptr, stream>>>(deviceInput, deviceWeight, deviceOutput, m, k, n);
+    uint32_t numBlocks = ascendcPlatform->GetCoreNumAic();
+    matmul::MatmulKernel<float><<<numBlocks, nullptr, stream>>>(deviceInput, deviceWeight, deviceOutput, m, k, n);
 
     // 同步等待算子执行结束
     ret = aclrtSynchronizeStream(stream);

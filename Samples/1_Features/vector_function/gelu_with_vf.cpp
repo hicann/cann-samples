@@ -20,40 +20,44 @@
 #include <vector>
 #include <random>
 
-__aicore__ void gelu_compute(const AscendC::LocalTensor<float> &xLocal, const AscendC::LocalTensor<float> &yLocal,
-    const AscendC::LocalTensor<float> &xCube, const AscendC::LocalTensor<float> &tLocal, int64_t n)
+__simd_vf__ inline void gelu_vf(__ubuf__ float *xAddr, __ubuf__ float *yAddr, uint32_t n, uint32_t loopNum)
 {
     const float NEG_SQRT_EIGHT_OVER_PI = -1.595769121 * 0.044715;
     const float TANH_APPROX_FACTOR = 1 / 0.044715;
-    uint32_t vectorLength = AscendC::VECTOR_REG_WIDTH / sizeof(float);
-    uint32_t loopNum = (n + vectorLength - 1) / vectorLength;
-    __VEC_SCOPE__
-    {
-        __ubuf__ float *xAddr = (__ubuf__ float *)xLocal.GetPhyAddr();
-        __ubuf__ float *yAddr = (__ubuf__ float *)yLocal.GetPhyAddr();
-        AscendC::MicroAPI::MaskReg pMask;
-        AscendC::MicroAPI::RegTensor<float> xReg, yReg, cubeReg, tReg;
-        uint32_t count;
-        count = static_cast<uint32_t>(n);
-        for (uint16_t i = 0; i < loopNum; ++i) {
-            pMask = AscendC::MicroAPI::UpdateMask<float>(count);
-            AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::LoadDist::DIST_NORM>(
-                xReg, (__ubuf__ float *)xAddr + i * vectorLength);
-            AscendC::MicroAPI::Mul(cubeReg, xReg, xReg, pMask);
-            AscendC::MicroAPI::Mul(cubeReg, cubeReg, xReg, pMask);
-            AscendC::MicroAPI::Muls(tReg, xReg, TANH_APPROX_FACTOR, pMask);
-            AscendC::MicroAPI::Add(cubeReg, cubeReg, tReg, pMask);
-            AscendC::MicroAPI::Muls(cubeReg, cubeReg, NEG_SQRT_EIGHT_OVER_PI, pMask);
-            AscendC::MicroAPI::Exp(cubeReg, cubeReg, pMask);
-            AscendC::MicroAPI::Adds(cubeReg, cubeReg, 1.0f, pMask);
-            AscendC::MicroAPI::Div(yReg, xReg, cubeReg, pMask);
-            AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::StoreDist::DIST_NORM_B32>(
-                (__ubuf__ float *)yAddr + i * vectorLength, yReg, pMask);
-        }
+    constexpr static uint32_t vectorLength = AscendC::VECTOR_REG_WIDTH / sizeof(float);
+    AscendC::MicroAPI::MaskReg pMask;
+    AscendC::MicroAPI::RegTensor<float> xReg, yReg, cubeReg, tReg;
+    uint32_t count;
+    count = static_cast<uint32_t>(n);
+    
+    for (uint16_t i = 0; i < loopNum; ++i) {
+        pMask = AscendC::MicroAPI::UpdateMask<float>(count);
+        AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::LoadDist::DIST_NORM>(
+            xReg, (__ubuf__ float *)xAddr + i * vectorLength);
+        AscendC::MicroAPI::Mul(cubeReg, xReg, xReg, pMask);
+        AscendC::MicroAPI::Mul(cubeReg, cubeReg, xReg, pMask);
+        AscendC::MicroAPI::Muls(tReg, xReg, TANH_APPROX_FACTOR, pMask);
+        AscendC::MicroAPI::Add(cubeReg, cubeReg, tReg, pMask);
+        AscendC::MicroAPI::Muls(cubeReg, cubeReg, NEG_SQRT_EIGHT_OVER_PI, pMask);
+        AscendC::MicroAPI::Exp(cubeReg, cubeReg, pMask);
+        AscendC::MicroAPI::Adds(cubeReg, cubeReg, 1.0f, pMask);
+        AscendC::MicroAPI::Div(yReg, xReg, cubeReg, pMask);
+        AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::StoreDist::DIST_NORM_B32>(
+            (__ubuf__ float *)yAddr + i * vectorLength, yReg, pMask);
     }
 }
 
-__global__ __aicore__ void gelu_kernel(
+__aicore__ inline void gelu_compute(const AscendC::LocalTensor<float> &xLocal, const AscendC::LocalTensor<float> &yLocal,
+    const AscendC::LocalTensor<float> &xCube, const AscendC::LocalTensor<float> &tLocal, int64_t n)
+{
+    constexpr static uint32_t vectorLength = AscendC::VECTOR_REG_WIDTH / sizeof(float);
+    uint32_t loopNum = (n + vectorLength - 1) / vectorLength;
+    __ubuf__ float *xAddr = (__ubuf__ float *)xLocal.GetPhyAddr();
+    __ubuf__ float *yAddr = (__ubuf__ float *)yLocal.GetPhyAddr();
+    gelu_vf(xAddr, yAddr, static_cast<uint32_t>(n), loopNum);
+}
+
+__global__ __aicore__ __vector__ void gelu_kernel(
     GM_ADDR x, GM_ADDR y, int64_t totalLength, int64_t blockLength, uint32_t tileSize)
 {
     constexpr static int64_t PIPELINE_DEPTH = 2;
@@ -165,13 +169,13 @@ int main()
     aclrtMemcpy(d_input, size, input.data(), size, ACL_MEMCPY_HOST_TO_DEVICE);
 
     // Call Gelu Kernel
-    int64_t blockDim, blockLength, tileSize;
-    blockDim = 1;
+    int64_t numBlocks, blockLength, tileSize;
+    numBlocks = 1;
     blockLength = numElements;
     tileSize = 32 * 1024;
     aclrtSynchronizeStream(stream);
     for (int64_t i = 0; i < 5; ++i) {
-        gelu_kernel<<<blockDim, nullptr, stream>>>(d_input, d_result, numElements, blockLength, tileSize);
+        gelu_kernel<<<numBlocks, nullptr, stream>>>(d_input, d_result, numElements, blockLength, tileSize);
     }
     aclrtSynchronizeStream(stream);
 

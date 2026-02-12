@@ -113,7 +113,7 @@ __global__ __aicore__ void quantize_custom(GM_ADDR x, GM_ADDR scale, GM_ADDR off
 
 int32_t main(int32_t argc, char *argv[])
 {
-    uint32_t blockDim = 1;
+    uint32_t numBlocks = 1;
     size_t inputByteSize = static_cast<size_t>(1) * 2048 * sizeof(uint32_t);
     size_t scaleByteSize = static_cast<size_t>(1) * 2048 * sizeof(uint32_t);
     size_t offsetByteSize = static_cast<size_t>(1) * 2048 * sizeof(uint32_t);
@@ -145,7 +145,7 @@ int32_t main(int32_t argc, char *argv[])
     aclrtMemcpy(scaleDevice, inputByteSize, scaleHost, inputByteSize, ACL_MEMCPY_HOST_TO_DEVICE);
     aclrtMemcpy(offsetDevice, inputByteSize, offsetHost, inputByteSize, ACL_MEMCPY_HOST_TO_DEVICE);
 
-    quantize_custom<<<blockDim, nullptr, stream>>>(xDevice, scaleDevice, offsetDevice, yDevice);
+    quantize_custom<<<numBlocks, nullptr, stream>>>(xDevice, scaleDevice, offsetDevice, yDevice);
     aclrtSynchronizeStream(stream);
 
     aclrtMemcpy(yHost, outputByteSize, yDevice, outputByteSize, ACL_MEMCPY_DEVICE_TO_HOST);
