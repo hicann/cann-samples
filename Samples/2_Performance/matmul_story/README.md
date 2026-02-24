@@ -106,7 +106,7 @@ AI Core内部核心组件及组件功能详细说明如下表。
     -   BT Buffer：存放矩阵计算中Bias数据，Cube随路Bias使用。
     -   FB Buffer：存放量化、激活类参数，FixPipe随路计算使用。
     -   L0A Buffer：Cube计算，A矩阵输入。
-    -   L0B Buffer：Cube计算，A矩阵输入。
+    -   L0B Buffer：Cube计算，B矩阵输入。
     -   L0C Buffer：Cube计算，C矩阵输出。
 
 -   **各存储单元推荐使用的数据排布格式**
