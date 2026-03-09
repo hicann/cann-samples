@@ -154,7 +154,7 @@ __aicore__ inline void QuantMatmulMxKernelAswtImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS
     }
     // 每个核依次处理 block
     while (bs.GetTileIdx(blockIdx)) {
-        // 获取当前处理的 blokc 的 shape
+        // 获取当前处理的 block 的 shape
         BlockShape singleShape = bs.GetBlockShape(blockIdx);
         if (Get<MNK_M>(singleShape) <= 0 || Get<MNK_N>(singleShape) <= 0) {
             return;

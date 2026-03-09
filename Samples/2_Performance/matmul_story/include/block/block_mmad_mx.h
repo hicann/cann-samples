@@ -310,8 +310,8 @@ public:
         }
         // s32场景要对齐到2 因此是align(nl1Align / 8, 2)
         uint64_t btAlign = AscendC::BLOCK_CUBE / BIAS_C0;
-        uint16_t bustLenth = Align(nl1Align / BIAS_C0, btAlign);
-        AscendC::DataCopyParams biasParam{1, static_cast<uint16_t>(bustLenth), 0, 0};
+        uint16_t burstLength = Align(nl1Align / BIAS_C0, btAlign);
+        AscendC::DataCopyParams biasParam{1, static_cast<uint16_t>(burstLength), 0, 0};
         // 当dstlocal位于C2时，C2中至少为fp32*16
         AscendC::DataCopy(biasBt, biasL1Local, biasParam);
     }

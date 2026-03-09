@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file quant_batch_matmul_v3_tiling_data.h
+ * \file quant_matmul_tiling_data.h
  * \brief
  */
 
