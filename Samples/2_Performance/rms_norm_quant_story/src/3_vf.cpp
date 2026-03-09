@@ -65,25 +65,25 @@ static constexpr int64_t BLOCK_BYTES = 32;
 static constexpr int MAX_ERROR_ELEM_NUM = 100;
 static constexpr uint32_t VL_FLOAT_SIZE = 256 / sizeof(float);
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB162B32 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::UNKNOWN,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
-    AscendC::RoundMode::UNKNOWN,
+static constexpr MicroAPI::CastTrait castTraitB162B32 = {
+    MicroAPI::RegLayout::ZERO,
+    MicroAPI::SatMode::UNKNOWN,
+    MicroAPI::MaskMergeMode::ZEROING,
+    RoundMode::UNKNOWN,
 };
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB322Int16 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::NO_SAT,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
-    AscendC::RoundMode::CAST_TRUNC,
+static constexpr MicroAPI::CastTrait castTraitB322Int16 = {
+    MicroAPI::RegLayout::ZERO,
+    MicroAPI::SatMode::NO_SAT,
+    MicroAPI::MaskMergeMode::ZEROING,
+    RoundMode::CAST_TRUNC,
 };
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB162Int8 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::NO_SAT,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
-    AscendC::RoundMode::CAST_TRUNC,
+static constexpr MicroAPI::CastTrait castTraitB162Int8 = {
+    MicroAPI::RegLayout::ZERO,
+    MicroAPI::SatMode::NO_SAT,
+    MicroAPI::MaskMergeMode::ZEROING,
+    RoundMode::CAST_TRUNC,
 };
 
 struct RmsnormQuantTilingData {
@@ -269,12 +269,12 @@ public:
         MicroAPI::MaskReg preg = MicroAPI::CreateMask<float>();
         uint32_t r = tilingData_->r;
 
-        DataCopy<float, AscendC::MicroAPI::LoadDist::DIST_BRC_B32>(vregRms, rmsAddr);
+        DataCopy<float, MicroAPI::LoadDist::DIST_BRC_B32>(vregRms, rmsAddr);
         for (uint16_t i = 0; i < vfLoopRNum_; i++) {
             preg = MicroAPI::UpdateMask<float>(r);
-            AscendC::MicroAPI::DataCopy(vregX, xAddr + i * VL_FLOAT_SIZE);
-            AscendC::MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_FLOAT_SIZE);
-            AscendC::MicroAPI::DataCopy(vregBeta, betaAddr + i * VL_FLOAT_SIZE);
+            MicroAPI::DataCopy(vregX, xAddr + i * VL_FLOAT_SIZE);
+            MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_FLOAT_SIZE);
+            MicroAPI::DataCopy(vregBeta, betaAddr + i * VL_FLOAT_SIZE);
             MicroAPI::Div(vregNorm, vregX, vregRms, preg);
             MicroAPI::Mul(vregNorm, vregNorm, vregGamma, preg);
             MicroAPI::Add(vregNorm, vregNorm, vregBeta, preg);

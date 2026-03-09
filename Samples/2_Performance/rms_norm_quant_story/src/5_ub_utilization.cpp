@@ -60,7 +60,7 @@ typedef int8_t offsetType;
 typedef int8_t outputType;
 
 static constexpr size_t BUF_NUM = 2;
-static constexpr size_t BLOCK_NUM = 1;
+static constexpr size_t BLOCK_NUM = 64;
 static constexpr int64_t BLOCK_BYTES = 32;
 static constexpr int64_t UB_SIZE = 253952;
 static constexpr uint32_t BLOCK_FLOAT_SIZE = BLOCK_BYTES / sizeof(float);
@@ -68,25 +68,25 @@ static constexpr uint32_t BLOCK_INT8_SIZE = BLOCK_BYTES / sizeof(int8_t);
 static constexpr uint32_t VL_FLOAT_SIZE = 256 / sizeof(float);
 static constexpr int MAX_ERROR_ELEM_NUM = 100;
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB162B32 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::UNKNOWN,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
-    AscendC::RoundMode::UNKNOWN,
+static constexpr MicroAPI::CastTrait castTraitB162B32 = {
+    MicroAPI::RegLayout::ZERO,
+    MicroAPI::SatMode::UNKNOWN,
+    MicroAPI::MaskMergeMode::ZEROING,
+    RoundMode::UNKNOWN,
 };
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB322Int16 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::NO_SAT,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
-    AscendC::RoundMode::CAST_TRUNC,
+static constexpr MicroAPI::CastTrait castTraitB322Int16 = {
+    MicroAPI::RegLayout::ZERO,
+    MicroAPI::SatMode::NO_SAT,
+    MicroAPI::MaskMergeMode::ZEROING,
+    RoundMode::CAST_TRUNC,
 };
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB162Int8 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::NO_SAT,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
-    AscendC::RoundMode::CAST_TRUNC,
+static constexpr MicroAPI::CastTrait castTraitB162Int8 = {
+    MicroAPI::RegLayout::ZERO,
+    MicroAPI::SatMode::NO_SAT,
+    MicroAPI::MaskMergeMode::ZEROING,
+    RoundMode::CAST_TRUNC,
 };
 
 struct RmsnormQuantTilingData {
@@ -194,7 +194,8 @@ public:
         pipe_.InitBuffer(xBuf_, rAlign_ * ubFactor_ * sizeof(float));
         pipe_.InitBuffer(gammaBuf_, rAlign_ * sizeof(float));
         pipe_.InitBuffer(betaBuf_, rAlign_ * sizeof(float));
-        pipe_.InitBuffer(rmsBuf_, ubFactor_ * BLOCK_BYTES);
+        pipe_.InitBuffer(rmsBuf_, AlignBytes(ubFactor_, sizeof(float)));
+        
 
         scale_ = static_cast<float>(scaleGm_.GetValue(0));
         offset_ = static_cast<float>(offsetGm_.GetValue(0));
@@ -272,7 +273,7 @@ public:
             MicroAPI::Muls(vregRms, vregReduceSum, rInv_, preg);
             MicroAPI::Adds(vregRms, vregRms, tilingData_->epsilon, preg);
             MicroAPI::Sqrt(vregRms, vregRms, preg);
-            MicroAPI::DataCopy(rmsAddr + loopA * BLOCK_FLOAT_SIZE, vregRms, preg);
+            MicroAPI::DataCopy<float, MicroAPI::StoreDist::DIST_FIRST_ELEMENT_B32>(rmsAddr + loopA, vregRms, preg);
         }
     }
 
@@ -286,12 +287,12 @@ public:
 
         for (uint16_t loopA = 0; loopA < ubFactor; loopA++) {
             uint32_t r = tilingData_->r;
-            DataCopy<float, AscendC::MicroAPI::LoadDist::DIST_BRC_B32>(vregRms, rmsAddr + loopA * BLOCK_FLOAT_SIZE);
+            DataCopy<float, MicroAPI::LoadDist::DIST_BRC_B32>(vregRms, rmsAddr + loopA);
             for (uint16_t i = 0; i < vfLoopRNum_; i++) {
                 preg = MicroAPI::UpdateMask<float>(r);
-                AscendC::MicroAPI::DataCopy(vregX, xAddr + loopA * rAlign_ + i * VL_FLOAT_SIZE);
-                AscendC::MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_FLOAT_SIZE);
-                AscendC::MicroAPI::DataCopy(vregBeta, betaAddr + i * VL_FLOAT_SIZE);
+                MicroAPI::DataCopy(vregX, xAddr + loopA * rAlign_ + i * VL_FLOAT_SIZE);
+                MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_FLOAT_SIZE);
+                MicroAPI::DataCopy(vregBeta, betaAddr + i * VL_FLOAT_SIZE);
                 MicroAPI::Div(vregNorm, vregX, vregRms, preg);
                 MicroAPI::Mul(vregNorm, vregNorm, vregGamma, preg);
                 MicroAPI::Add(vregNorm, vregNorm, vregBeta, preg);
@@ -448,23 +449,29 @@ int64_t calcMaxUbFactor(size_t r)
      *   xInQue:  rAlign * maxUbFactor * sizeof(DATA_TYPE) * BUF_NUM
      *   yOutQue: rAlign * maxUbFactor * sizeof(OUTPUT_DTYPE) * BUF_NUM
      *   xBuf:    rAlign * maxUbFactor * sizeof(float)
-     *   rmsBuf:  maxUbFactor * BLOCK_BYTES
+     *   rmsBuf:  maxUbFactor * sizeof(float)
      * 与maxUbFactor无关的固定部分:
      *   gammaInQue: rAlign * sizeof(DATA_TYPE)
      *   betaInQue:  rAlign * sizeof(DATA_TYPE)
      *   gammaBuf:   rAlign * sizeof(float)
      *   betaBuf:    rAlign * sizeof(float)
+     *   rmsBuf:     BLOCK_BYTES
+     * 注:
+     *  rmsBuf的大小实际是(maxUbFactor * sizeof(float) + BLOCK_BYTES - 1) / BLOCK_BYTES * BLOCK_BYTES，
+     *  为了方便tiling计算简化为:maxUbFactor * sizeof(float) + BLOCK_BYTES
      */
 
     int64_t rAlign = (r + BLOCK_BYTES - 1) / BLOCK_BYTES * BLOCK_BYTES;
-    // 与maxUbFactor线性相关的rAlign系数
-    constexpr int64_t linearCoefPerFactor = sizeof(dataType) * BUF_NUM + sizeof(outputType) * BUF_NUM + sizeof(float);
-    constexpr int64_t rmsBufCoef = BLOCK_BYTES;
+    // 与maxUbFactor线性相关的系数 (xBuf + rmsBuf各有一个sizeof(float))
+    constexpr int64_t linearCoefPerFactor =
+        sizeof(dataType) * BUF_NUM + sizeof(outputType) * BUF_NUM + sizeof(float) + sizeof(float);
+    // 固定部分
+    constexpr int64_t fixedPart = BLOCK_BYTES;
     // 固定部分rAlign系数
     constexpr int64_t fixedCoef = sizeof(dataType) * 2 + sizeof(float) * 2;
 
-    int64_t linearCoef = rAlign * linearCoefPerFactor + rmsBufCoef;
-    int64_t fixedSize = rAlign * fixedCoef;
+    int64_t linearCoef = rAlign * linearCoefPerFactor;
+    int64_t fixedSize = rAlign * fixedCoef + fixedPart;
 
     int64_t maxUbFactor = (UB_SIZE - fixedSize) / linearCoef;
     if (maxUbFactor <= 0) {
