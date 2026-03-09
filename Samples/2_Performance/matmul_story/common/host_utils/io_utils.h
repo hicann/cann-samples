@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include "common_utils.h"
 
-bool ReadFile(const std::string& filePath, size_t& fileSize, void* buffer, size_t bufferSize)
+inline bool ReadFile(const std::string& filePath, size_t& fileSize, void* buffer, size_t bufferSize)
 {
     struct stat sBuf;
     int fileStatus = stat(filePath.data(), &sBuf);
@@ -67,7 +67,7 @@ bool ReadFile(const std::string& filePath, size_t& fileSize, void* buffer, size_
  * @param [in] size: size to write
  * @return write result
  */
-bool WriteFile(const std::string& filePath, const void* buffer, size_t size)
+inline bool WriteFile(const std::string& filePath, const void* buffer, size_t size)
 {
     if (buffer == nullptr) {
         ERROR_LOG("Write file failed. buffer is nullptr");

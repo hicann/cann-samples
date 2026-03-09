@@ -24,12 +24,12 @@
 #include "host_utils/io_utils.h"
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/layout_utils.h"
-#include "../../include/block/block_mmad_mx.h"
-#include "../../include/block/block_scheduler_policy.h"
-#include "../../include/block/block_scheduler_mx.h"
-#include "../../include/kernel/quant_matmul_mx_kernel_aswt_impl.h"
-#include "../../include/policy/dispatch_policy.h"
-#include "../../include/utils/quant_matmul_tiling_data.h"
+#include "block/block_mmad_mx.h"
+#include "block/block_scheduler_policy.h"
+#include "block/block_scheduler_mx.h"
+#include "kernel/quant_matmul_mx_kernel_aswt_impl.h"
+#include "policy/dispatch_policy.h"
+#include "utils/quant_matmul_tiling_data.h"
 
 __global__ __aicore__ void QuantMatmulMxfp4Kernel(
     GM_ADDR dA, GM_ADDR dB, GM_ADDR dScaleA, GM_ADDR dScaleB, GM_ADDR dBias, GM_ADDR dC,
