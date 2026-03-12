@@ -3,10 +3,9 @@ import argparse
 import os
 
 
-def rms_norm_quant_numpy(x, gamma, beta, scale, offset, eps=1e-6):
+def rms_norm_quant_numpy(x, gamma, scale, offset, eps=1e-6):
     x = x.astype(numpy.float32)
     gamma = gamma.astype(numpy.float32)
-    beta = beta.astype(numpy.float32)
     scale = scale.astype(numpy.float32)
     offset = offset.astype(numpy.float32)
 
@@ -15,7 +14,7 @@ def rms_norm_quant_numpy(x, gamma, beta, scale, offset, eps=1e-6):
     rstd = 1 / std
     result_mid = x * rstd
 
-    y = result_mid * gamma + beta
+    y = result_mid * gamma
     y = y * scale + offset
     y_quant = y.clip(-128, 127)
     y_quant = y_quant.astype("int8")
@@ -25,7 +24,6 @@ def rms_norm_quant_numpy(x, gamma, beta, scale, offset, eps=1e-6):
 def gen_input_data(a, r, dtype, output_dir):
     x_shape = (a, r)
     gamma_shape = (r, )
-    beta_shape = (r, )
     scale_shape = (1, )
     offset_shape = (1, )
 
@@ -38,16 +36,13 @@ def gen_input_data(a, r, dtype, output_dir):
     gamma = numpy.random.uniform(low=-100, high=100, size=gamma_shape).astype(dtype)
     gamma.tofile(os.path.join(output_dir, "input1.bin"))
 
-    beta = numpy.random.uniform(low=-100, high=100, size=beta_shape).astype(dtype)
-    beta.tofile(os.path.join(output_dir, "input2.bin"))
-
     scale = numpy.random.uniform(low=-10, high=10, size=scale_shape).astype(dtype)
-    scale.tofile(os.path.join(output_dir, "input3.bin"))
+    scale.tofile(os.path.join(output_dir, "input2.bin"))
 
     offset = numpy.random.uniform(low=-10, high=10, size=offset_shape).astype(numpy.int8)
-    offset.tofile(os.path.join(output_dir, "input4.bin"))
+    offset.tofile(os.path.join(output_dir, "input3.bin"))
 
-    y_out = rms_norm_quant_numpy(x, gamma, beta, scale, offset)
+    y_out = rms_norm_quant_numpy(x, gamma, scale, offset)
     y_out.tofile(os.path.join(output_dir, "output0.bin"))
 
 
