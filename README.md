@@ -12,7 +12,7 @@ cann-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture
 
 **请获取最新版本的CANN toolkit包以获得完整的体验。**
 
-单击[下载链接](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-release/software/master/)，根据实际环境架构，获取```Ascend-cann-toolkit_${cann_version}_linux-${arch}.run```。
+单击[下载链接](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/master/)，根据实际环境架构，获取```Ascend-cann-toolkit_${cann_version}_linux-${arch}.run```。
 
 1. **安装社区CANN toolkit包**
 
