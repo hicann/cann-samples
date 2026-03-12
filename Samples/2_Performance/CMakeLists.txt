@@ -11,3 +11,4 @@
 
 add_subdirectory(matmul_story)
 add_subdirectory(rms_norm_quant_story)
+add_subdirectory(full_quant_fused_infer_attention_score_story)
