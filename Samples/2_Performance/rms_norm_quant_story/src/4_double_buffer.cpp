@@ -16,6 +16,7 @@
 #include "acl/acl.h"
 #include "acl/acl_rt.h"
 #include "kernel_operator.h"
+#include "platform/platform_ascendc.h"
 #include "basic_api/reg_compute/kernel_reg_compute_utils.h"
 #include <iostream>
 #include <fstream>
@@ -58,10 +59,9 @@ typedef int8_t offsetType;
 typedef int8_t outputType;
 
 static constexpr size_t BUF_NUM = 2;
-static constexpr size_t BLOCK_NUM = 64;
 static constexpr int64_t BLOCK_BYTES = 32;
 static constexpr int MAX_ERROR_ELEM_NUM = 100;
-static constexpr uint32_t VL_FLOAT_SIZE = 256 / sizeof(float);
+static constexpr uint32_t VL_B32_SIZE = 256 / sizeof(float);
 
 static constexpr AscendC::MicroAPI::CastTrait castTraitB162B32 = {
     AscendC::MicroAPI::RegLayout::ZERO,
@@ -163,7 +163,7 @@ public:
         } else {
             curblockFactor_ = tilingData_->blockFactor;
         }
-        vfLoopRNum_ = static_cast<uint16_t>(CeilDiv(static_cast<uint32_t>(tilingData_->r), VL_FLOAT_SIZE));
+        vfLoopRNum_ = static_cast<uint16_t>(CeilDiv(static_cast<uint32_t>(tilingData_->r), VL_B32_SIZE));
 
         xGm_.SetGlobalBuffer(x + blockIdx_ * tilingData_->blockFactor * tilingData_->r);
         gammaGm_.SetGlobalBuffer(gamma);
@@ -241,11 +241,13 @@ public:
         AscendC::MicroAPI::Duplicate(vregReduceSum, 0);
         for (uint16_t i = 0; i < vfLoopRNum_; i++) {
             preg = AscendC::MicroAPI::UpdateMask<float>(r);
-            AscendC::MicroAPI::DataCopy<half, AscendC::MicroAPI::LoadDist::DIST_UNPACK_B16>(vregXIn, xInAddr + i * VL_FLOAT_SIZE);
+            AscendC::MicroAPI::DataCopy<half, AscendC::MicroAPI::LoadDist::DIST_UNPACK_B16>(
+                vregXIn, xInAddr + i * VL_B32_SIZE);
             AscendC::MicroAPI::Cast<float, half, castTraitB162B32>(vregX, vregXIn, preg);
             AscendC::MicroAPI::Mul(vregXQuared, vregX, vregX, preg);
-            AscendC::MicroAPI::Add<float, AscendC::MicroAPI::MaskMergeMode::MERGING>(vregReduceSum, vregReduceSum, vregXQuared, preg);
-            AscendC::MicroAPI::DataCopy(xAddr + i * VL_FLOAT_SIZE, vregX, preg);
+            AscendC::MicroAPI::Add<float, AscendC::MicroAPI::MaskMergeMode::MERGING>(
+                vregReduceSum, vregReduceSum, vregXQuared, preg);
+            AscendC::MicroAPI::DataCopy(xAddr + i * VL_B32_SIZE, vregX, preg);
         }
 
         r = tilingData_->r;
@@ -270,9 +272,9 @@ public:
         AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::LoadDist::DIST_BRC_B32>(vregRms, rmsAddr);
         for (uint16_t i = 0; i < vfLoopRNum_; i++) {
             preg = AscendC::MicroAPI::UpdateMask<float>(r);
-            AscendC::MicroAPI::DataCopy(vregX, xAddr + i * VL_FLOAT_SIZE);
-            AscendC::MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_FLOAT_SIZE);
-            AscendC::MicroAPI::DataCopy(vregBeta, betaAddr + i * VL_FLOAT_SIZE);
+            AscendC::MicroAPI::DataCopy(vregX, xAddr + i * VL_B32_SIZE);
+            AscendC::MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_B32_SIZE);
+            AscendC::MicroAPI::DataCopy(vregBeta, betaAddr + i * VL_B32_SIZE);
             AscendC::MicroAPI::Div(vregNorm, vregX, vregRms, preg);
             AscendC::MicroAPI::Mul(vregNorm, vregNorm, vregGamma, preg);
             AscendC::MicroAPI::Add(vregNorm, vregNorm, vregBeta, preg);
@@ -281,7 +283,7 @@ public:
             AscendC::MicroAPI::Cast<half, float, castTraitB322Int16>(VregYFp16, vregNorm, preg);
             AscendC::MicroAPI::Cast<OUTPUT_DTYPE, half, castTraitB162Int8>(VregY, VregYFp16, preg);
             AscendC::MicroAPI::DataCopy<OUTPUT_DTYPE, AscendC::MicroAPI::StoreDist::DIST_PACK4_B32>(
-                yAddr + i * VL_FLOAT_SIZE, VregY, preg);
+                yAddr + i * VL_B32_SIZE, VregY, preg);
         }
     }
 
@@ -419,7 +421,9 @@ size_t segmentProduct(const std::vector<size_t> &vec, size_t i, size_t j)
 
 size_t calcTiling(size_t a, size_t r, RmsnormQuantTilingData &tilingData)
 {
-    size_t blockFactor = (a + BLOCK_NUM - 1) / BLOCK_NUM;
+    auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
+    int64_t coreNum = ascendcPlatform->GetCoreNumAiv();
+    size_t blockFactor = (a + coreNum - 1) / coreNum;
     size_t blockNum = (a + blockFactor - 1) / blockFactor;
     size_t blockTail = a - blockFactor * (blockNum - 1);
     tilingData.blockFactor = blockFactor;

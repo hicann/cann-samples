@@ -57,7 +57,6 @@ typedef int8_t offsetType;
 typedef int8_t outputType;
 
 static constexpr size_t BUF_NUM = 1;
-static constexpr size_t BLOCK_NUM = 1;
 static constexpr int64_t BLOCK_BYTES = 32;
 static constexpr int MAX_ERROR_ELEM_NUM = 100;
 
@@ -209,8 +208,14 @@ public:
         AscendC::Add(rmsLocalTensor, rmsLocalTensor, betaLocalTensor, tilingData_->r);
         AscendC::Muls(rmsLocalTensor, rmsLocalTensor, scale_, tilingData_->r);
         AscendC::Adds(rmsLocalTensor, rmsLocalTensor, offset_, tilingData_->r);
-        AscendC::Cast(rmsLocalTensor.template ReinterpretCast<half>(), rmsLocalTensor, AscendC::RoundMode::CAST_NONE, tilingData_->r);
-        AscendC::Cast(yLocalTensor, rmsLocalTensor.template ReinterpretCast<half>(), AscendC::RoundMode::CAST_RINT, tilingData_->r);
+        AscendC::Cast(rmsLocalTensor.template ReinterpretCast<half>(),
+            rmsLocalTensor,
+            AscendC::RoundMode::CAST_NONE,
+            tilingData_->r);
+        AscendC::Cast(yLocalTensor,
+            rmsLocalTensor.template ReinterpretCast<half>(),
+            AscendC::RoundMode::CAST_RINT,
+            tilingData_->r);
         xInQueue_.FreeTensor(xInLocalTensor);
         yOutQueue_.EnQue<OUTPUT_DTYPE>(yLocalTensor);
     }

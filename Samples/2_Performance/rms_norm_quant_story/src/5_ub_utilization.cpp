@@ -16,6 +16,7 @@
 #include "acl/acl.h"
 #include "acl/acl_rt.h"
 #include "kernel_operator.h"
+#include "platform/platform_ascendc.h"
 #include "basic_api/reg_compute/kernel_reg_compute_utils.h"
 #include <iostream>
 #include <fstream>
@@ -58,12 +59,10 @@ typedef int8_t offsetType;
 typedef int8_t outputType;
 
 static constexpr size_t BUF_NUM = 2;
-static constexpr size_t BLOCK_NUM = 64;
 static constexpr int64_t BLOCK_BYTES = 32;
-static constexpr int64_t UB_SIZE = 253952;
-static constexpr uint32_t BLOCK_FLOAT_SIZE = BLOCK_BYTES / sizeof(float);
-static constexpr uint32_t BLOCK_INT8_SIZE = BLOCK_BYTES / sizeof(int8_t);
-static constexpr uint32_t VL_FLOAT_SIZE = 256 / sizeof(float);
+static constexpr uint32_t BLOCK_B32_SIZE = BLOCK_BYTES / sizeof(float);
+static constexpr uint32_t BLOCK_B8_SIZE = BLOCK_BYTES / sizeof(int8_t);
+static constexpr uint32_t VL_B32_SIZE = 256 / sizeof(float);
 static constexpr int MAX_ERROR_ELEM_NUM = 100;
 
 static constexpr AscendC::MicroAPI::CastTrait castTraitB162B32 = {
@@ -172,7 +171,7 @@ public:
         }
         ubFactor_ = tilingData_->ubFactor;
         rAlign_ = CeilDiv(tilingData_->r, BLOCK_BYTES) * BLOCK_BYTES;
-        vfLoopRNum_ = static_cast<uint16_t>(CeilDiv(static_cast<uint32_t>(tilingData_->r), VL_FLOAT_SIZE));
+        vfLoopRNum_ = static_cast<uint16_t>(CeilDiv(static_cast<uint32_t>(tilingData_->r), VL_B32_SIZE));
 
         curUbLoops_ = CeilDiv(curBlockFactor_, ubFactor_);
         ubFactorTail_ = curBlockFactor_ - (curUbLoops_ - 1) * ubFactor_;
@@ -193,7 +192,6 @@ public:
         pipe_.InitBuffer(gammaBuf_, rAlign_ * sizeof(float));
         pipe_.InitBuffer(betaBuf_, rAlign_ * sizeof(float));
         pipe_.InitBuffer(rmsBuf_, AlignBytes(ubFactor_, sizeof(float)));
-        
 
         scale_ = static_cast<float>(scaleGm_.GetValue(0));
         offset_ = static_cast<float>(offsetGm_.GetValue(0));
@@ -257,11 +255,12 @@ public:
             for (uint16_t i = 0; i < vfLoopRNum_; i++) {
                 preg = AscendC::MicroAPI::UpdateMask<float>(r);
                 AscendC::MicroAPI::DataCopy<half, AscendC::MicroAPI::LoadDist::DIST_UNPACK_B16>(
-                    vregXIn, xInAddr + loopA * rAlign_ + i * VL_FLOAT_SIZE);
+                    vregXIn, xInAddr + loopA * rAlign_ + i * VL_B32_SIZE);
                 AscendC::MicroAPI::Cast<float, half, castTraitB162B32>(vregX, vregXIn, preg);
                 AscendC::MicroAPI::Mul(vregXQuared, vregX, vregX, preg);
-                AscendC::MicroAPI::Add<float, AscendC::MicroAPI::MaskMergeMode::MERGING>(vregReduceSum, vregReduceSum, vregXQuared, preg);
-                AscendC::MicroAPI::DataCopy(xAddr + loopA * rAlign_ + i * VL_FLOAT_SIZE, vregX, preg);
+                AscendC::MicroAPI::Add<float, AscendC::MicroAPI::MaskMergeMode::MERGING>(
+                    vregReduceSum, vregReduceSum, vregXQuared, preg);
+                AscendC::MicroAPI::DataCopy(xAddr + loopA * rAlign_ + i * VL_B32_SIZE, vregX, preg);
             }
 
             r = tilingData_->r;
@@ -271,7 +270,8 @@ public:
             AscendC::MicroAPI::Muls(vregRms, vregReduceSum, rInv_, preg);
             AscendC::MicroAPI::Adds(vregRms, vregRms, tilingData_->epsilon, preg);
             AscendC::MicroAPI::Sqrt(vregRms, vregRms, preg);
-            AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::StoreDist::DIST_FIRST_ELEMENT_B32>(rmsAddr + loopA, vregRms, preg);
+            AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::StoreDist::DIST_FIRST_ELEMENT_B32>(
+                rmsAddr + loopA, vregRms, preg);
         }
     }
 
@@ -288,9 +288,9 @@ public:
             AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::LoadDist::DIST_BRC_B32>(vregRms, rmsAddr + loopA);
             for (uint16_t i = 0; i < vfLoopRNum_; i++) {
                 preg = AscendC::MicroAPI::UpdateMask<float>(r);
-                AscendC::MicroAPI::DataCopy(vregX, xAddr + loopA * rAlign_ + i * VL_FLOAT_SIZE);
-                AscendC::MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_FLOAT_SIZE);
-                AscendC::MicroAPI::DataCopy(vregBeta, betaAddr + i * VL_FLOAT_SIZE);
+                AscendC::MicroAPI::DataCopy(vregX, xAddr + loopA * rAlign_ + i * VL_B32_SIZE);
+                AscendC::MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_B32_SIZE);
+                AscendC::MicroAPI::DataCopy(vregBeta, betaAddr + i * VL_B32_SIZE);
                 AscendC::MicroAPI::Div(vregNorm, vregX, vregRms, preg);
                 AscendC::MicroAPI::Mul(vregNorm, vregNorm, vregGamma, preg);
                 AscendC::MicroAPI::Add(vregNorm, vregNorm, vregBeta, preg);
@@ -299,7 +299,7 @@ public:
                 AscendC::MicroAPI::Cast<half, float, castTraitB322Int16>(VregYFp16, vregNorm, preg);
                 AscendC::MicroAPI::Cast<OUTPUT_DTYPE, half, castTraitB162Int8>(VregY, VregYFp16, preg);
                 AscendC::MicroAPI::DataCopy<OUTPUT_DTYPE, AscendC::MicroAPI::StoreDist::DIST_PACK4_B32>(
-                    yAddr + loopA * rAlign_ + i * VL_FLOAT_SIZE, VregY, preg);
+                    yAddr + loopA * rAlign_ + i * VL_B32_SIZE, VregY, preg);
             }
         }
     }
@@ -439,7 +439,7 @@ size_t segmentProduct(const std::vector<size_t> &vec, size_t i, size_t j)
     return product;
 }
 
-int64_t calcMaxUbFactor(size_t r)
+int64_t calcMaxUbFactor(size_t r, int64_t ubSize)
 {
     /*
      * UB内存分配公式推导:
@@ -471,7 +471,7 @@ int64_t calcMaxUbFactor(size_t r)
     int64_t linearCoef = rAlign * linearCoefPerFactor;
     int64_t fixedSize = rAlign * fixedCoef + fixedPart;
 
-    int64_t maxUbFactor = (UB_SIZE - fixedSize) / linearCoef;
+    int64_t maxUbFactor = (ubSize - fixedSize) / linearCoef;
     if (maxUbFactor <= 0) {
         throw std::runtime_error("UB space insufficient, please reduce r value\n");
     }
@@ -480,12 +480,16 @@ int64_t calcMaxUbFactor(size_t r)
 
 size_t calcTiling(size_t a, size_t r, RmsnormQuantTilingData &tilingData)
 {
-    size_t blockFactor = (a + BLOCK_NUM - 1) / BLOCK_NUM;
+    auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
+    uint64_t ubSize;
+    ascendcPlatform->GetCoreMemSize(platform_ascendc::CoreMemType::UB, ubSize);
+    int64_t coreNum = ascendcPlatform->GetCoreNumAiv();
+    size_t blockFactor = (a + coreNum - 1) / coreNum;
     size_t blockNum = (a + blockFactor - 1) / blockFactor;
     size_t blockTail = a - blockFactor * (blockNum - 1);
     tilingData.blockFactor = blockFactor;
     tilingData.blockTail = blockTail;
-    int64_t maxUbFactor = calcMaxUbFactor(r);
+    int64_t maxUbFactor = calcMaxUbFactor(r, ubSize);
 
     tilingData.ubFactor = maxUbFactor;
     return blockNum;

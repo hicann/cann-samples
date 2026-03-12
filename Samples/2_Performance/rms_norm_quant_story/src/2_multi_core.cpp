@@ -16,6 +16,7 @@
 #include "acl/acl.h"
 #include "acl/acl_rt.h"
 #include "kernel_operator.h"
+#include "platform/platform_ascendc.h"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -57,7 +58,6 @@ typedef int8_t offsetType;
 typedef int8_t outputType;
 
 static constexpr size_t BUF_NUM = 1;
-static constexpr size_t BLOCK_NUM = 64;
 static constexpr int64_t BLOCK_BYTES = 32;
 static constexpr int MAX_ERROR_ELEM_NUM = 100;
 
@@ -205,7 +205,8 @@ public:
 
         AscendC::Cast(xLocalTensor, xInLocalTensor, AscendC::RoundMode::CAST_NONE, tilingData_->r);
         AscendC::Mul(rmsLocalTensor, xLocalTensor, xLocalTensor, tilingData_->r);
-        AscendC::ReduceSum(reduceLocalTensor, rmsLocalTensor, xInLocalTensor.template ReinterpretCast<float>(), tilingData_->r);
+        AscendC::ReduceSum(
+            reduceLocalTensor, rmsLocalTensor, xInLocalTensor.template ReinterpretCast<float>(), tilingData_->r);
         AscendC::Duplicate(rmsLocalTensor, reduceLocalTensor, tilingData_->r);
 
         AscendC::Muls(rmsLocalTensor, rmsLocalTensor, rInv_, tilingData_->r);
@@ -216,8 +217,14 @@ public:
         AscendC::Add(rmsLocalTensor, rmsLocalTensor, betaLocalTensor, tilingData_->r);
         AscendC::Muls(rmsLocalTensor, rmsLocalTensor, scale_, tilingData_->r);
         AscendC::Adds(rmsLocalTensor, rmsLocalTensor, offset_, tilingData_->r);
-        AscendC::Cast(rmsLocalTensor.template ReinterpretCast<half>(), rmsLocalTensor, AscendC::RoundMode::CAST_NONE, tilingData_->r);
-        AscendC::Cast(yLocalTensor, rmsLocalTensor.template ReinterpretCast<half>(), AscendC::RoundMode::CAST_RINT, tilingData_->r);
+        AscendC::Cast(rmsLocalTensor.template ReinterpretCast<half>(),
+            rmsLocalTensor,
+            AscendC::RoundMode::CAST_NONE,
+            tilingData_->r);
+        AscendC::Cast(yLocalTensor,
+            rmsLocalTensor.template ReinterpretCast<half>(),
+            AscendC::RoundMode::CAST_RINT,
+            tilingData_->r);
         xInQueue_.FreeTensor(xInLocalTensor);
         yOutQueue_.EnQue<OUTPUT_DTYPE>(yLocalTensor);
     }
@@ -333,7 +340,9 @@ size_t segmentProduct(const std::vector<size_t> &vec, size_t i, size_t j)
 
 size_t calcTiling(size_t a, size_t r, RmsnormQuantTilingData &tilingData)
 {
-    size_t blockFactor = (a + BLOCK_NUM - 1) / BLOCK_NUM;
+    auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
+    int64_t coreNum = ascendcPlatform->GetCoreNumAiv();
+    size_t blockFactor = (a + coreNum - 1) / coreNum;
     size_t blockNum = (a + blockFactor - 1) / blockFactor;
     size_t blockTail = a - blockFactor * (blockNum - 1);
     tilingData.blockFactor = blockFactor;
@@ -367,12 +376,8 @@ int32_t main(int argc, char *argv[])
     std::vector<size_t> xShape = {a, r};
     std::vector<size_t> gammaShape = {r};
     std::vector<size_t> betaShape = {r};
-    std::vector<size_t> scaleShape = {
-        1
-    };
-    std::vector<size_t> offsetShape = {
-        1
-    };
+    std::vector<size_t> scaleShape = {1};
+    std::vector<size_t> offsetShape = {1};
     std::vector<size_t> yShape = {a, r};
 
     size_t xEleNum = segmentProduct(xShape, 0, xShape.size());
