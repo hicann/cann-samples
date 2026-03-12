@@ -14,48 +14,62 @@
 import os
 import sys
 import math
-import logging
 import numpy as np
-import en_dtypes
 import torch
-import torch_npu
+from ml_dtypes import float4_e2m1fn
+from en_dtypes import float8_e8m0
 
+
+def pack_b4_to_b8(b4_data: np.ndarray):
+
+    # pack b4 numpy array to int8 numpy array
+    packed_shape = [b4_data.shape[0], int(b4_data.shape[1] / 2)]
+    pack_size = 2
+    shift = np.array([0, 4], dtype=np.int8)
+    if b4_data.size % pack_size != 0:
+        b4_data = np.pad(b4_data.flatten(), (0, pack_size - b4_data.size % pack_size), 'constant')
+    b4_data = b4_data.reshape(-1, 2).view(np.int8)
+    return np.sum(np.bitwise_and(b4_data, 0b00001111) << shift, axis=1, dtype=np.int8).reshape(packed_shape)
 
 
 def gen_golden_data_simple(m, k, n):
     M = m
     K = k
     N = n
-    cpu_x1 = torch.randint(-10, 10, (M, int(K / 2)), dtype=torch.int8)
-    cpu_x2 = torch.randint(-10, 10, (N, int(K / 2)), dtype=torch.int8)
-    scale_x1 = torch.randint(-10, 10, (M, math.ceil(K / 64), 2), dtype=torch.int8)
-    scale_x2 = torch.randint(-10, 10, (N, math.ceil(K / 64), 2), dtype=torch.int8)
 
-    x1_npu = cpu_x1.npu()
-    x2_npu = cpu_x2.npu().transpose(-1, -2)
-    scale_x1_npu = scale_x1.npu()
-    scale_x2_npu = scale_x2.npu().transpose(0, 1)
+    # Generate data
+    a_ori = np.random.uniform(0, 34, (M, K)).astype(float4_e2m1fn)
+    a_pack_int8 = pack_b4_to_b8(a_ori)
+    b_ori = np.random.uniform(0, 34, (N, K)).astype(float4_e2m1fn)
+    b_pack_int8 = pack_b4_to_b8(b_ori)
+    a_scale = np.random.uniform(1, 32, size=(M, math.ceil(K / 64), 2)).astype(float8_e8m0)
+    b_scale = np.random.uniform(1, 32, size=(N, math.ceil(K / 64), 2)).astype(float8_e8m0)
 
-    #调用npu_quant_matmul函数，指定x1_dtype和x2_dtpe为torch_npu.float4_e2m1fn_x2
-    npu_out = torch_npu.npu_quant_matmul(
-        x1_npu,
-        x2_npu,
-        scale_x2_npu,
-        pertoken_scale=scale_x1_npu,
-        pertoken_scale_dtype=torch_npu.float8_e8m0fnu,
-        output_dtype=torch.float32,
-        group_sizes=[1, 1, 32],
-        x1_dtype=torch_npu.float4_e2m1fn_x2,
-        x2_dtype=torch_npu.float4_e2m1fn_x2,
-        scale_dtype=torch_npu.float8_e8m0fnu
-    ).cpu()
+    # false true transpose and broadcast
+    a_scale_reshape = a_scale.reshape(M, -1)
+    a_scale_broadcast = np.repeat(a_scale_reshape, 32, axis=-1)
+
+    b_ori_transpose = np.swapaxes(b_ori, -1, -2)
+    b_scale_reshape = b_scale.reshape(N, -1)
+    b_scale_broadcast = np.repeat(b_scale_reshape, 32, axis=-1)
+    b_scale_broadcast_transpose = np.swapaxes(b_scale_broadcast, -1, -2)
+
+    # dequant
+    a_dequant = a_ori.astype(np.float32) * a_scale_broadcast.astype(np.float32)
+    b_dequant = b_ori_transpose.astype(np.float32) * b_scale_broadcast_transpose.astype(np.float32)
+
+    a_cpu = torch.from_numpy(a_dequant)
+    b_cpu = torch.from_numpy(b_dequant)
+
+    out = torch.matmul(a_cpu, b_cpu)
+
     os.makedirs("input", exist_ok=True)
     os.makedirs("output", exist_ok=True)
-    cpu_x1.numpy().tofile("./input/input_a.bin")
-    cpu_x2.numpy().tofile("./input/input_b.bin")
-    scale_x1.numpy().tofile("./input/input_scaleA.bin")
-    scale_x2.numpy().tofile("./input/input_scaleB.bin")
-    npu_out.numpy().tofile("./output/golden_out.bin")
+    a_pack_int8.tofile("./input/input_a.bin")
+    b_pack_int8.tofile("./input/input_b.bin")
+    a_scale.tofile("./input/input_scaleA.bin")
+    b_scale.tofile("./input/input_scaleB.bin")
+    out.numpy().tofile("./output/golden_out.bin")
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:

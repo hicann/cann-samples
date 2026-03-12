@@ -27,63 +27,13 @@ def verify_result():
     if output.size != golden.size:
         raise ValueError("output size != golden size")
 
-    # ------------------------------
-    # NaN mask
-    # ------------------------------
+    # 打印 tensor
+    output_tensor = torch.from_numpy(output).reshape(8192, 8192)
+    golden_tensor = torch.from_numpy(golden).reshape(8192, 8192)
+    print("golden_data:\n", golden_tensor)
+    print("output:\n", output_tensor)
 
-    output_nan = np.isnan(output)
-    golden_nan = np.isnan(golden)
-
-    both_nan = output_nan & golden_nan
-    nan_mismatch = output_nan ^ golden_nan
-
-    # ------------------------------
-    # 数值误差
-    # ------------------------------
-
-    diff = np.abs(output - golden)
-
-    # 误差位置
-    diff_mask = diff > 1
-
-    # 合并错误
-    error_mask = (diff_mask | nan_mismatch) & (~both_nan)
-
-    diff_indices = np.where(error_mask)[0]
-
-    # ------------------------------
-    # 打印前100个错误
-    # ------------------------------
-
-    max_print = min(100, diff_indices.size)
-
-    for i in range(max_print):
-
-        idx = diff_indices[i]
-
-        golden_val = golden[idx]
-        output_val = output[idx]
-
-        denom = max(abs(golden_val), 1e-12)
-
-        rdiff = abs(output_val - golden_val) / denom
-
-        print(
-            "data index: %06d, expected: %-.9f, actual: %-.9f, rdiff: %-.6f"
-            % (idx, golden_val, output_val, rdiff)
-        )
-
-    # ------------------------------
-    # error ratio
-    # ------------------------------
-
-    error_ratio = diff_indices.size / golden.size
-
-    print("error count:", diff_indices.size)
-    print("total count:", golden.size)
-    print("error ratio: %.6f, tolerance: %.6f" % (error_ratio, ERROR_TOL))
-
-    return error_ratio <= ERROR_TOL
+    return torch.allclose(golden_tensor, output_tensor, rtol=ERROR_TOL, atol=ERROR_TOL, equal_nan=True)
 
 if __name__ == "__main__":
 
