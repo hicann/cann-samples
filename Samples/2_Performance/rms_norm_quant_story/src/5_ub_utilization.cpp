@@ -231,6 +231,8 @@ public:
         AscendC::MicroAPI::RegTensor<float> vregReduceSum;
         AscendC::MicroAPI::RegTensor<float> vregRms;
         AscendC::MicroAPI::MaskReg preg = AscendC::MicroAPI::CreateMask<float>();
+        AscendC::MicroAPI::MaskReg pregAll =
+            AscendC::MicroAPI::CreateMask<float, AscendC::MicroAPI::MaskPattern::ALL>();
 
         for (uint16_t loopA = 0; loopA < ubFactor; loopA++) {
             uint32_t r = tilingData_->r;
@@ -241,8 +243,7 @@ public:
                     vregXIn, xInAddr + loopA * rAlign_ + i * VL_B32_SIZE);
                 AscendC::MicroAPI::Cast<float, DATA_TYPE, castTraitB162B32>(vregX, vregXIn, preg);
                 AscendC::MicroAPI::Mul(vregXQuared, vregX, vregX, preg);
-                AscendC::MicroAPI::Add<float, AscendC::MicroAPI::MaskMergeMode::MERGING>(
-                    vregReduceSum, vregReduceSum, vregXQuared, preg);
+                AscendC::MicroAPI::Add(vregReduceSum, vregReduceSum, vregXQuared, pregAll);
             }
 
             r = tilingData_->r;

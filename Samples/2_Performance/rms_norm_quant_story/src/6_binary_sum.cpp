@@ -298,7 +298,6 @@ public:
                         vregX1, rmsAddr + tilingData_->binaryAddLastLoops * VL_B32_SIZE * loopA);
                     AscendC::MicroAPI::DataCopy(
                         vregX2, rmsAddr + tilingData_->binaryAddLastLoops * VL_B32_SIZE * loopA + VL_B32_SIZE);
-                    AscendC::MicroAPI::Adds(vregX2, vregX2, 0, preg);
                     AscendC::MicroAPI::Add(vregReduceSum, vregX1, vregX2, pregAll);
                     AscendC::MicroAPI::ReduceSum(vregReduceSum, vregReduceSum, pregAll);
                     AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::StoreDist::DIST_FIRST_ELEMENT_B32>(
