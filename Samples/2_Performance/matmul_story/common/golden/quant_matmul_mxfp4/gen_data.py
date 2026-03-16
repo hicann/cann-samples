@@ -38,12 +38,13 @@ def gen_golden_data_simple(m, k, n):
     N = n
 
     # Generate data
-    a_ori = np.random.uniform(0, 34, (M, K)).astype(float4_e2m1fn)
+    # When the result of the computation is very large, the precision check may fail.
+    a_ori = np.random.uniform(1, 8, (M, K)).astype(float4_e2m1fn)
     a_pack_int8 = pack_b4_to_b8(a_ori)
-    b_ori = np.random.uniform(0, 34, (N, K)).astype(float4_e2m1fn)
+    b_ori = np.random.uniform(1, 8, (N, K)).astype(float4_e2m1fn)
     b_pack_int8 = pack_b4_to_b8(b_ori)
-    a_scale = np.random.uniform(1, 32, size=(M, math.ceil(K / 64), 2)).astype(float8_e8m0)
-    b_scale = np.random.uniform(1, 32, size=(N, math.ceil(K / 64), 2)).astype(float8_e8m0)
+    a_scale = np.random.uniform(1, 8, size=(M, math.ceil(K / 64), 2)).astype(float8_e8m0)
+    b_scale = np.random.uniform(1, 8, size=(N, math.ceil(K / 64), 2)).astype(float8_e8m0)
 
     # false true transpose and broadcast
     a_scale_reshape = a_scale.reshape(M, -1)
@@ -61,7 +62,7 @@ def gen_golden_data_simple(m, k, n):
     a_cpu = torch.from_numpy(a_dequant)
     b_cpu = torch.from_numpy(b_dequant)
 
-    out = torch.matmul(a_cpu, b_cpu)
+    out = torch.matmul(a_cpu, b_cpu).to(torch.bfloat16)
 
     os.makedirs("input", exist_ok=True)
     os.makedirs("output", exist_ok=True)
@@ -69,7 +70,7 @@ def gen_golden_data_simple(m, k, n):
     b_pack_int8.tofile("./input/input_b.bin")
     a_scale.tofile("./input/input_scaleA.bin")
     b_scale.tofile("./input/input_scaleB.bin")
-    out.numpy().tofile("./output/golden_out.bin")
+    out.view(torch.uint16).numpy().tofile("./output/golden_out.bin")
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:

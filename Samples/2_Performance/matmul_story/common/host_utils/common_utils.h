@@ -28,21 +28,27 @@
     } while (0)
 
 template <typename T>
-static T CeilDiv(T num1, T num2)
+inline T CeilDiv(T a, T b)
 {
-    return (num1 + num2 - 1) / num2;
+    if (b == 0) {
+        return a;
+    }
+    return (a + b - 1) / b;
 }
 
 template <typename T>
-static T CeilAlign(T num1, T num2)
+inline T CeilAlign(T a, T b)
 {
-    return CeilDiv(num1, num2) * num2;
+    return CeilDiv(a, b) * b;
 }
 
 template <typename T>
-static T FloorAlign(T num1, T num2)
+inline T FloorAlign(T a, T b)
 {
-    return num1 / num2 * num2;
+    if (b == 0) {
+        return a;
+    }
+    return a / b * b;
 }
 
 #endif // COMMON_UTILS_H
