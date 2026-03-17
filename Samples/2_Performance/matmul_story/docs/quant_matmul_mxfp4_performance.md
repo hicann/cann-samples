@@ -409,7 +409,7 @@ $$
   - Double Buffer：隐藏内存访问延迟，提升流水线并行度
   - UnitFlag：提升计算与搬出流水并行度
 
-- **模板实现**：[quant_matmul_mxfp4_swat.cpp](../matmul_stubs/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_aswt.cpp)
+- **模板实现**：[quant_matmul_mxfp4_swat.cpp](../matmul_recipes/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_swat.cpp)
 
 ### FullLoad模板
 

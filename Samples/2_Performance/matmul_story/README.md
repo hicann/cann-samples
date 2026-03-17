@@ -6,7 +6,7 @@
 matmul_story/
 ├── common/                                     # 公共工具函数与验证脚本
 ├── docs/                                       # 性能优化技术文档
-├── matmul_stubs/                               # 算子实现与示例代码
+├── matmul_recipes/                               # 算子实现与示例代码
 │   ├── include/                                # 头文件 (block, kernel, policy, utils)
 │   └── examples/                               # 算子示例目录
 │       ├── quant_matmul_mxfp4/                 # MXFP4 量化矩阵乘示例
@@ -27,8 +27,8 @@ matmul_story/
 
 ## 算子示例
 
-- [matmul_a16w16](./matmul_stubs/examples/matmul_a16w16/README.md)：A16W16 非量化矩阵乘算子优化实践
-- [quant_matmul_mxfp4](./matmul_stubs/examples/quant_matmul_mxfp4/README.md)：MXFP4 量化矩阵乘算子优化实践
+- [matmul_a16w16](./matmul_recipes/examples/matmul_a16w16/README.md)：A16W16 非量化矩阵乘算子优化实践
+- [quant_matmul_mxfp4](./matmul_recipes/examples/quant_matmul_mxfp4/README.md)：MXFP4 量化矩阵乘算子优化实践
 
 ## 分步教程
 
