@@ -46,32 +46,6 @@ inline int32_t TestSetAttr(int32_t myPe, int32_t nPes, uint64_t localMemSize, co
     return 0;
 }
 
-/**
-    描述当前sample 实现与transformer仓下实现，参数做如下调整
-    GM_ADDR shmemSpace,         shmem 申请的单卡内存空间，新增
-    GM_ADDR x,                  token输入
-    GM_ADDR expertIds,          专家ID
-    GM_ADDR scales,             不需要
-    GM_ADDR xActiveMask,        不需要
-    GM_ADDR expertScales,       不需要
-    GM_ADDR elasticInfo,        不需要
-    GM_ADDR expandXOut,         输出
-    GM_ADDR dynamicScalesOut,   不需要
-    GM_ADDR assistInfoOut,      不需要
-    GM_ADDR expertTokenNumsOut, 不需要
-    GM_ADDR epSendCountsOut,    不需要
-    GM_ADDR tpSendCountsOut,    不需要
-    GM_ADDR expandScalesOut,    不需要
-    GM_ADDR workspaceGM,
-    GM_ADDR tilingGM
-*/
-
-__global__ __aicore__ void MoeDistributeDispatchKernel(
-    GM_ADDR shmemSpace, GM_ADDR x, GM_ADDR expertIds, GM_ADDR expandXOut, GM_ADDR workspaceGM, GM_ADDR tilingGM)
-{
-    // 待补齐kernel实现
-}
-
 /** 
     描述当前sample 实现与transformer仓下实现，参数做如下调整：
     GM_ADDR shmemSpace,             shmem 申请的单卡内存空间
@@ -96,12 +70,42 @@ __global__ __aicore__ void MoeDistributeDispatchKernel(
     GM_ADDR workspaceGM,            需要考虑下？
     GM_ADDR tilingGM                需要提前申请下
 */
-
-
-__global__ __aicore__ void MoeDistributeCombineKernel(
-    GM_ADDR shmemSpace, GM_ADDR expandX, GM_ADDR expertIds, GM_ADDR XOut, GM_ADDR workspaceGM, GM_ADDR tilingGM)
+__global__ __aicore__ void MoeDistributeDispatchKernel(
+    GM_ADDR shmemSpace, GM_ADDR x, GM_ADDR expertIds, GM_ADDR expandXOut, GM_ADDR workspaceGM, GM_ADDR tilingGM)
 {
     // 待补齐kernel实现
+}
+
+
+
+/**
+    描述当前sample 实现与transformer仓下实现，参数做如下调整
+    GM_ADDR shmemSpace,         shmem 申请的单卡内存空间，新增
+    GM_ADDR x,                  token输入
+    GM_ADDR expertIds,          专家ID
+    GM_ADDR scales,             不需要
+    GM_ADDR xActiveMask,        不需要
+    GM_ADDR expertScales,       专家权重
+    GM_ADDR elasticInfo,        不需要
+    GM_ADDR expandXOut,         输出
+    GM_ADDR dynamicScalesOut,   不需要
+    GM_ADDR assistInfoOut,      不需要
+    GM_ADDR expertTokenNumsOut, 不需要
+    GM_ADDR epSendCountsOut,    不需要
+    GM_ADDR tpSendCountsOut,    不需要
+    GM_ADDR expandScalesOut,    不需要
+    GM_ADDR workspaceGM,
+    GM_ADDR tilingGM
+*/
+__global__ __aicore__ void MoeDistributeCombineKernel(
+    GM_ADDR shmemSpace, GM_ADDR expandX, GM_ADDR expertIds, GM_ADDR assistInForCombine, GM_ADDR epSendCount, GM_ADDR expertScales, GM_ADDR XOut, GM_ADDR workspaceGM, GM_ADDR tilingGM)
+{
+    KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_MIX_AIV_1_0);
+    GET_INLING_DATA_WIHT_STRUCT(MoeDistributeCombineShmemTilingData, tilingData, tilingGM);
+    TPipe pipe;
+    MoeDistributeCombineShmem<float, float, int32_t> op();
+    op.Init(shmemSpace, expandX, expertIds, assistInfoForCombine, epSendCount, expertScales, XOut, workspaceGM, &pipe, &tilingData);
+    op.Process();
 
 }
 
@@ -110,9 +114,23 @@ void SetDispatchTilingData(MoeDistributeDispatchTilingData& dispatchTilingData)
     // 待补齐tilingData数据填写
 }
 
-void SetCombineTilingData(MoeDistributeCombineTilingData& combineTilingData)
+void SetCombineTilingData(MoeDistributeCombineShmemTilingData& combineTilingData)
 {
-    // 待补齐tilingData数据填写
+    auto ascendPlatform = platform_ascendc::platformAscendC(context->GetPlatformInfo());
+    uint64_t aivNum = ascendPlatform.GetCoreNumAiv();
+    uint64_t ubSize = 0UL;
+    ascendPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ubSize);
+    combineTilingData.epWorldSize = 2;
+    combineTilingData.epRankId = 0;
+    combineTilingData.moeExpertNum = 8;
+    combineTilingData.moeExpertPerRankNum = 4;
+    combineTilingData.globalBs = 16;
+    combineTilingData.bs = 8;
+    combineTilingData.k = 8;
+    combineTilingData.h = 7168;
+    combineTilingData.aivNum = aivNum;
+    combineTilingData.totalUbSize = ubSize;
+    combineTilingData.totalWinSize = 100 * 1024 * 1024;  //100MB
 }
 
 int main(int argc, char* argv[])
@@ -141,7 +159,7 @@ int main(int argc, char* argv[])
 
     ACL_CHECK(aclrtSynchronizeStream(stream));
     MoeDistributeDispatchTilingData dispatchTilingData;
-    MoeDistributeCombineTilingData combineTilingData;
+    MoeDistributeCombineShmemTilingData combineTilingData;
 
     // 待补齐相应参数生成和传递
     for (int i = 0; i < 1; ++i) {
