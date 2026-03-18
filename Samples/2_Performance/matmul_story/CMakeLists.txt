@@ -22,6 +22,7 @@ add_executable(quant_matmul_mxfp4_swat ${CMAKE_CURRENT_SOURCE_DIR}/matmul_recipe
 
 target_include_directories(quant_matmul_mxfp4_swat PRIVATE
     ${ASCEND_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/third_party/tensor_api
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/matmul_recipes/include
 )

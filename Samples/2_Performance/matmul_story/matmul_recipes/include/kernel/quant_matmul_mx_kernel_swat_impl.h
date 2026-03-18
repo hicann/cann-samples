@@ -24,6 +24,7 @@
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/layout_utils.h"
 #include "kernel_utils/tuple_utils.h"
+#include "include/tensor.h"
 #include "../block/block_scheduler_mx.h"
 #include "../block/block_mmad_mx.h"
 #include "../utils/coord_utils.h"
@@ -56,28 +57,33 @@ public:
     using AType = typename BlockMmad::AType;
     using BType = typename BlockMmad::BType;
     using CType = typename BlockMmad::CType;
-    using BiasType = typename BlockMmad::BiasType;
     using LayoutB = typename BlockMmad::LayoutB;
 
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
-    // x1, x2, x1Scale, x2Scale, bias, y
+    // x1, x2, x1Scale, x2Scale, y
     using BlockOffset = AscendC::Shape<int64_t, int64_t, int64_t, int64_t, int64_t, int64_t>;
-    using CoordClass = Coordinate<transA, transB, CubeFormat::ND, CubeFormat::ND, CubeFormat::ND>;
     using BlockSchedulerParams = typename BlockSchedulerOp::Params;
+
+    using MakeLayoutA =
+        AscendC::Std::conditional_t<transA, AscendC::Te::DNLayoutFormat<AType>, AscendC::Te::NDLayoutFormat<AType>>;
+    using MakeLayoutB =
+        AscendC::Std::conditional_t<transB, AscendC::Te::DNLayoutFormat<BType>, AscendC::Te::NDLayoutFormat<BType>>;
+    using MakeLayoutScaleA = AscendC::Std::conditional_t<
+        transA, AscendC::Te::ScaleADNLayoutFormat<fp8_e8m0_t>, AscendC::Te::ScaleANDLayoutFormat<fp8_e8m0_t>>;
+    using MakeLayoutScaleB = AscendC::Std::conditional_t<
+        transB, AscendC::Te::ScaleBDNLayoutFormat<fp8_e8m0_t>, AscendC::Te::ScaleBNDLayoutFormat<fp8_e8m0_t>>;
 
     // Tile-level runtime knobs.
     //
     // These values describe how one logical block is computed:
     // - baseM/baseN/baseK define the block tile shape
-    // - isBias controls whether bias is loaded/accumulated
     // - dbL0C enables ping-pong buffering on the L0C output tile
     struct QBMMTiling {
         uint32_t baseM;
         uint32_t baseN;
         uint32_t baseK;
-        uint32_t isBias;
         uint32_t dbL0C;
     };
 
@@ -94,10 +100,10 @@ public:
     };
 
 public:
-    __aicore__ inline void Init(const Params& params);
     __aicore__ inline void operator()(const Params& params);
 
 private:
+    __aicore__ inline void ResetGmAddr(const Params& params);
     __aicore__ inline void Process(const Params& params, BlockSchedulerOp& bs);
     __aicore__ inline TupleShape ToShapeTuple(const ProblemShape& problemShape)
     {
@@ -108,13 +114,13 @@ private:
     BlockMmad mmadOp_;
     TupleShape problemShape_{};
     BlockOffset blockOffset_{0, 0, 0, 0, 0, 0};
-    AscendC::GlobalTensor<AType> aGlobal_;
-    AscendC::GlobalTensor<BType> bGlobal_;
-    AscendC::GlobalTensor<CType> cGlobal_;
-    AscendC::GlobalTensor<BiasType> biasGlobal_;
-    AscendC::GlobalTensor<fp8_e8m0_t> scaleAGlobal_;
-    AscendC::GlobalTensor<fp8_e8m0_t> scaleBGlobal_;
-    bool isBias_{false};
+
+    __gm__ AType* aGmAddr_;
+    __gm__ BType* bGmAddr_;
+    __gm__ CType* cGmAddr_;
+    __gm__ fp8_e8m0_t* scaleAGmAddr_;
+    __gm__ fp8_e8m0_t* scaleBGmAddr_;
+
 };
 
 QBMM_MX_KERNEL_CLASS_TEM_PARAMS
@@ -127,75 +133,73 @@ __aicore__ inline void QuantMatmulMxKernelSwatImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS
 
     // Bind GM tensors, construct the scheduler, initialize the MMAD pipeline,
     // then let `Process()` iterate over tiles assigned to the current hardware block.
-    Init(params);
+    ResetGmAddr(params);
     BlockSchedulerOp bs(params.problemShape, params.schParams);
     problemShape_ = ToShapeTuple(params.problemShape);
 
     // `BlockMmad` expects the block tile shape in [M, N, K] form.
     BlockShape l0TileShape{params.qbmmParams.baseM, params.qbmmParams.baseN, params.qbmmParams.baseK, 0};
     bool enableL0CPingPong = (params.qbmmParams.dbL0C > 1);
-    mmadOp_.Init(problemShape_, l0TileShape, params.l1Params, isBias_, enableL0CPingPong);
+    mmadOp_.Init(problemShape_, l0TileShape, params.l1Params, enableL0CPingPong);
     Process(params, bs);
 }
 
 QBMM_MX_KERNEL_CLASS_TEM_PARAMS
-__aicore__ inline void QuantMatmulMxKernelSwatImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::Init(const Params& params)
+__aicore__ inline void QuantMatmulMxKernelSwatImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::ResetGmAddr(const Params& params)
 {
-    // The host has already allocated GM buffers and passed raw addresses here.
-    // The kernel-side wrapper converts those addresses into typed GlobalTensor views.
-    aGlobal_.SetGlobalBuffer((__gm__ AType*)params.mmadParams.aGmAddr);
-    bGlobal_.SetGlobalBuffer((__gm__ BType*)params.mmadParams.bGmAddr);
-    cGlobal_.SetGlobalBuffer((__gm__ CType*)params.mmadParams.cGmAddr);
-    if (params.qbmmParams.isBias == 1) {
-        isBias_ = true;
-        biasGlobal_.SetGlobalBuffer((__gm__ BiasType*)params.mmadParams.biasGmAddr);
-    }
-    scaleAGlobal_.SetGlobalBuffer((__gm__ fp8_e8m0_t*)params.mmadParams.scaleAGmAddr);
-    scaleBGlobal_.SetGlobalBuffer((__gm__ fp8_e8m0_t*)params.mmadParams.scaleBGmAddr);
+    aGmAddr_ = reinterpret_cast<__gm__ AType*>(params.mmadParams.aGmAddr);
+    bGmAddr_ = reinterpret_cast<__gm__ BType*>(params.mmadParams.bGmAddr);
+    cGmAddr_ = reinterpret_cast<__gm__ CType*>(params.mmadParams.cGmAddr);
+    scaleAGmAddr_ = reinterpret_cast<__gm__ fp8_e8m0_t*>(params.mmadParams.scaleAGmAddr);
+    scaleBGmAddr_ = reinterpret_cast<__gm__ fp8_e8m0_t*>(params.mmadParams.scaleBGmAddr);
 }
 
 QBMM_MX_KERNEL_CLASS_TEM_PARAMS
 __aicore__ inline void QuantMatmulMxKernelSwatImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::Process(
     const Params& params, BlockSchedulerOp& bs)
 {
-    // Addressing relies on `Coordinate` to translate tile indices + tail split offsets into GM offsets.
-    CoordClass coord(
-        params.problemShape.m, params.problemShape.n, params.problemShape.k, params.qbmmParams.baseM,
-        params.qbmmParams.baseN, params.qbmmParams.baseK);
+    auto layoutA = MakeLayoutA{}(params.problemShape.m, params.problemShape.k);
+    auto layoutScaleA =
+        MakeLayoutScaleA{}(params.problemShape.m, CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE);
+    auto layoutB = MakeLayoutB{}(params.problemShape.k, params.problemShape.n);
+    auto layoutScaleB =
+        MakeLayoutScaleB{}(CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, params.problemShape.n);
+    auto gmA = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(aGmAddr_), layoutA);
+    auto gmScaleA = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(scaleAGmAddr_), layoutScaleA);
+    auto gmB = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(bGmAddr_), layoutB);
+    auto gmScaleB = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(scaleBGmAddr_), layoutScaleB);
+    auto layoutC = AscendC::Te::MakeNDLayout<CType>(params.problemShape.m, params.problemShape.n);
+    auto gmC = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(cGmAddr_), layoutC);
+
     BlockCoord blockIdx;
-    const int64_t mTailTile = params.schParams.mTailTile;
-    const int64_t nTailTile = params.schParams.nTailTile;
-    // Tail-round load balance: split the last scheduled tiles into smaller pieces if needed.
-    if ((bs.GetEndBlockIdx() + 1) * mTailTile * nTailTile <= AscendC::GetBlockNum()) {
-        bs.UpdateTailTile(mTailTile, nTailTile);
-    }
-    // Each block (hardware core) processes a sequence of tiles.
+    bs.UpdateTailTile(params.schParams.mTailTile, params.schParams.nTailTile);
+    int64_t mPos = 0L;
+    int64_t nPos = 0L;
+    constexpr int64_t kPos = 0L;  // Do not slice K, so the coordinate is 0.
+    // Each core processes the block sequentially.
     while (bs.GetTileIdx(blockIdx)) {
-        // Get the current tile shape (with optional tail-split offsets).
         BlockShape singleShape = bs.GetBlockShape(blockIdx);
         if (Get<MNK_M>(singleShape) <= 0 || Get<MNK_N>(singleShape) <= 0) {
             // If an invalid shape is returned, stop processing for this core.
             // (Keep behavior unchanged; only comment is added/translated.)
             return;
         }
-        AscendC::Std::tuple<uint32_t, uint32_t, uint32_t, uint32_t> loadBalanceInfo = bs.GetLoadBalanceInfo();
-        // Compute GM offsets for A/B/scales/bias/C based on tile indices and tail strategy.
-        blockOffset_ = coord.template GetQuantOffset<true>(
-            Get<IDX_M_TILEIDX>(blockIdx), Get<IDX_N_TILEIDX>(blockIdx),
-            Get<IDX_M_TAIL_SPLIT_TILEIDX>(singleShape),
-            Get<IDX_N_TAIL_SPLIT_TILEIDX>(singleShape), loadBalanceInfo);
 
-        // Execute one logical block:
-        // 1. load the tile of A/B/scale/bias from the computed GM offsets
-        // 2. iterate over K using the configured L1/L0 staging policy
-        // 3. write the result tile back to the corresponding C location
-        mmadOp_(
-            aGlobal_[Get<IDX_A_OFFSET>(blockOffset_)],
-            bGlobal_[Get<IDX_B_OFFSET>(blockOffset_)],
-            scaleAGlobal_[Get<IDX_X1SCALE_OFFSET>(blockOffset_)],
-            scaleBGlobal_[Get<IDX_X2SCALE_OFFSET>(blockOffset_)],
-            biasGlobal_[Get<IDX_BIAS_OFFSET>(blockOffset_)],
-            cGlobal_[Get<IDX_C_OFFSET>(blockOffset_)], singleShape);
+        bs.GetTileCoord(blockIdx, mPos, nPos);
+        auto gmBlockA = gmA(
+            AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), params.problemShape.k));
+        auto gmBlockScaleA = gmScaleA(
+            AscendC::Te::MakeCoord(mPos, kPos),
+            AscendC::Te::MakeShape(Get<MNK_M>(singleShape), CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE));
+        auto gmBlockB = gmB(
+            AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, Get<MNK_N>(singleShape)));
+        auto gmBlockScaleB = gmScaleB(
+            AscendC::Te::MakeCoord(kPos, nPos),
+            AscendC::Te::MakeShape(CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, Get<MNK_N>(singleShape)));
+        auto gmBlockC =
+            gmC(AscendC::Te::MakeCoord(mPos, nPos),
+                AscendC::Te::MakeShape(Get<MNK_M>(singleShape), Get<MNK_N>(singleShape)));
+        mmadOp_(gmBlockA, gmBlockB, gmBlockScaleA, gmBlockScaleB, gmBlockC, singleShape);
     }
 }
 

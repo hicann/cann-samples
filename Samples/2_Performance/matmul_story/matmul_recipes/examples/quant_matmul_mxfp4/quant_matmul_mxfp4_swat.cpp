@@ -47,7 +47,7 @@
 // - `BlockMmadMx`                  : manages L1/L0 movement and MMAD execution.
 // - `QuantMatmulMxKernelSwatImpl`  : connects scheduling, address mapping, and compute.
 __global__ __aicore__ void QuantMatmulMxfp4Kernel(
-    GM_ADDR dA, GM_ADDR dB, GM_ADDR dScaleA, GM_ADDR dScaleB, GM_ADDR dBias, GM_ADDR dC,
+    GM_ADDR dA, GM_ADDR dB, GM_ADDR dScaleA, GM_ADDR dScaleB, GM_ADDR dC,
     const QuantMatmulTilingData quantMatmulTilingData)
 {
     KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIC_ONLY);
@@ -60,7 +60,6 @@ __global__ __aicore__ void QuantMatmulMxfp4Kernel(
     // Accumulation and output both use fp32 here to keep the demo easy to inspect.
     using AType = fp4x2_e2m1_t;
     using BType = fp4x2_e2m1_t;
-    using BiasType = float;
     using CType = bfloat16_t;
 
     // Logical tensor layouts as seen by the matmul template.
@@ -86,7 +85,7 @@ __global__ __aicore__ void QuantMatmulMxfp4Kernel(
     // This sample uses the simpler default path because it is easier to learn.
     using DispatchPolicy = QuantMatmulMxMultiBlockWithSwat<>;
     using BlockMmad = Block::BlockMmadMx<
-        DispatchPolicy, L1TileShape, L0TileShape, AType, layoutA, BType, layoutB, CType, layoutC, BiasType, layoutC, void>;
+        DispatchPolicy, L1TileShape, L0TileShape, AType, layoutA, BType, layoutB, CType, layoutC>;
     using ProblemShape = MatmulShape;
     using QuantMatmulKernelImpl = Kernel::QuantMatmulMxKernelSwatImpl<ProblemShape, BlockMmad, BlockScheduler>;
 
@@ -94,11 +93,9 @@ __global__ __aicore__ void QuantMatmulMxfp4Kernel(
 
     // `QBMMTiling` contains the "shape of one compute tile":
     // - baseM/baseN/baseK: block-level matmul tile shape
-    // - isBias           : whether bias is enabled
     // - dbL0C            : whether L0C ping-pong is enabled
     using QBMMTiling = typename QuantMatmulKernelImpl::QBMMTiling;
     QBMMTiling qbmmParams{quantMatmulTilingData.baseM, quantMatmulTilingData.baseN, quantMatmulTilingData.baseK,
-                          static_cast<uint32_t>(quantMatmulTilingData.isBias),
                           static_cast<uint32_t>(quantMatmulTilingData.dbL0C)};
 
     // Runtime parameters consumed by the templated kernel implementation.
@@ -111,7 +108,7 @@ __global__ __aicore__ void QuantMatmulMxfp4Kernel(
     // - qbmmParams   : tile geometry and optional features
     Params params = {
         {quantMatmulTilingData.m, quantMatmulTilingData.n, quantMatmulTilingData.k, 1},
-        {dA, dB, dC, dBias, dScaleA, dScaleB},
+        {dA, dB, dC, dScaleA, dScaleB},
         {quantMatmulTilingData.stepK * quantMatmulTilingData.baseK, quantMatmulTilingData.scaleKL1, quantMatmulTilingData.nBufferNum},
         {quantMatmulTilingData.baseM, quantMatmulTilingData.baseN, quantMatmulTilingData.mTailTile, quantMatmulTilingData.nTailTile,
          quantMatmulTilingData.mBaseTailSplitCnt, quantMatmulTilingData.nBaseTailSplitCnt, quantMatmulTilingData.mTailMain,
@@ -189,7 +186,6 @@ void SetTilingData(QuantMatmulTilingData& quantMatmulTilingData, int m, int n, i
     quantMatmulTilingData.scaleKL1 = 8192;
     quantMatmulTilingData.stepK = 2;
     quantMatmulTilingData.nBufferNum = 2;
-    quantMatmulTilingData.isBias = 0;
     quantMatmulTilingData.dbL0C = 1;
 
     quantMatmulTilingData.mTailTile = 1;
@@ -239,7 +235,6 @@ int main(int argc, char* argv[])
     uint8_t* hB = nullptr;
     uint8_t* hScaleA = nullptr;
     uint8_t* hScaleB = nullptr;
-    float* hBias = nullptr;
     half* hC = nullptr;
 
     // Device buffers mirror the host buffers.
@@ -250,7 +245,6 @@ int main(int argc, char* argv[])
     GM_ADDR dB = nullptr;
     GM_ADDR dScaleA = nullptr;
     GM_ADDR dScaleB = nullptr;
-    GM_ADDR dBias = nullptr;
     GM_ADDR dC = nullptr;
 
     // -------------------------------------------------------------------------
@@ -266,16 +260,12 @@ int main(int argc, char* argv[])
     //   each scale value covers `MXFP_DIVISOR_SIZE` logical K elements and uses
     //   `MXFP_MULTI_BASE_SIZE` bytes in storage.
     //
-    // bias:
-    //   one fp32 bias per output column N.
-    //
     // C:
     //   full bf16 output matrix of shape [M, N].
     size_t sizeA = ((m * k + 1) >> 1) * sizeof(uint8_t);
     size_t sizeB = ((k * n + 1) >> 1) * sizeof(uint8_t);
     size_t sizeScaleA = (m * CeilDiv(k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE) * sizeof(uint8_t);
     size_t sizeScaleB = (n * CeilDiv(k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE) * sizeof(uint8_t);
-    size_t sizeBias = n * sizeof(float);
     size_t sizeC = m * n * sizeof(half);
 
     // Materialize the default tiling configuration for this problem shape.
@@ -296,8 +286,6 @@ int main(int argc, char* argv[])
     std::unique_ptr<void, aclError (*)(void*)> HostScaleA(hScaleA, aclrtFreeHost);
     CHECK_COND(aclrtMallocHost((void**)&hScaleB, sizeScaleB) == ACL_SUCCESS, "aclrtMallocHost failed.");
     std::unique_ptr<void, aclError (*)(void*)> HostScaleB(hScaleB, aclrtFreeHost);
-    CHECK_COND(aclrtMallocHost((void**)&hBias, sizeBias) == ACL_SUCCESS, "aclrtMallocHost failed.");
-    std::unique_ptr<void, aclError (*)(void*)> HostBias(hBias, aclrtFreeHost);
     CHECK_COND(aclrtMallocHost((void**)&hC, sizeC) == ACL_SUCCESS, "aclrtMallocHost failed.");
     std::unique_ptr<void, aclError (*)(void*)> HostC(hC, aclrtFreeHost);
 
@@ -321,8 +309,6 @@ int main(int argc, char* argv[])
     std::unique_ptr<void, aclError (*)(void*)> DeviceScaleA(dScaleA, aclrtFree);
     CHECK_COND(aclrtMalloc((void**)&dScaleB, sizeScaleB, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS, "aclrtMalloc failed.");
     std::unique_ptr<void, aclError (*)(void*)> DeviceScaleB(dScaleB, aclrtFree);
-    CHECK_COND(aclrtMalloc((void**)&dBias, sizeBias, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS, "aclrtMalloc failed.");
-    std::unique_ptr<void, aclError (*)(void*)> DeviceBias(dBias, aclrtFree);
     CHECK_COND(aclrtMalloc((void**)&dC, sizeC, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS, "aclrtMalloc failed.");
     std::unique_ptr<void, aclError (*)(void*)> DeviceC(dC, aclrtFree);
 
@@ -344,9 +330,6 @@ int main(int argc, char* argv[])
     CHECK_COND(
         aclrtMemcpyAsync(dScaleB, sizeScaleB, hScaleB, sizeScaleB, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
         "aclrtMemcpyAsync failed.");
-    CHECK_COND(
-        aclrtMemcpyAsync(dBias, sizeBias, hBias, sizeBias, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
-        "aclrtMemcpyAsync failed.");
 
     // Query the platform object to learn how many AIC cores are available.
     //
@@ -362,7 +345,7 @@ int main(int argc, char* argv[])
     // The kernel itself is small because most of the interesting logic is
     // encoded in the template stack and the runtime tiling parameters.
     // -------------------------------------------------------------------------
-    QuantMatmulMxfp4Kernel<<<numBlocks, nullptr, stream>>>(dA, dB, dScaleA, dScaleB, dBias, dC, quantMatmulTilingData);
+    QuantMatmulMxfp4Kernel<<<numBlocks, nullptr, stream>>>(dA, dB, dScaleA, dScaleB, dC, quantMatmulTilingData);
 
     // Queue the output copy after the kernel launch on the same stream.
     CHECK_COND(

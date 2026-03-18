@@ -234,6 +234,19 @@ public:
         roundIdx_++;
         return true;
     }
+    __aicore__ inline void GetTileCoord(const BlockCoord& blockCoord, int64_t& mPos, int64_t& nPos)
+    {
+        auto mTileIdx = Get<MNK_M>(blockCoord);
+        auto nTileIdx = Get<MNK_N>(blockCoord);
+        mPos = mTileIdx * baseM_ + mSplitAddrOffset_;
+        nPos = nTileIdx * baseN_ + nSplitAddrOffset_;
+        if (mTileIdx > mBaseNormCnt_) {
+            mPos -= (mTileIdx - mBaseNormCnt_) * (baseM_ - mBaseTailMain_);
+        }
+        if (nTileIdx > nBaseNormCnt_) {
+            nPos -= (nTileIdx - nBaseNormCnt_) * (baseN_ - nBaseTailMain_);
+        }
+    }
 };
 
 template <class ProblemShape_, class L1TileShape_, class L0TileShape_, bool TransA_, bool TransB_>
