@@ -9,34 +9,24 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-# gelu_without_vf
-add_executable(gelu_without_vf gelu_without_vf.cpp gelu_cpu.cpp)
-target_compile_options(gelu_without_vf PRIVATE
+# quantize
+add_executable(quantize_hif8_demo quantize_custom.cpp)
+target_compile_options(quantize_hif8_demo PRIVATE
     "-xasc"
     "--npu-arch=dav-3510"
     "-w"
-    "-O1"
+    "-O3"
 )
-target_link_libraries(gelu_without_vf
+target_link_libraries(quantize_hif8_demo
     PRIVATE
     cann_samples::ascend_base
 )
-install(TARGETS gelu_without_vf
-    RUNTIME DESTINATION 1_Features/vector_function
+install(TARGETS quantize_hif8_demo
+    RUNTIME DESTINATION 1_Features/hardware_features/hif8
 )
-
-# gelu_with_vf
-add_executable(gelu_with_vf gelu_with_vf.cpp gelu_cpu.cpp)
-target_compile_options(gelu_with_vf PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O1"
-)
-target_link_libraries(gelu_with_vf
-    PRIVATE
-    cann_samples::ascend_base
-)
-install(TARGETS gelu_with_vf
-    RUNTIME DESTINATION 1_Features/vector_function
+install(DIRECTORY
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+    DESTINATION 1_Features/hardware_features/hif8
+    FILES_MATCHING
+    PATTERN "*.py"
 )

@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(vector_function)
-add_subdirectory(simt)
-add_subdirectory(hif8)
+add_subdirectory(memory_optimization)
+add_subdirectory(instruction_optimization)
+add_subdirectory(system_optimization)
+add_subdirectory(hardware_features)

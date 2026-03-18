@@ -71,6 +71,10 @@ cann-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture
 ├── Samples                        # 样例目录
 │   ├── 0_Introduction            # 入门介绍样例
 │   ├── 1_Features                # 功能特性样例
+│   │   ├── memory_optimization   # 访存优化方法
+│   │   ├── instruction_optimization # 指令优化方法
+│   │   ├── system_optimization   # 系统优化方法
+│   │   └── hardware_features     # 芯片特性样例
 │   ├── 2_Performance             # 性能调优样例
 │   └── CMakeLists.txt
 ├── cmake                         # 项目工程编译目录
@@ -80,6 +84,8 @@ cann-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture
 ├── SECURITY.md                   # 安全声明
 └── README.md                     # 项目说明文档
 ```
+
+当前 `1_Features` 下已有样例统一归类在 `hardware_features`，其余分类目录预留用于后续扩展。
 
 ## 💬相关信息
 

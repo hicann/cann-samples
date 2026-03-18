@@ -62,10 +62,10 @@ AscendC::DataCopy(yGm, yOutput, TOTAL_LENGTH);
 - 样例执行
   ```bash
   # 根据 ${git_clone_path}/README.md 编译Samples仓的所有执行用例
-  cd build_out/1_Features/hif8 # 进入hif8的build结果目录
-  python3 gen_data.py   # 生成测试输入数据
+  cd build_out/1_Features/hardware_features/hif8 # 进入hif8的build结果目录
+  python3 scripts/gen_data.py   # 生成测试输入数据
   ./quantize_hif8_demo  # 执行编译生成的可执行程序，执行样例
-  python3 verify_result.py output/output_y.bin output/golden_y.bin   # 验证输出结果是否正确，确认算法逻辑正确
+  python3 scripts/verify_result.py output/output_y.bin output/golden_y.bin   # 验证输出结果是否正确，确认算法逻辑正确
   ```
   如果看到以下执行结果，说明精度对比成功。
   ```bash

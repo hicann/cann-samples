@@ -31,8 +31,8 @@ cmake --build build --parallel
 cmake --install build --prefix ./build_out
 
 # 6. 运行示例
-./build_out/Samples/1_Features/vector_function/gelu_without_vf
-./build_out/Samples/1_Features/vector_function/gelu_with_vf
+./build_out/1_Features/hardware_features/vector_function/gelu_without_vf
+./build_out/1_Features/hardware_features/vector_function/gelu_with_vf
 ```
 
 **预期输出**：

@@ -25,5 +25,5 @@ target_link_libraries(simt
     stdc++
 )
 install(TARGETS simt
-    RUNTIME DESTINATION 1_Features/simt
+    RUNTIME DESTINATION 1_Features/hardware_features/simt
 )

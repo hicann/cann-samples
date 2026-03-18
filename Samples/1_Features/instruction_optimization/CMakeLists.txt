@@ -8,25 +8,3 @@
 # BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
-
-# quantize
-add_executable(quantize_hif8_demo quantize_custom.cpp)
-target_compile_options(quantize_hif8_demo PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
-)
-target_link_libraries(quantize_hif8_demo
-    PRIVATE
-    cann_samples::ascend_base
-)
-install(TARGETS quantize_hif8_demo
-    RUNTIME DESTINATION 1_Features/hif8
-)
-install(DIRECTORY
-    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
-    DESTINATION 1_Features/hif8
-    FILES_MATCHING
-    PATTERN "*.py"
-)
