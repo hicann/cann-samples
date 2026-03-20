@@ -64,13 +64,17 @@ def gen_golden_data_simple(m, k, n):
 
     out = torch.matmul(a_cpu, b_cpu).to(torch.bfloat16)
 
-    os.makedirs("input", exist_ok=True)
-    os.makedirs("output", exist_ok=True)
-    a_pack_int8.tofile("./input/input_a.bin")
-    b_pack_int8.tofile("./input/input_b.bin")
-    a_scale.tofile("./input/input_scaleA.bin")
-    b_scale.tofile("./input/input_scaleB.bin")
-    out.view(torch.uint16).numpy().tofile("./output/golden_out.bin")
+    # 生成到本脚本所在目录，而非当前工作目录
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    input_dir = os.path.join(script_dir, "input")
+    output_dir = os.path.join(script_dir, "output")
+    os.makedirs(input_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
+    a_pack_int8.tofile(os.path.join(input_dir, "input_a.bin"))
+    b_pack_int8.tofile(os.path.join(input_dir, "input_b.bin"))
+    a_scale.tofile(os.path.join(input_dir, "input_scaleA.bin"))
+    b_scale.tofile(os.path.join(input_dir, "input_scaleB.bin"))
+    out.view(torch.uint16).numpy().tofile(os.path.join(output_dir, "golden_out.bin"))
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:

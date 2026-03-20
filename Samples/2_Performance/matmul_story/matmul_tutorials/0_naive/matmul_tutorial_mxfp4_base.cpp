@@ -9,10 +9,12 @@
  */
 
 #include <cmath>
-#include <filesystem>
 #include <iostream>
+#include <limits.h>
+#include <unistd.h>
 #include <memory>
 #include <random>
+#include <string>
 #include <vector>
 
 #if ASC_DEVKIT_MAJOR >= 9
@@ -22,6 +24,7 @@
 #endif
 #include "acl/acl.h"
 #include "tiling/platform/platform_ascendc.h"
+#include <cstdlib>
 #include "../../common/host_utils/io_utils.h"
 #include "include/blcok/block_mmad_mx_base.h"
 #include "include/blcok/block_scheduler_mx_base.h"
@@ -100,10 +103,30 @@ int main(int argc, char* argv[])
     auto sizeScaleA = static_cast<size_t>(1) * hostScaleA.size() * sizeof(uint8_t);
     auto sizeScaleB = static_cast<size_t>(1) * hostScaleB.size() * sizeof(uint8_t);
     auto sizeOutput = static_cast<size_t>(1) * hostOutput.size() * sizeof(half);
-    ReadFile("./input/input_a.bin", sizeA, hostA.data(), sizeA);
-    ReadFile("./input/input_b.bin", sizeB, hostB.data(), sizeB);
-    ReadFile("./input/input_scaleA.bin", sizeScaleA, hostScaleA.data(), sizeScaleA);
-    ReadFile("./input/input_scaleB.bin", sizeScaleB, hostScaleB.data(), sizeScaleB);
+    // 与 gen_data.py 一致：读写路径为 golden 目录（脚本同级）下的 input/、output/
+    // 使用 readlink 替代 std::filesystem，兼容 GCC 7.3（CANN 最低支持版本）
+    char exePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    std::string baseDir = ".";
+    if (len > 0) {
+        exePath[len] = '\0';
+        baseDir = exePath;
+        for (int up = 0; up < 2; ++up) {
+            size_t lastSlash = baseDir.find_last_of('/');
+            if (lastSlash != std::string::npos && lastSlash > 0) {
+                baseDir.resize(lastSlash);
+            } else {
+                break;
+            }
+        }
+        baseDir += "/golden";
+    }
+    std::string inputDir = baseDir + "/input";
+    std::string outputDir = baseDir + "/output";
+    ReadFile(inputDir + "/input_a.bin", sizeA, hostA.data(), sizeA);
+    ReadFile(inputDir + "/input_b.bin", sizeB, hostB.data(), sizeB);
+    ReadFile(inputDir + "/input_scaleA.bin", sizeScaleA, hostScaleA.data(), sizeScaleA);
+    ReadFile(inputDir + "/input_scaleB.bin", sizeScaleB, hostScaleB.data(), sizeScaleB);
 
     // Device Addredd malloc
     GM_ADDR deviceA = nullptr;
@@ -151,17 +174,17 @@ int main(int argc, char* argv[])
     ret = aclrtMemcpy(hostOutput.data(), sizeOutput, deviceOutput, sizeOutput, ACL_MEMCPY_DEVICE_TO_HOST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceOutput failed.");
 
-    WriteFile("./output/npu_out.bin", hostOutput.data(), sizeOutput);
+    WriteFile(outputDir + "/npu_out.bin", hostOutput.data(), sizeOutput);
     aclrtDestroyStream(stream);
     aclrtResetDevice(deviceId);
     aclFinalize();
 
-    std::filesystem::path exe_path = std::filesystem::canonical("/proc/self/exe");
-    std::filesystem::path exe_dir = exe_path.parent_path();
-    std::filesystem::path script =
-        exe_dir.parent_path().parent_path() / "common/golden/quant_matmul_mxfp4/verify_result.py";
-    std::string cmd = "python3 \"" + script.string() + "\" " + std::to_string(m) + " " + std::to_string(n);
-    (void)system(cmd.c_str());
+    // 调用与 gen_data 同级的 verify_result.py（baseDir 下），脚本从 ./output/ 读 bin
+    std::string cmd = "cd \"" + baseDir + "\" && python3 verify_result.py " + std::to_string(m) + " " +
+                      std::to_string(n);
+    if (std::system(cmd.c_str()) != 0) {
+        return 1;
+    }
     return 0;
 }
 

@@ -13,9 +13,10 @@
  * \brief
  */
 #include <cstdlib>
-#include <filesystem>
 #include <iostream>
+#include <limits.h>
 #include <memory>
+#include <string>
 #include <unistd.h>
 
 #include "acl/acl.h"
@@ -272,6 +273,22 @@ int main(int argc, char* argv[])
     QuantMatmulTilingData quantMatmulTilingData;
     SetTilingData(quantMatmulTilingData, m, n, k);
 
+    // 与 gen_data.py 一致：读写路径为可执行文件所在目录下的 input/、output/
+    // 使用 readlink 替代 std::filesystem，兼容 GCC 7.3（CANN 最低支持版本）
+    char exePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    std::string baseDir = ".";
+    if (len > 0) {
+        exePath[len] = '\0';
+        baseDir = exePath;
+        size_t lastSlash = baseDir.find_last_of('/');
+        if (lastSlash != std::string::npos) {
+            baseDir.resize(lastSlash);
+        }
+    }
+    std::string inputDir = baseDir + "/input";
+    std::string outputDir = baseDir + "/output";
+
     // -------------------------------------------------------------------------
     // 5. Allocate pinned host memory.
     //
@@ -293,10 +310,10 @@ int main(int argc, char* argv[])
     //
     // The sample keeps input generation out of the main executable so that
     // compute code stays easy to follow and data can be reproduced offline.
-    ReadFile("./input/input_a.bin", sizeA, hA, sizeA);
-    ReadFile("./input/input_b.bin", sizeB, hB, sizeB);
-    ReadFile("./input/input_scaleA.bin", sizeScaleA, hScaleA, sizeScaleA);
-    ReadFile("./input/input_scaleB.bin", sizeScaleB, hScaleB, sizeScaleB);
+    ReadFile(inputDir + "/input_a.bin", sizeA, hA, sizeA);
+    ReadFile(inputDir + "/input_b.bin", sizeB, hB, sizeB);
+    ReadFile(inputDir + "/input_scaleA.bin", sizeScaleA, hScaleA, sizeScaleA);
+    ReadFile(inputDir + "/input_scaleB.bin", sizeScaleB, hScaleB, sizeScaleB);
 
     // -------------------------------------------------------------------------
     // 6. Allocate global memory on device.
@@ -357,13 +374,16 @@ int main(int argc, char* argv[])
     // -------------------------------------------------------------------------
     CHECK_COND(aclrtSynchronizeStream(stream) == ACL_SUCCESS, "aclrtSynchronizeStream failed.");
 
-    WriteFile("./output/npu_out.bin", hC, sizeC);
-    std::filesystem::path exe_path = std::filesystem::canonical("/proc/self/exe");
-    std::filesystem::path exe_dir = exe_path.parent_path();
-    std::filesystem::path script =
-        exe_dir.parent_path().parent_path().parent_path() / "common/golden/quant_matmul_mxfp4/verify_result.py";
-    std::string cmd = "python3 \"" + script.string() + "\" " + std::to_string(m) + " " + std::to_string(n);
-    system(cmd.c_str());
+    WriteFile(outputDir + "/npu_out.bin", hC, sizeC);
+    // 调用与 gen_data 同级的 verify_result.py（baseDir 下），脚本从 ./output/ 读 bin
+    std::string cmd = "cd \"" + baseDir + "\" && python3 verify_result.py " + std::to_string(m) + " " +
+                      std::to_string(n);
+    if (std::system(cmd.c_str()) != 0) {
+        aclrtDestroyStream(stream);
+        aclrtResetDevice(deviceId);
+        aclFinalize();
+        return 1;
+    }
     // `unique_ptr` takes care of freeing host/device buffers.
     // The runtime objects still need explicit destruction/finalization.
     aclrtDestroyStream(stream);
