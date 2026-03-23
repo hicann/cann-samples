@@ -34,30 +34,24 @@ golden 输入数据由 `matmul_recipes/examples/quant_matmul_mxfp4/gen_data.py` 
 
 ## 构建与运行
 
-在 `Samples/2_Performance/matmul_story` 目录下执行：
+在仓库根目录下执行全量编译与安装，并进入安装目录：
 
 ```bash
 cmake -S . -B build
-cmake --build build --target quant_matmul_mxfp4_a_full_load quant_matmul_mxfp4_swat
+cmake --build build --parallel
 cmake --install build --prefix ./build_out
+cd build_out/2_Performance/matmul_story/matmul_recipes/examples/quant_matmul_mxfp4
 ```
 
-先生成一组测试数据：
+之后可按需执行以下命令：
 
 ```bash
-python3 matmul_recipes/examples/quant_matmul_mxfp4/gen_data.py 256 256 256
-```
+# 先生成一组测试数据
+python3 gen_data.py 256 256 256
 
-再从安装目录运行某一个可执行文件：
+# 运行其中一个可执行文件，如
+./quant_matmul_mxfp4_swat 256 256 256
 
-```bash
-cd build_out/2_Performance/matmul_story
-./matmul_recipes/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_a_full_load 256 256 256
-./matmul_recipes/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_swat 256 256 256
-```
-
-运行算法推荐脚本：
-
-```bash
-python3 matmul_recipes/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_algorithm_recommend.py 256 256 256
+# 运行算法推荐脚本
+python3 quant_matmul_mxfp4_algorithm_recommend.py 256 256 256
 ```

@@ -63,8 +63,8 @@ private:
 
     uint32_t CalcScaleKL1() const
     {
-        // Scale reuse can only span the K range buffered on both sides, so the
-        // smaller reusable window wins.
+        // Scale reuse is bounded by the smaller reusable K window on the A and
+        // B sides, because both scale tensors must stay valid for the same K range.
         return static_cast<uint32_t>(std::min(
             runInfo_.scaleFactorA * runInfo_.stepKa * runInfo_.baseK,
             runInfo_.scaleFactorB * runInfo_.stepKb * runInfo_.baseK));

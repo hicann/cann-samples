@@ -79,7 +79,7 @@ struct QuantMatmulRunInfo {
     uint64_t baseN{0UL};
     uint64_t baseK{0UL};
 
-    // Effective L1 depth on the A and B paths, expressed in units of DB_SIZE.
+    // stepKa/stepKb count how many baseK tiles one outer streaming step spans.
     uint64_t stepKa{0UL};
     uint64_t stepKb{0UL};
     uint64_t depthA1{0UL};

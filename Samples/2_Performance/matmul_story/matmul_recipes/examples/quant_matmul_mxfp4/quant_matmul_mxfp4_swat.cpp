@@ -141,12 +141,6 @@ int main(int argc, char* argv[])
         PrintUsage(argv[0]);
         return 1;
     }
-    
-    QuantMatmulTilingData tilingData;
-    // Host tiling picks the block shape, tail strategy, and buffering plan
-    // that will later be consumed by the device kernel.
-    std::unique_ptr<QuantMatmulTilingBase> tilingEngine = std::make_unique<QuantMatmulTilingSwat>();
-    tilingEngine->GetTilingData(m, n, k, tilingData);
 
     constexpr int32_t deviceId = 0;
     aclrtStream stream = nullptr;
@@ -178,6 +172,12 @@ int main(int argc, char* argv[])
     };
 
     try {
+        QuantMatmulTilingData tilingData;
+        // Host tiling picks the block shape, tail strategy, and buffering plan
+        // that will later be consumed by the device kernel.
+        std::unique_ptr<QuantMatmulTilingBase> tilingEngine = std::make_unique<QuantMatmulTilingSwat>();
+        tilingEngine->GetTilingData(m, n, k, tilingData);
+
         uint32_t deviceCount = 0;
         CHECK_COND(aclrtGetDeviceCount(&deviceCount) == ACL_SUCCESS, "Failed to query ACL device count.");
         CHECK_COND(deviceCount > 0U, "No ACL devices are available.");
@@ -186,6 +186,10 @@ int main(int argc, char* argv[])
         CHECK_COND(aclrtSetDevice(deviceId) == ACL_SUCCESS, "Failed to set the ACL device.");
         deviceSet = true;
         CHECK_COND(aclrtCreateStream(&stream) == ACL_SUCCESS, "Failed to create the ACL stream.");
+        CHECK_COND(aclrtCreateEvent(&kernelStartEvent) == ACL_SUCCESS,
+                  "Failed to create the start event for kernel timing.");
+        CHECK_COND(aclrtCreateEvent(&kernelEndEvent) == ACL_SUCCESS,
+                  "Failed to create the end event for kernel timing.");
 
         size_t sizeA = ((m * k) >> 1) * sizeof(uint8_t);
         size_t sizeB = ((k * n) >> 1) * sizeof(uint8_t);
@@ -275,16 +279,10 @@ int main(int argc, char* argv[])
             aclrtMemcpyAsync(dScaleB, sizeScaleB, hScaleB, sizeScaleB, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
             "Failed to copy scaleB from host to device.");
         CHECK_COND(
-            aclrtCreateEvent(&kernelStartEvent) == ACL_SUCCESS,
-            "Failed to create the start event for kernel timing.");
-        CHECK_COND(
-            aclrtCreateEvent(&kernelEndEvent) == ACL_SUCCESS,
-            "Failed to create the end event for kernel timing.");
-        CHECK_COND(
             aclrtRecordEvent(kernelStartEvent, stream) == ACL_SUCCESS,
             "Failed to record the start event for kernel timing.");
 
-        // Launch exactly the number of cores requested by the tiling result so
+        // Launch exactly the number of AICs requested by the tiling result so
         // scheduler-side load balancing and runtime launch geometry match.
         QuantMatmulMxfp4SwatKernel<<<tilingData.usedCoreNum, nullptr, stream>>>(
             dA, dB, dScaleA, dScaleB, dC, tilingData);
@@ -315,10 +313,9 @@ int main(int argc, char* argv[])
             return 1;
         }
         std::cout << std::fixed << std::setprecision(3)
-                  << "Kernel elapsed time: " << kernelElapsedUs << " us" << std::endl;
-        std::cout << "Timing note: event-based timing may be skewed when the NPU is shared. "
-                     "If the device is not exclusively owned, or the reported time is unstable, "
-                     "use the `msprof` command for precise profiling."
+                  << "[Profiling] Kernel elapsed time: " << kernelElapsedUs << " us" << std::endl;
+        std::cout << "[Profiling Note] Event timing may be affected by NPU contention. "
+                     "Use `msprof` for precise profiling."
                   << std::endl;
         cleanupAcl();
         return 0;

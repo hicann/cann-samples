@@ -183,7 +183,9 @@ def print_ranking(results: List[CandidateResult]) -> None:
         print(f"  {index}. {result.label}")
 
     if not ranked_results:
-        print("  No compatible template found.")
+        print("  No compatible algorithm found for the current shape.")
+        return
+    print("  Note: Only algorithms that support the current shape are listed.")
 
 
 def main(argv: List[str]) -> int:

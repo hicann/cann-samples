@@ -49,9 +49,12 @@ struct alignas(8) QuantMatmulTilingData {
     uint32_t mTailMain{0};
     uint32_t nTailMain{0};
 
-    // Runtime resource selection.
+    // Launch-time AIC count and buffering parameters.
+    // Number of AICs launched for this kernel instance.
     uint32_t usedCoreNum{0};
+    // Number of baseK tiles consumed before the rolling L1 buffers advance.
     uint8_t stepK{0};
+    // Number of rolling A/B buffer slots reserved in L1.
     uint8_t nBufferNum{0};
 
     // Output buffering mode selected for the kernel implementation.

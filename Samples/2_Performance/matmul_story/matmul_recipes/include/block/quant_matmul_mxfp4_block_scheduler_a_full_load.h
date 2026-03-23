@@ -159,8 +159,8 @@ public:
             return false;
         }
 
-        // A-full-load walks tiles in a direct row-major order because the path
-        // optimizes for reusing a resident A tile instead of N-axis balancing.
+        // A-full-load keeps each core on a fixed M tile and advances N across
+        // rounds so the resident A tile can be reused as long as possible.
         int64_t curRoundIdx = roundIdx_;
         int64_t mTileIdx = blockIdx_ % mCnt_;
         int64_t curNTailTile = (curRoundIdx == round_ - 1) ? nTailTile_ : 1;

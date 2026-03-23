@@ -22,7 +22,8 @@ from ml_dtypes import float4_e2m1fn
 
 
 def pack_b4_to_b8(b4_data: np.ndarray):
-    # Pack a B4 numpy array into an int8 numpy array.
+    # The sample stores two fp4 values inside one byte, so pack the last
+    # dimension in pairs before writing the binary inputs consumed by the kernel.
     packed_shape = [b4_data.shape[0], int(b4_data.shape[1] / 2)]
     pack_size = 2
     shift = np.array([0, 4], dtype=np.int8)
@@ -54,6 +55,8 @@ def gen_golden_data_simple(m, k, n):
     # When the result of the computation is very large, the precision check may fail.
     a_ori = np.random.uniform(1, 8, (M, K)).astype(float4_e2m1fn)
     a_pack_int8 = pack_b4_to_b8(a_ori)
+    # Keep B in (N, K) order so the packed file matches the sample's
+    # column-major/filter-major interpretation on the device side.
     b_ori = np.random.uniform(1, 8, (N, K)).astype(float4_e2m1fn)
     b_pack_int8 = pack_b4_to_b8(b_ori)
     a_scale = np.random.uniform(1, 8, size=(M, math.ceil(K / 64), 2)).astype(float8_e8m0)
@@ -80,6 +83,8 @@ def gen_golden_data_simple(m, k, n):
     write_artifacts(current_dir, a_pack_int8, b_pack_int8, a_scale, b_scale, out)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    # The script may be called from either the source tree or the installed
+    # sample directory. When those differ, emit artifacts to both locations.
     if os.path.normcase(os.path.abspath(script_dir)) != os.path.normcase(os.path.abspath(current_dir)):
         write_artifacts(script_dir, a_pack_int8, b_pack_int8, a_scale, b_scale, out)
 
