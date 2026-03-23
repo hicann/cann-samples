@@ -20,11 +20,13 @@ set(CPP_FILES
     src/6_binary_sum.cpp
 )
 
+configure_file(utils/gen_rms_norm_quant_data.py gen_rms_norm_quant_data.py COPYONLY)
+
 set(INSTALL_TARGETS "")
 foreach(CPP_FILE ${CPP_FILES})
     get_filename_component(TARGET_NAME ${CPP_FILE} NAME_WE)
+    set(TARGET_NAME "rms_norm_quant_${TARGET_NAME}")
     add_executable(${TARGET_NAME} ${CPP_FILE})
-    target_compile_definitions(${TARGET_NAME} PRIVATE SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_options(${TARGET_NAME} PRIVATE
         "-xasc"
         "--npu-arch=dav-3510"
@@ -45,4 +47,8 @@ add_custom_target(rms_norm_quant_story DEPENDS ${INSTALL_TARGETS})
 
 install(TARGETS ${INSTALL_TARGETS}
     RUNTIME DESTINATION 2_Performance/rms_norm_quant_story
+)
+
+install(FILES utils/gen_rms_norm_quant_data.py
+    DESTINATION 2_Performance/rms_norm_quant_story
 )

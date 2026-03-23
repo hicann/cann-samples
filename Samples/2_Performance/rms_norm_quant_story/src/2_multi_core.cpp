@@ -376,7 +376,7 @@ int32_t main(int argc, char *argv[])
     // 生成数据
     std::string exeDir = getExeDir();
     std::ostringstream cmd;
-    cmd << "python3 " << SOURCE_DIR << "/utils/gen_input_data.py "
+    cmd << "python3 " << exeDir << "/gen_rms_norm_quant_data.py "
         << "-r=" << r << " "
         << "-a=" << a << " "
         << "-d=float16 "
