@@ -26,8 +26,11 @@ using namespace AscendC;
 
 struct QuantMatmulMxBaseScheduler {};
 
+/*!
+ * \brief Column-major linear order of M–N plane tiles: tileIdx = nTileIdx * mCnt + mTileIdx.
+ */
 template <class ProblemShape_>
-class BlockSchedulerRowSplitMx {
+class BlockSchedulerColumnMajorMx {
 public:
     int64_t m_{0};
     int64_t n_{0};
@@ -55,7 +58,7 @@ public:
     };
 
 public:
-    __aicore__ inline BlockSchedulerRowSplitMx(const ProblemShape& shape, const Params& params)
+    __aicore__ inline BlockSchedulerColumnMajorMx(const ProblemShape& shape, const Params& params)
     {
         m_ = shape.m;
         n_ = shape.n;
@@ -94,9 +97,9 @@ public:
         if (tileIdx >= totalCnt_) {
             return false;
         }
-        // row-major: (mTileIdx, nTileIdx)
-        Get<MNK_M>(blockCoord) = tileIdx / nCnt_;
-        Get<MNK_N>(blockCoord) = tileIdx % nCnt_;
+        // column-major: tileIdx = nTileIdx * mCnt_ + mTileIdx
+        Get<MNK_M>(blockCoord) = tileIdx % mCnt_;
+        Get<MNK_N>(blockCoord) = tileIdx / mCnt_;
         roundIdx_++;
         return true;
     }
@@ -104,7 +107,7 @@ public:
 
 template <class ProblemShape_>
 struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxBaseScheduler> {
-    using SchedulerOp = BlockSchedulerRowSplitMx<ProblemShape_>;
+    using SchedulerOp = BlockSchedulerColumnMajorMx<ProblemShape_>;
 };
 
 }  // namespace Block

@@ -27,9 +27,9 @@
 #include "tiling/platform/platform_ascendc.h"
 #include <cstdlib>
 #include "../../common/host_utils/io_utils.h"
-#include "include/block/block_mmad_mx_base.h"
-#include "include/block/block_scheduler_mx_base.h"
-#include "include/kernel/quant_matmul_mx_kernel_impl_base.h"
+#include "include/kernel/quant_matmul_mx_kernel_last_round_tile_balance_impl.h"
+#include "include/block/block_mmad_mx_swat.h"
+#include "include/block/block_scheduler_mx_swat.h"
 #include "include/utils/quant_matmul_constant.h"
 
 void printUsage(const std::string& programName)
@@ -55,7 +55,7 @@ void parseArguments(int argc, char* argv[], int& m, int& k, int& n)
         m = std::stoi(argv[1]);
         k = std::stoi(argv[2]);
         n = std::stoi(argv[3]);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument& e) {
         throw std::invalid_argument("ERROR: m k n must be Integer");
     }
 
@@ -71,7 +71,6 @@ void parseArguments(int argc, char* argv[], int& m, int& k, int& n)
         throw std::invalid_argument("ERROR: k should satisfy that CeilDiv(k, 32) is an even number");
     }
 }
-
 int main(int argc, char* argv[])
 {
     int m, k, n;
@@ -83,12 +82,10 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // resource Init
     int32_t deviceId = 0;
     aclrtStream stream;
     aclrtEvent kernelStartEvent = nullptr;
     aclrtEvent kernelEndEvent = nullptr;
-
     auto ret = aclInit(nullptr);
     CHECK_COND(ret == ACL_SUCCESS, "aclInit failed.");
     ret = aclrtSetDevice(deviceId);
@@ -96,7 +93,6 @@ int main(int argc, char* argv[])
     ret = aclrtCreateStream(&stream);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtCreateStream failed.");
 
-    // Host Input/Output construct
     std::vector<uint8_t> hostA((m * k + 1) >> 1, 0);
     std::vector<uint8_t> hostB((k * n + 1) >> 1, 0);
     std::vector<uint8_t> hostScaleA(m * CeilDiv(k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, 0);
@@ -107,8 +103,6 @@ int main(int argc, char* argv[])
     auto sizeScaleA = static_cast<size_t>(1) * hostScaleA.size() * sizeof(uint8_t);
     auto sizeScaleB = static_cast<size_t>(1) * hostScaleB.size() * sizeof(uint8_t);
     auto sizeOutput = static_cast<size_t>(1) * hostOutput.size() * sizeof(half);
-    // 与 gen_data.py 一致：读写路径为 golden 目录（脚本同级）下的 input/、output/
-    // 使用 readlink 替代 std::filesystem，兼容 GCC 7.3（CANN 最低支持版本）
     char exePath[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
     std::string baseDir = ".";
@@ -132,7 +126,6 @@ int main(int argc, char* argv[])
     ReadFile(inputDir + "/input_scaleA.bin", sizeScaleA, hostScaleA.data(), sizeScaleA);
     ReadFile(inputDir + "/input_scaleB.bin", sizeScaleB, hostScaleB.data(), sizeScaleB);
 
-    // Device Addredd malloc
     GM_ADDR deviceA = nullptr;
     GM_ADDR deviceB = nullptr;
     GM_ADDR deviceScaleA = nullptr;
@@ -154,7 +147,6 @@ int main(int argc, char* argv[])
     std::unique_ptr<void, aclError (*)(void*)> DeviceOutputAddr(deviceOutput, aclrtFree);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMalloc deviceOutput failed.");
 
-    // memcpy from Host to Device
     ret = aclrtMemcpy(deviceA, sizeA, hostA.data(), sizeA, ACL_MEMCPY_HOST_TO_DEVICE);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceA failed.");
     ret = aclrtMemcpy(deviceB, sizeB, hostB.data(), sizeB, ACL_MEMCPY_HOST_TO_DEVICE);
@@ -167,42 +159,36 @@ int main(int argc, char* argv[])
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     CHECK_COND(ascendcPlatform != nullptr, "get ascendcPlatform failed.");
     uint32_t blockDim = ascendcPlatform->GetCoreNumAic();
-
     ret = aclrtCreateEvent(&kernelStartEvent);
     CHECK_COND(ret == ACL_SUCCESS, "Failed to create the start event for kernel timing.");
     ret = aclrtCreateEvent(&kernelEndEvent);
     CHECK_COND(ret == ACL_SUCCESS, "Failed to create the end event for kernel timing.");
     ret = aclrtRecordEvent(kernelStartEvent, stream);
     CHECK_COND(ret == ACL_SUCCESS, "Failed to record the start event for kernel timing.");
-    Kernel::QuantMatmulMxfp4BaseKernel<<<blockDim, nullptr, stream>>>(
+    Kernel::QuantMatmulMxfp4LastRoundTileBalanceKernel<<<blockDim, nullptr, stream>>>(
         m, k, n, deviceA, deviceB, deviceScaleA, deviceScaleB, deviceOutput);
-
     ret = aclrtRecordEvent(kernelEndEvent, stream);
     CHECK_COND(ret == ACL_SUCCESS, "Failed to record the end event for kernel timing.");
 
-    // Synchronize
     ret = aclrtSynchronizeStream(stream);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtSynchronizeStream failed.");
-
     float kernelElapsedMs = 0.0F;
     ret = aclrtEventElapsedTime(&kernelElapsedMs, kernelStartEvent, kernelEndEvent);
     CHECK_COND(ret == ACL_SUCCESS, "Failed to query the kernel elapsed time.");
     double kernelElapsedUs = static_cast<double>(kernelElapsedMs) * 1000.0;
 
-    // memcpy from Device to Host
     ret = aclrtMemcpy(hostOutput.data(), sizeOutput, deviceOutput, sizeOutput, ACL_MEMCPY_DEVICE_TO_HOST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceOutput failed.");
 
     WriteFile(outputDir + "/npu_out.bin", hostOutput.data(), sizeOutput);
 
-    // 调用与 gen_data 同级的 verify_result.py（baseDir 下），脚本从 ./output/ 读 bin
     std::string cmd = "cd \"" + baseDir + "\" && python3 verify_result.py " + std::to_string(m) + " " +
                       std::to_string(n);
     if (std::system(cmd.c_str()) != 0) {
         return 1;
     }
     std::cout << std::fixed << std::setprecision(3)
-              << "Kernel elapsed time: " << kernelElapsedUs << " us" << std::endl;
+                  << "Kernel elapsed time: " << kernelElapsedUs << " us" << std::endl;
     std::cout << "Timing note: event-based timing may be skewed when the NPU is shared. "
                  "If the device is not exclusively owned, or the reported time is unstable, "
                  "use the `msprof` command for precise profiling."

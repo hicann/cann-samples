@@ -102,6 +102,9 @@ function(add_matmul_tutorial target_name source_under_tutorials subdir)
 endfunction()
 
 add_matmul_tutorial(matmul_tutorial_mxfp4_base 0_naive/matmul_tutorial_mxfp4_base.cpp 0_naive)
+add_matmul_tutorial(matmul_tutorial_mxfp4_swat  2_block_swat/matmul_tutorial_mxfp4_swat.cpp  2_block_swat)
+add_matmul_tutorial(matmul_tutorial_mxfp4_swat_balance  3_last_round_tile_balance/matmul_tutorial_mxfp4_swat_balance.cpp  3_last_round_tile_balance)
+add_matmul_tutorial(matmul_tutorial_mxfp4_swat_unitflag  4_unit_flag/matmul_tutorial_mxfp4_swat_unitflag.cpp  4_unit_flag)
 
 # ============================================================================
 # Install layout

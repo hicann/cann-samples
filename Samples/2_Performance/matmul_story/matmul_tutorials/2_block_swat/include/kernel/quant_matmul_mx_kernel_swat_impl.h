@@ -9,12 +9,12 @@
  */
 
 /*!
- * \file quant_matmul_mx_kernel_base_impl.h
+ * \file quant_matmul_mx_kernel_swat_impl.h
  * \brief
  */
 
-#ifndef QUANT_MATMUL_MX_KERNEL_Base_IMPL_H
-#define QUANT_MATMUL_MX_KERNEL_Base_IMPL_H
+#ifndef QUANT_MATMUL_MX_KERNEL_SWAT_IMPL_H
+#define QUANT_MATMUL_MX_KERNEL_SWAT_IMPL_H
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
 #else
@@ -24,8 +24,8 @@
 #include "../../../../common/kernel_utils/common_utils.h"
 #include "../../../../common/kernel_utils/layout_utils.h"
 #include "../../../../common/kernel_utils/tuple_utils.h"
-#include "../block/block_scheduler_mx_base.h"
-#include "../block/block_mmad_mx_base.h"
+#include "../block/block_scheduler_mx_swat.h"
+#include "../block/block_mmad_mx_swat.h"
 #include "../utils/coord_utils.h"
 
 namespace Kernel {
@@ -36,11 +36,11 @@ namespace Kernel {
 using namespace AscendC;
 
 QBMM_MX_KERNEL_CLASS_TEM_PARAMS
-class QuantMatmulMxKernelBaseImpl {
+class QuantMatmulMxKernelSwatImpl {
 public:
-    __aicore__ inline QuantMatmulMxKernelBaseImpl()
+    __aicore__ inline QuantMatmulMxKernelSwatImpl()
     {}
-    __aicore__ inline ~QuantMatmulMxKernelBaseImpl()
+    __aicore__ inline ~QuantMatmulMxKernelSwatImpl()
     {}
 
     static constexpr bool transA = BlockMmad::transA;
@@ -56,9 +56,8 @@ public:
 
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
-    using BlockCoord = AscendC::Coord<int64_t, int64_t>;
-    // x1, x2, x1Scale, x2Scale, y
-    using BlockOffset = AscendC::Shape<int64_t, int64_t, int64_t, int64_t, int64_t>;
+    using BlockCoord = typename BlockSchedulerOp::BlockCoord;
+    using BlockOffset = AscendC::Shape<int64_t, int64_t, int64_t, int64_t, int64_t>;  // a, b, scaleA, scaleB, c
     using CoordClass = Coordinate<transA, transB, CubeFormat::ND, CubeFormat::ND, CubeFormat::ND>;
     using BlockSchedulerParams = typename BlockSchedulerOp::Params;
 
@@ -99,7 +98,7 @@ private:
 };
 
 QBMM_MX_KERNEL_CLASS_TEM_PARAMS
-__aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::operator()(const Params& params)
+__aicore__ inline void QuantMatmulMxKernelSwatImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::operator()(const Params& params)
 {
     if ASCEND_IS_AIV {
         return;
@@ -115,7 +114,7 @@ __aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS
 }
 
 QBMM_MX_KERNEL_CLASS_TEM_PARAMS
-__aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::Init(const Params& params)
+__aicore__ inline void QuantMatmulMxKernelSwatImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::Init(const Params& params)
 {
     aGlobal_.SetGlobalBuffer((__gm__ AType*)params.mmadParams.aGmAddr);
     bGlobal_.SetGlobalBuffer((__gm__ BType*)params.mmadParams.bGmAddr);
@@ -125,21 +124,18 @@ __aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS
 }
 
 QBMM_MX_KERNEL_CLASS_TEM_PARAMS
-__aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::Process(
+__aicore__ inline void QuantMatmulMxKernelSwatImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS>::Process(
     const Params& params, BlockSchedulerOp& bs)
 {
     CoordClass coord(
         params.problemShape.m, params.problemShape.n, params.problemShape.k, params.qbmmParams.baseM,
         params.qbmmParams.baseN, params.qbmmParams.baseK);
     BlockCoord blockIdx;
-    // get TileIdx for each Core
     while (bs.GetTileIdx(blockIdx)) {
-        // get current block shape
         BlockShape singleShape = bs.GetBlockShape(blockIdx);
         if (Get<MNK_M>(singleShape) <= 0 || Get<MNK_N>(singleShape) <= 0) {
             return;
         }
-        // get current block index in gm
         blockOffset_ = coord.template GetQuantOffset<false>(
             Get<IDX_M_TILEIDX>(blockIdx), Get<IDX_N_TILEIDX>(blockIdx),
             Get<IDX_M_TAIL_SPLIT_TILEIDX>(singleShape),
@@ -154,7 +150,7 @@ __aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS
     }
 }
 
-__global__ __aicore__ void QuantMatmulMxfp4BaseKernel(uint64_t m, uint64_t k, uint64_t n,
+__global__ __aicore__ void QuantMatmulMxfp4SwatKernel(uint64_t m, uint64_t k, uint64_t n,
         GM_ADDR aGM, GM_ADDR bGM, GM_ADDR aScaleGM, GM_ADDR bScaleGM, GM_ADDR cGM)
 {
     KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIC_ONLY);
@@ -162,15 +158,16 @@ __global__ __aicore__ void QuantMatmulMxfp4BaseKernel(uint64_t m, uint64_t k, ui
     using BType = fp4x2_e2m1_t;
     using CType = bfloat16_t;
 
-    using BlockScheduler = Block::QuantMatmulMxBaseScheduler;
+    using BlockScheduler = Block::QuantMatmulMxSwatScheduler;
     using BlockMmad = Block::BlockMmadMx<AType, BType, CType>;
     using ProblemShape = MatmulShape;
-    using QuantMatmulKernelImpl = Kernel::QuantMatmulMxKernelBaseImpl<ProblemShape, BlockMmad, BlockScheduler>;
+    using QuantMatmulKernelImpl = Kernel::QuantMatmulMxKernelSwatImpl<ProblemShape, BlockMmad, BlockScheduler>;
     using Params = typename QuantMatmulKernelImpl::Params;
 
     constexpr uint32_t BASE_M = 256;
     constexpr uint32_t BASE_N = 256;
     constexpr uint32_t BASE_K = 256; // 128 / sizeof(fp4x2_e2m1_t)
+    constexpr uint32_t PINGPONG_NUM = 2;
 
     Params params;
     params.problemShape.m = static_cast<int64_t>(m);
@@ -181,6 +178,9 @@ __global__ __aicore__ void QuantMatmulMxfp4BaseKernel(uint64_t m, uint64_t k, ui
     params.mmadParams.scaleAGmAddr = aScaleGM;
     params.mmadParams.scaleBGmAddr = bScaleGM;
     params.mmadParams.cGmAddr = cGM;
+    params.l1Params.kL1 = BASE_K;
+    params.l1Params.scaleKL1 = BASE_K;
+    params.l1Params.l1BufNum = PINGPONG_NUM;
     params.schParams.baseM = BASE_M;
     params.schParams.baseN = BASE_N;
     params.qbmmParams.baseM = BASE_M;
@@ -194,3 +194,4 @@ __global__ __aicore__ void QuantMatmulMxfp4BaseKernel(uint64_t m, uint64_t k, ui
 } // namespace Kernel
 
 #endif
+

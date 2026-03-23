@@ -97,7 +97,7 @@ public:
 
     // Matrix B GM-L1，ND2NZ
     __aicore__ inline void CopyInL1B(
-        const AscendC::GlobalTensor<AType>& bGlobal, const AscendC::LocalTensor<AType>& bl1Local,
+        const AscendC::GlobalTensor<AType>& bGlobal, const AscendC::LocalTensor<BType>& bl1Local,
         uint64_t curNL1, uint64_t curKL1, uint64_t k_)
     {
         AscendC::Nd2NzParams nd2nzParams;
