@@ -246,23 +246,23 @@ int main(int argc, char* argv[])
         ReadFile(inputDir + "/input_scaleB.bin", sizeScaleB, hScaleB, sizeScaleB);
 
         CHECK_COND(
-            aclrtMalloc((void**)&dA, sizeA, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS,
+            aclrtMalloc((void**)&dA, sizeA, ACL_MEM_MALLOC_HUGE_ONLY) == ACL_SUCCESS,
             "Failed to allocate the device buffer for input A.");
         std::unique_ptr<void, aclError (*)(void*)> deviceA(dA, aclrtFree);
         CHECK_COND(
-            aclrtMalloc((void**)&dB, sizeB, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS,
+            aclrtMalloc((void**)&dB, sizeB, ACL_MEM_MALLOC_HUGE_ONLY) == ACL_SUCCESS,
             "Failed to allocate the device buffer for input B.");
         std::unique_ptr<void, aclError (*)(void*)> deviceB(dB, aclrtFree);
         CHECK_COND(
-            aclrtMalloc((void**)&dScaleA, sizeScaleA, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS,
+            aclrtMalloc((void**)&dScaleA, sizeScaleA, ACL_MEM_MALLOC_HUGE_ONLY) == ACL_SUCCESS,
             "Failed to allocate the device buffer for scaleA.");
         std::unique_ptr<void, aclError (*)(void*)> deviceScaleA(dScaleA, aclrtFree);
         CHECK_COND(
-            aclrtMalloc((void**)&dScaleB, sizeScaleB, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS,
+            aclrtMalloc((void**)&dScaleB, sizeScaleB, ACL_MEM_MALLOC_HUGE_ONLY) == ACL_SUCCESS,
             "Failed to allocate the device buffer for scaleB.");
         std::unique_ptr<void, aclError (*)(void*)> deviceScaleB(dScaleB, aclrtFree);
         CHECK_COND(
-            aclrtMalloc((void**)&dC, sizeC, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS,
+            aclrtMalloc((void**)&dC, sizeC, ACL_MEM_MALLOC_HUGE_ONLY) == ACL_SUCCESS,
             "Failed to allocate the device buffer for output C.");
         std::unique_ptr<void, aclError (*)(void*)> deviceC(dC, aclrtFree);
 
