@@ -66,9 +66,9 @@ __global__ __aicore__ __vector__ void add_kernel(
     constexpr static int64_t PIPELINE_DEPTH = 2;
     AscendC::TPipe pipe;
     AscendC::GlobalTensor<T> xGm, yGm, zGm;
-    AscendC::TQue<AscendC::QuePosition::VECIN, PIPELINE_DEPTH> inQueueX;
-    AscendC::TQue<AscendC::QuePosition::VECIN, PIPELINE_DEPTH> inQueueY;
-    AscendC::TQue<AscendC::QuePosition::VECOUT, PIPELINE_DEPTH> outQueueZ;
+    AscendC::TQue<AscendC::TPosition::VECIN, PIPELINE_DEPTH> inQueueX;
+    AscendC::TQue<AscendC::TPosition::VECIN, PIPELINE_DEPTH> inQueueY;
+    AscendC::TQue<AscendC::TPosition::VECOUT, PIPELINE_DEPTH> outQueueZ;
     pipe.InitBuffer(inQueueX, PIPELINE_DEPTH, tileSize);
     pipe.InitBuffer(inQueueY, PIPELINE_DEPTH, tileSize);
     pipe.InitBuffer(outQueueZ, PIPELINE_DEPTH, tileSize);
