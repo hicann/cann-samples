@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file moe_init_routing_final.cpp
+ * \file 5_simt.cpp
  * \brief
  */
 
@@ -37,61 +37,12 @@
 
 #include "moe_mrgsort.h"
 #include "moe_mrgsort_out.h"
+#include "moe_sort_base.h"
 #include "moe_tiling_def.h"
 #include "moe_util.h"
 #include "moe_kernel_common.h"
 
-#define CHECK_ACL(x) do { \
-    aclError err = (x); \
-    if (err != ACL_SUCCESS) { \
-        printf("ACL Error %d at %s:%d\n", err, __FILE__, __LINE__); \
-        exit(1); \
-    } \
-} while(0)
-
 using namespace AscendC;
-
-constexpr int64_t SIMT_DCACHE_SIZE = 64 * 1024; // UB要给SIMT预留64k的DCache空间
-constexpr int64_t ASCENDC_FRAMEWORK_RESERVED_SIZE = 16 * 1024 * 1024; // 预留16M大小给AscendC框架使用
-constexpr int64_t KV_FACTOR = 2; // sort key and value
-constexpr int64_t SORT_BUFFER_FACTOR = 6;
-
-class MoeSortBase {
-protected:
-    constexpr static int64_t DST_BLK_STRIDE = 1;
-    constexpr static int64_t DST_REP_STRIDE = 8;
-    constexpr static int64_t MAX_MRGSORT_LIST = 4;
-    constexpr static uint16_t FLOAT_REG_TENSOR_LENGTH = 256 / sizeof(float);
-
-    GlobalTensor<int32_t> expertIdxGm;
-    GlobalTensor<int32_t> expandedRowIdxGm;
-    GlobalTensor<int32_t> sortedExpertForSourceRowGm;
-    GlobalTensor<int32_t> expandDstToSrcRowGm;
-    GlobalTensor<int32_t> sortedexpertIdxGm;
-    GlobalTensor<int32_t> expertCountTempGm;
-
-    TQue<QuePosition::VECIN, PIPELINE_DEPTH> sortDataCopyInQueue;
-    TQue<QuePosition::VECOUT, PIPELINE_DEPTH> sortDataCopyOutQueue;
-    TBuf<TPosition::VECCALC> tempBuffer;
-    TBuf<TPosition::VECCALC> sortedBuffer;
-
-    TPipe *pipe;
-    int64_t blockIdx = 0;
-    int64_t totalLength = 0;
-    int64_t sortNum = 0;
-    int64_t tileLength = 0;
-    int64_t expertStart = 0;
-    int64_t expertEnd = 0;
-    int64_t actualExpertNum = 0;
-    int64_t n = 0;
-    int64_t k = 0;
-    int64_t rowIdxType = 0;
-    int64_t vmsNeedCoreNum = 0;
-    int64_t sortOutOneLoopMaxElements = 0;
-
-public:
-    __aicore__ inline MoeSortBase(){};
-};
 
 class ExpertIdxSortOneCore : public MoeSortBase {
 public:
@@ -113,16 +64,14 @@ public:
         actualExpertNum = expertEnd - expertStart;
 
         expertIdxGm.SetGlobalBuffer(expertIdx, this->tileLength);
-        sortedexpertIdxGm.SetGlobalBuffer(workspace, this->tileLength);
+        sortedExpertIdxGm.SetGlobalBuffer(workspace, this->tileLength);
         expandedRowIdxGm.SetGlobalBuffer(expandedRowIdx,  this->tileLength);
 
         if (this->blockIdx == 0) {
             expertCountTempGm.SetGlobalBuffer(workspace + Align(totalLength, sizeof(int32_t)) * KV_FACTOR, 
                                                                 actualExpertNum);
             InitGlobalMemory(expertCountTempGm, actualExpertNum, 0);
-            event_t event = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_MTE2));
-            SetFlag<HardEvent::MTE3_MTE2>(event);
-            WaitFlag<HardEvent::MTE3_MTE2>(event);
+            SetWaitFlag<HardEvent::MTE3_MTE2>(HardEvent::MTE3_MTE2);
         }
 
         // key and value
@@ -154,26 +103,8 @@ public:
 
         uint16_t repeatTimes = Ceil(this->tileLength, FLOAT_REG_TENSOR_LENGTH);
         uint32_t sreg = static_cast<uint32_t>(this->tileLength);
-        __local_mem__ float *inUbAddr = (__local_mem__ float *)expertIdxFp32.GetPhyAddr();
-        float cmpScalar = static_cast<float>(expertStart);
-        float negone = static_cast<float>(-1);
-
-        __VEC_SCOPE__
-        {
-            MicroAPI::RegTensor<float> inRegToFloat, infFloat, vDstReg0;
-            MicroAPI::MaskReg maskRegLoop, cmpMaskReg;
-            MicroAPI::MaskReg pregMain = MicroAPI::CreateMask<float, MicroAPI::MaskPattern::ALL>();
-            Duplicate(infFloat, static_cast<float>(MIN_FP32), pregMain);
-
-            for (uint16_t i = 0; i < repeatTimes; i++) {
-                maskRegLoop = MicroAPI::UpdateMask<float>(sreg);
-                MicroAPI::DataCopy(inRegToFloat, inUbAddr + i * FLOAT_REG_TENSOR_LENGTH);
-                MicroAPI::CompareScalar<float, CMPMODE::LT>(cmpMaskReg, inRegToFloat, cmpScalar, maskRegLoop);
-                MicroAPI::Muls(inRegToFloat, inRegToFloat, negone, maskRegLoop);
-                MicroAPI::Select(vDstReg0, infFloat, inRegToFloat, cmpMaskReg);
-                MicroAPI::DataCopy(inUbAddr + i * FLOAT_REG_TENSOR_LENGTH, vDstReg0, maskRegLoop);
-            }
-        }
+        __ubuf__ float *inUbAddr = (__ubuf__ float *)expertIdxFp32.GetPhyAddr();
+        SortVf(inUbAddr, expertStart, sreg, repeatTimes);
 
         int64_t duplicateNum = this->totalLength % ONE_REPEAT_SORT_NUM;
         if (duplicateNum > 0) {
@@ -210,7 +141,7 @@ public:
         DataCopyParams intriParams;
         intriParams.blockCount = 1;
         intriParams.blockLen = this->totalLength * sizeof(int32_t);
-        DataCopyPad(sortedexpertIdxGm, outLocal[0], intriParams);
+        DataCopyPad(sortedExpertIdxGm, outLocal[0], intriParams);
         DataCopyPad(expandedRowIdxGm, outLocal[this->sortNum], intriParams);
         sortDataCopyOutQueue.FreeTensor(outLocal);
     }
@@ -291,15 +222,13 @@ public:
         int64_t totalLengthAlign = Align(this->totalLength, sizeof(int32_t));
         expertIdxGm.SetGlobalBuffer(expertIdx + this->blockIdx * tilingData->vbsComputeTilingData.perCoreElements, 
                                     this->sortTotalLength);
-        sortedexpertIdxGm.SetGlobalBuffer(workspace, totalLengthAlign);
+        sortedExpertIdxGm.SetGlobalBuffer(workspace, totalLengthAlign);
         expandedRowIdxGm.SetGlobalBuffer(expandedRowIdx, totalLengthAlign);
 
         if (this->blockIdx == 0) {
             expertCountTempGm.SetGlobalBuffer(workspace + Align(n * k, sizeof(int32_t)) * 2, actualExpertNum);
             InitGlobalMemory(expertCountTempGm, actualExpertNum, 0);
-            event_t event = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_MTE2));
-            SetFlag<HardEvent::MTE3_MTE2>(event);
-            WaitFlag<HardEvent::MTE3_MTE2>(event);
+            SetWaitFlag<HardEvent::MTE3_MTE2>(HardEvent::MTE3_MTE2);
         }
 
         // key and value
@@ -328,9 +257,7 @@ public:
         LocalTensor<int32_t> rowIdxLocal = inLocal[sortNum];
         int64_t startValue = this->blockIdx * this->vbsTilingData->perCoreElements + inOffset;
 
-        event_t event = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_S));
-        SetFlag<HardEvent::MTE3_S>(event);
-        WaitFlag<HardEvent::MTE3_S>(event);
+        SetWaitFlag<HardEvent::MTE3_S>(HardEvent::MTE3_S);
         ArithProgression<int32_t>(rowIdxLocal, startValue, 1, size);
         sortDataCopyInQueue.EnQue(inLocal);
     }
@@ -346,27 +273,8 @@ public:
 
         uint16_t repeatTimes = Ceil(sortNum, FLOAT_REG_TENSOR_LENGTH);
         uint32_t sreg = static_cast<uint32_t>(sortNum);
-        // __ubuf__
-        __local_mem__ float *inUbAddr = (__local_mem__ float *)expertForSourceRowLocalFp32.GetPhyAddr();
-        float cmpScalar = static_cast<float>(expertStart);
-        float negone = static_cast<float>(-1);
-
-        __VEC_SCOPE__
-        {
-            MicroAPI::MaskReg pregMain = MicroAPI::CreateMask<float, MicroAPI::MaskPattern::ALL>();
-            MicroAPI::RegTensor<float> inRegToFloat, infFloat, vDstReg0;
-            Duplicate(infFloat, static_cast<float>(MIN_FP32), pregMain);
-
-            MicroAPI::MaskReg maskRegLoop, cmpMaskReg;
-            for (uint16_t i = 0; i < repeatTimes; i++) {
-                maskRegLoop = MicroAPI::UpdateMask<float>(sreg);
-                MicroAPI::DataCopy(inRegToFloat, inUbAddr + i * FLOAT_REG_TENSOR_LENGTH);
-                MicroAPI::CompareScalar<float, CMPMODE::LT>(cmpMaskReg, inRegToFloat, cmpScalar, maskRegLoop);
-                MicroAPI::Muls(inRegToFloat, inRegToFloat, negone, maskRegLoop);
-                MicroAPI::Select(vDstReg0, infFloat, inRegToFloat, cmpMaskReg);
-                MicroAPI::DataCopy(inUbAddr + i * FLOAT_REG_TENSOR_LENGTH, vDstReg0, maskRegLoop);
-            }
-        }
+        __ubuf__ float *inUbAddr = (__ubuf__ float *)expertForSourceRowLocalFp32.GetPhyAddr();
+        SortVf(inUbAddr, expertStart, sreg, repeatTimes);
 
         int64_t duplicateNum = size % ONE_REPEAT_SORT_NUM;
         if (duplicateNum > 0) {
@@ -525,7 +433,7 @@ public:
         }
 
         LocalTensor<float> outLocalV = outLocal[this->sortOutOneLoopMaxElements * MAX_MRGSORT_LIST];
-        sorter->SetOutput(this->sortedexpertIdxGm, this->expandedRowIdxGm, outLocal, outLocalV);
+        sorter->SetOutput(this->sortedExpertIdxGm, this->expandedRowIdxGm, outLocal, outLocalV);
 
         LocalTensor<float> tempBuffer =
             sortedBuffer.Get<float>(GetSortLen<float>(this->sortOutOneLoopMaxElements) * MAX_MRGSORT_LIST);
@@ -599,18 +507,15 @@ private:
     GlobalTensor<int32_t> expertCountTempGm_;
     GlobalTensor<int64_t> expertTokensCountGm_;
     GlobalTensor<int32_t> expertTotalCountGm_;
-    GlobalTensor<int32_t> expandedRowIdxGm_;
 
-    TQue<QuePosition::VECIN, PIPELINE_DEPTH> sortedExpertIdxInQueue_;
-    TQue<QuePosition::VECOUT, PIPELINE_DEPTH> expertCountOutToTempQueue_;
-    TQue<QuePosition::VECIN, PIPELINE_DEPTH> expertCountTempInQueue_;
-    TQue<QuePosition::VECOUT, PIPELINE_DEPTH> expertIdxCountOutQueue_;
-    TQue<QuePosition::VECOUT, PIPELINE_DEPTH> expertTotalCountQueue_;
+    TQue<QuePosition::VECIN, 1> sortedExpertIdxInQueue_;
+    TQue<QuePosition::VECOUT, 1> expertCountOutToTempQueue_;
+    TQue<QuePosition::VECIN, 1> expertCountTempInQueue_;
+    TQue<QuePosition::VECOUT, 1> expertIdxCountOutQueue_;
+    TQue<QuePosition::VECOUT, 1> expertTotalCountQueue_;
 
     TPipe *pipe_;
     int64_t blockIdx_;
-    int64_t n_ = 0;
-    int64_t k_ = 0;
     int64_t needCoreNum_ = 0;
     int64_t perCoreElements_ = 0;
     int64_t curCoreElements_ = 0;
@@ -621,17 +526,13 @@ private:
     int64_t perCorePerLoopElements_ = 0;
     int64_t perCoreLastLoopElements_ = 0;
     int64_t actualExpertTotalNum_ = 0;
-    int64_t expertNum_ = 0;
-    int64_t expertTokensNumType_ = 0;
     int64_t expertCountElements_ = 0;
     MoeTokensCountTilingData *expertTokensCountTilingData_;
 
 public:
-    __aicore__ inline ExpertTokensCount()
-    {}
+    __aicore__ inline ExpertTokensCount(){};
 
-    __aicore__ inline void Init(__gm__ int32_t *expandedRowIdx, 
-                                __gm__ int64_t *expertTokensCount, 
+    __aicore__ inline void Init(__gm__ int64_t *expertTokensCount, 
                                 __gm__ int32_t *workspace,
                                 MoeInitRoutingTilingData *tilingData, TPipe *tPipe)
     {
@@ -639,15 +540,11 @@ public:
         blockIdx_ = AscendC::GetBlockIdx();
         expertTokensCountTilingData_ = &(tilingData->countTilingData);
 
-        n_ = tilingData->n;
-        k_ = tilingData->k;
         needCoreNum_ = expertTokensCountTilingData_->needCoreNum;
         perCoreElements_ = expertTokensCountTilingData_->perCoreElements;
         expertStart_ = tilingData->expertStart;
         expertEnd_ = tilingData->expertEnd;
         actualExpertNum_ = expertEnd_ - expertStart_;
-        expertNum_ = tilingData->expertNum;
-        expertTokensNumType_ = tilingData->expertTokensNumType;
         expertCountElements_ = actualExpertNum_;
 
         if (blockIdx_ == needCoreNum_ - 1) {
@@ -662,86 +559,26 @@ public:
             perCoreLastLoopElements_ = expertTokensCountTilingData_->perCoreLastLoopElements;
         }
 
-        expandedRowIdxGm_.SetGlobalBuffer(expandedRowIdx + blockIdx_ * perCoreElements_);
         expertTokensCountGm_.SetGlobalBuffer(expertTokensCount, expertCountElements_);
         sortedExpertIdxGm_.SetGlobalBuffer(workspace + blockIdx_ * perCoreElements_, curCoreElements_);
 
-        int64_t expertIdxOffset = Align(n_ * k_, sizeof(int32_t)) * 2;
+        int64_t expertIdxOffset = Align(tilingData->n * tilingData->k, sizeof(int32_t)) * 2;
         int64_t expertCountTempOffset = Align(actualExpertNum_, sizeof(int32_t));
         expertCountTempGm_.SetGlobalBuffer(workspace + expertIdxOffset, actualExpertNum_);
         expertTotalCountGm_.SetGlobalBuffer(workspace + expertIdxOffset + expertCountTempOffset, actualExpertNum_);
        
         int64_t sortedExpertIdxInLen = Max(perCorePerLoopElements_, perCoreLastLoopElements_);
-        pipe_->InitBuffer(sortedExpertIdxInQueue_, PIPELINE_DEPTH, 
-                          AlignBytes(sortedExpertIdxInLen, sizeof(int32_t)));
-        pipe_->InitBuffer(expertCountOutToTempQueue_, PIPELINE_DEPTH, 
-                          AlignBytes(actualExpertNum_, sizeof(int32_t)));
-        pipe_->InitBuffer(expertCountTempInQueue_, PIPELINE_DEPTH, 
-                          AlignBytes(actualExpertNum_, sizeof(int32_t)));
-        pipe_->InitBuffer(expertIdxCountOutQueue_, PIPELINE_DEPTH, 
-                          AlignBytes(expertCountElements_, sizeof(int64_t)));
-        pipe_->InitBuffer(expertTotalCountQueue_, PIPELINE_DEPTH, 
-                          AlignBytes(1, sizeof(int32_t)));
-    }
+        pipe_->InitBuffer(sortedExpertIdxInQueue_, 1, AlignBytes(sortedExpertIdxInLen, sizeof(int32_t)));
+        pipe_->InitBuffer(expertCountOutToTempQueue_, 1, AlignBytes(actualExpertNum_, sizeof(int32_t)));
+        pipe_->InitBuffer(expertCountTempInQueue_, 1, AlignBytes(actualExpertNum_, sizeof(int32_t)));
+        pipe_->InitBuffer(expertIdxCountOutQueue_, 1, AlignBytes(expertCountElements_, sizeof(int64_t)));
+        pipe_->InitBuffer(expertTotalCountQueue_, 1, AlignBytes(1, sizeof(int32_t)));
 
-    __aicore__ inline void CopyOut()
-    {
-        LocalTensor<int32_t> expertCountOutLocal = expertCountOutToTempQueue_.DeQue<int32_t>();
-
-        DataCopyExtParams copyParams{static_cast<uint16_t>(1), 
-                                     static_cast<uint32_t>((actualExpertNum_) * sizeof(int32_t)),
-                                     0, 0, 0};
-        SetAtomicAdd<int32_t>();
-        DataCopyPad(expertCountTempGm_, expertCountOutLocal, copyParams);
-        SetAtomicNone();
-        expertCountOutToTempQueue_.FreeTensor(expertCountOutLocal);
-    }
-
-    __aicore__ inline void ExpertCountCopyIn()
-    {
-        LocalTensor<int32_t> expertCountTempInLocal = expertCountTempInQueue_.AllocTensor<int32_t>();
-
-        DataCopyExtParams dataCopyParams{static_cast<uint16_t>(1),
-                                         static_cast<uint32_t>((actualExpertNum_) * sizeof(int32_t)), 0, 0, 0};
-        DataCopyPadExtParams dataCopyPadParams{false, 0, 0, 0};
-        DataCopyPad(expertCountTempInLocal, expertCountTempGm_, dataCopyParams, dataCopyPadParams);
-        expertCountTempInQueue_.EnQue(expertCountTempInLocal);
-    }
-
-    __aicore__ inline void ExpertCountCompute()
-    {
-        LocalTensor<int32_t> expertCountTempInLocal = expertCountTempInQueue_.DeQue<int32_t>();
-        LocalTensor<int64_t> expertCountOutLocal = expertIdxCountOutQueue_.AllocTensor<int64_t>();
-        LocalTensor<int32_t> expertTotalCountLocal = expertTotalCountQueue_.AllocTensor<int32_t>();
-        event_t eventIDMte2ToS = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE2_S));
-        SetFlag<HardEvent::MTE2_S>(eventIDMte2ToS);
-        WaitFlag<HardEvent::MTE2_S>(eventIDMte2ToS);
-        // key value mode is not supported yet
-        for (int64_t i = 0; i < actualExpertNum_; i++) {
-            int64_t expertCount = static_cast<int64_t>(expertCountTempInLocal.GetValue(i));
-            expertCountOutLocal.SetValue(i, expertCount);
-            actualExpertTotalNum_ += expertCount;
+        if (blockIdx_ == 0) {
+            InitGlobalMemory(expertTotalCountGm_, 1, 0);
+            SetWaitFlag<HardEvent::MTE3_MTE2>(HardEvent::MTE3_MTE2);
         }
-        expertTotalCountLocal.SetValue(0, static_cast<int32_t>(actualExpertTotalNum_));
-        event_t eventIDSToMte3 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::S_MTE3));
-        SetFlag<HardEvent::S_MTE3>(eventIDSToMte3);
-        WaitFlag<HardEvent::S_MTE3>(eventIDSToMte3);
-        expertIdxCountOutQueue_.EnQue<int64_t>(expertCountOutLocal);
-        expertTotalCountQueue_.EnQue<int32_t>(expertTotalCountLocal);
-        expertCountTempInQueue_.FreeTensor(expertCountTempInLocal);
-    }
-
-    __aicore__ inline void ExpertCountCopyOut()
-    {
-        LocalTensor<int64_t> expertCountOutLocal = expertIdxCountOutQueue_.DeQue<int64_t>();
-        LocalTensor<int32_t> expertTotalCountLocal = expertTotalCountQueue_.DeQue<int32_t>();
-        DataCopyExtParams copyParams{static_cast<uint16_t>(1),
-                                     static_cast<uint32_t>(expertCountElements_ * sizeof(int64_t)), 0, 0, 0};
-        DataCopyPad(expertTokensCountGm_, expertCountOutLocal, copyParams);
-        copyParams.blockLen = sizeof(int32_t);
-        DataCopyPad(expertTotalCountGm_, expertTotalCountLocal, copyParams);
-        expertIdxCountOutQueue_.FreeTensor(expertCountOutLocal);
-        expertTotalCountQueue_.FreeTensor(expertTotalCountLocal);
+        SyncAll();
     }
 
     __aicore__ inline void Process()
@@ -772,7 +609,84 @@ public:
         }
         SyncAll();
     }
+
+private:
+    __aicore__ inline void CopyOut()
+    {
+        LocalTensor<int32_t> expertCountOutLocal = expertCountOutToTempQueue_.DeQue<int32_t>();
+
+        DataCopyExtParams copyParams{static_cast<uint16_t>(1), 
+                                     static_cast<uint32_t>((actualExpertNum_) * sizeof(int32_t)),
+                                     0, 0, 0};
+        SetAtomicAdd<int32_t>();
+        DataCopyPad(expertCountTempGm_, expertCountOutLocal, copyParams);
+        SetAtomicNone();
+        expertCountOutToTempQueue_.FreeTensor(expertCountOutLocal);
+    }
+
+    __aicore__ inline void ExpertCountCopyIn()
+    {
+        LocalTensor<int32_t> expertCountTempInLocal = expertCountTempInQueue_.AllocTensor<int32_t>();
+
+        DataCopyExtParams dataCopyParams{static_cast<uint16_t>(1),
+                                         static_cast<uint32_t>((actualExpertNum_) * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams dataCopyPadParams{false, 0, 0, 0};
+        DataCopyPad(expertCountTempInLocal, expertCountTempGm_, dataCopyParams, dataCopyPadParams);
+        expertCountTempInQueue_.EnQue(expertCountTempInLocal);
+    }
+
+    __aicore__ inline void ExpertCountCompute()
+    {
+        LocalTensor<int32_t> expertCountTempInLocal = expertCountTempInQueue_.DeQue<int32_t>();
+        LocalTensor<int64_t> expertCountOutLocal = expertIdxCountOutQueue_.AllocTensor<int64_t>();
+        LocalTensor<int32_t> expertTotalCountLocal = expertTotalCountQueue_.AllocTensor<int32_t>();
+        SetWaitFlag<HardEvent::MTE2_S>(HardEvent::MTE2_S);
+        // key value mode is not supported yet
+        for (int64_t i = 0; i < actualExpertNum_; i++) {
+            int64_t expertCount = static_cast<int64_t>(expertCountTempInLocal.GetValue(i));
+            expertCountOutLocal.SetValue(i, expertCount);
+            actualExpertTotalNum_ += expertCount;
+        }
+        expertTotalCountLocal.SetValue(0, static_cast<int32_t>(actualExpertTotalNum_));
+        SetWaitFlag<HardEvent::S_MTE3>(HardEvent::S_MTE3);
+        expertIdxCountOutQueue_.EnQue<int64_t>(expertCountOutLocal);
+        expertTotalCountQueue_.EnQue<int32_t>(expertTotalCountLocal);
+        expertCountTempInQueue_.FreeTensor(expertCountTempInLocal);
+    }
+
+    __aicore__ inline void ExpertCountCopyOut()
+    {
+        LocalTensor<int64_t> expertCountOutLocal = expertIdxCountOutQueue_.DeQue<int64_t>();
+        LocalTensor<int32_t> expertTotalCountLocal = expertTotalCountQueue_.DeQue<int32_t>();
+        DataCopyExtParams copyParams{static_cast<uint16_t>(1),
+                                     static_cast<uint32_t>(expertCountElements_ * sizeof(int64_t)), 0, 0, 0};
+        DataCopyPad(expertTokensCountGm_, expertCountOutLocal, copyParams);
+        copyParams.blockLen = sizeof(int32_t);
+        DataCopyPad(expertTotalCountGm_, expertTotalCountLocal, copyParams);
+        expertIdxCountOutQueue_.FreeTensor(expertCountOutLocal);
+        expertTotalCountQueue_.FreeTensor(expertTotalCountLocal);
+    }
 };
+
+__simt_vf__ __aicore__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void GatherOutSimt(
+    int32_t curLoopElements, int32_t cols, int32_t k,
+    __gm__ float *xGmAddr, __ubuf__ int32_t *expandedRowIdxLocalAddr, __ubuf__ float *xLocalAddr)
+{
+    auto threadIdx0 = static_cast<int32_t>(Simt::GetThreadIdx<0>());
+    auto threadNum0 = static_cast<int32_t>(Simt::GetThreadNum<0>());
+
+    auto threadIdx1 = static_cast<int32_t>(Simt::GetThreadIdx<1>());
+    auto threadNum1 = static_cast<int32_t>(Simt::GetThreadNum<1>());
+
+    for (auto i = threadIdx0; i < curLoopElements; i += threadNum0) {
+        int64_t rowIdx = expandedRowIdxLocalAddr[i];
+        int64_t xSrcOffset = rowIdx * cols;
+        int64_t xLocalOffset = i * cols;
+        for (auto j = threadIdx1; j < cols; j += threadNum1) {
+            xLocalAddr[xLocalOffset + j]  = xGmAddr[xSrcOffset + j];
+        }
+    }
+}
 
 class GatherOut {
 private:
@@ -875,15 +789,6 @@ public:
         expandedRowIdxCopyInQueue_.EnQue(subRowIdxLocal);
     }
 
-    __aicore__ inline void CopyXIn(int64_t xSrcOffset, int64_t curLoopCols)
-    {
-        LocalTensor<float> xLocal = xCopyInQueue_.AllocTensor<float>();
-        DataCopyExtParams copyParams{static_cast<uint16_t>(1), static_cast<uint32_t>(curLoopCols * sizeof(float)), 0, 0, 0};
-        DataCopyPadExtParams<float> padParams{false, 0, 0, 0};
-        DataCopyPad(xLocal, xGm_[xSrcOffset], copyParams, padParams);
-        xCopyInQueue_.EnQue(xLocal);
-    }
-
     __aicore__ inline void CopyXOut(int64_t xDstOffset, int64_t curLoopCols)
     {
         LocalTensor<float> xLocal = xCopyInQueue_.DeQue<float>();
@@ -904,37 +809,25 @@ public:
                 curLoopElements = curCoreLastLoopIndicesElements_;
             }
             int64_t curExpertLoopOffset = indicesLoop * curCorePerLoopIndicesElements_;
-            event_t event1 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::S_MTE2));
-            SetFlag<HardEvent::S_MTE2>(event1);
-            WaitFlag<HardEvent::S_MTE2>(event1);
-
+            SetWaitFlag<HardEvent::S_MTE2>(HardEvent::S_MTE2);
             CopyExpertIn(curExpertLoopOffset, curLoopElements);
 
             LocalTensor<int32_t> subRowIdxLocal = expandedRowIdxCopyInQueue_.DeQue<int32_t>();
-            event_t event2 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE2_S));
-            SetFlag<HardEvent::MTE2_S>(event2);
-            WaitFlag<HardEvent::MTE2_S>(event2);
+            LocalTensor<float> xLocal = xCopyInQueue_.AllocTensor<float>();
 
-            for (int64_t indicesIndex = 0; indicesIndex < curLoopElements; indicesIndex++) {
-                int64_t rowIdx = subRowIdxLocal.GetValue(indicesIndex);
-                int64_t xSrcOffset = rowIdx / k_ * cols_;
-                int64_t scaleSrcOffset = rowIdx / k_;
-                int64_t xDstOffset = (curExpertLoopOffset + indicesIndex) * cols_;
-                event_t event3 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::S_MTE2));
-                SetFlag<HardEvent::S_MTE2>(event3);
-                WaitFlag<HardEvent::S_MTE2>(event3);
+            __gm__ float *xGmAddr = (__gm__ float *)xGm_.GetPhyAddr();
+            __ubuf__ int32_t *expandedRowIdxLocalAddr = (__ubuf__ int32_t *)subRowIdxLocal.GetPhyAddr();
+            __ubuf__ float *xLocalAddr = (__ubuf__ float *)xLocal.GetPhyAddr();
+            
+            Simt::VF_CALL<GatherOutSimt>(Simt::Dim3{16, 128, 1}, 
+                                        static_cast<int32_t>(curLoopElements), static_cast<int32_t>(cols_), 
+                                        static_cast<int32_t>(k_), xGmAddr, expandedRowIdxLocalAddr, xLocalAddr);
 
-                // inputscale is not supported yet
-                int64_t curLoopCols = perLoopCols_;
-                for (int64_t colsLoop = 0; colsLoop < colsLoops_; colsLoop++) {
-                    if (colsLoop == colsLoops_ - 1) {
-                        curLoopCols = lastLoopCols_;
-                    }
-                    int64_t colsLoopOffset = colsLoop * perLoopCols_;
-                    CopyXIn(xSrcOffset + colsLoopOffset, curLoopCols);
-                    CopyXOut(xDstOffset + colsLoopOffset, curLoopCols);
-                }
-            }
+            xCopyInQueue_.EnQue(xLocal);
+            SyncAll();
+
+            // 一次搬出
+            CopyXOut(curExpertLoopOffset * cols_, curLoopElements * cols_);
             expandedRowIdxCopyInQueue_.FreeTensor(subRowIdxLocal);
         }
     }
@@ -961,7 +854,7 @@ __global__ __aicore__ __vector__ void MoeInitRouting(
 
     TPipe countPipe;
     ExpertTokensCount countOp;
-    countOp.Init(expandedRowIdx, expertTokensCountOrCumsum, workspace, &tiling, &countPipe);
+    countOp.Init(expertTokensCountOrCumsum, workspace, &tiling, &countPipe);
     countOp.Process();
     countPipe.Destroy();
 
@@ -988,16 +881,15 @@ void CalGatherTiling(MoeInitRoutingTilingData *tilingData)
     int64_t inputXDtypeSize = sizeof(float);
 
     int64_t perLoopCols = tilingData->cols;
-    int64_t colMultiple = 2 * inputXDtypeSize;
-    int64_t rowMultiple = 2;
-    int64_t perLoopMaxIndicesElements =
-        (tilingData->ubSize - Align(perLoopCols, inputXDtypeSize) * colMultiple - UB_BLOCK_SIZE * 2) / rowMultiple /
-        static_cast<int64_t>(sizeof(int32_t));
+    int64_t inputXSize = AlignBytes(perLoopCols, inputXDtypeSize);
+    int64_t inputScaleSize = BLOCK_BYTES;
+    int64_t perLoopMaxIndicesElements = 
+        tilingData->ubSize / DOUBLE_BUFFER / (inputXSize + inputScaleSize + static_cast<int64_t>(sizeof(int32_t)));
     while (perLoopMaxIndicesElements <= 0) {
         perLoopCols = CeilDiv(perLoopCols, 2);
-        perLoopMaxIndicesElements =
-            (tilingData->ubSize - Align(perLoopCols, inputXDtypeSize) * colMultiple - UB_BLOCK_SIZE * 2) / rowMultiple /
-                static_cast<int64_t>(sizeof(int32_t));
+        inputXSize = AlignBytes(perLoopCols, inputXDtypeSize);
+        perLoopMaxIndicesElements = 
+            tilingData->ubSize / DOUBLE_BUFFER / (inputXSize + inputScaleSize + static_cast<int64_t>(sizeof(int32_t)));
     }
     int64_t colsLoops = CeilDiv(tilingData->cols, perLoopCols);
     int64_t lastLoopCols = tilingData->cols - (colsLoops - 1) * perLoopCols;
@@ -1145,9 +1037,9 @@ int main()
     aclrtStream stream = nullptr;
     CHECK_ACL(aclrtCreateStream(&stream));
 
-    int64_t n = 2048;
-    int64_t k = 8;
-    int64_t c = 320;
+    int64_t n = 16384;
+    int64_t k = 1;
+    int64_t c = 32;
     MoeInitRoutingTilingData tilingData;
     tilingData.n = n;
     tilingData.cols = c;
@@ -1199,7 +1091,6 @@ int main()
 
     workspaceSize = sortWorkspaceSize + coreSyncWorkspaceSize + scatterWorkspaceSize +
                     expertTokensCountWorkspaceSize + expertTokenTotalCountWorkspace;
-    workspaceSize += ASCENDC_FRAMEWORK_RESERVED_SIZE;
 
     CHECK_ACL(aclrtMalloc((void **)&xDevice, xSize, ACL_MEM_MALLOC_HUGE_FIRST));
     CHECK_ACL(aclrtMalloc((void **)&expertIdxDevice, expertIdxSize, ACL_MEM_MALLOC_HUGE_FIRST));
@@ -1215,17 +1106,8 @@ int main()
     CHECK_ACL(aclrtMallocHost((void **)&tokenCountHost, tokenCountSize));
     CHECK_ACL(aclrtMallocHost((void **)&expandedScaleHost, scaleSize));
 
-    // gen input
+    GenInputAndGolden(n, k ,c);
     std::string exeDir = GetExeDir();
-    std::ostringstream cmd;
-    cmd << "python3 " << SOURCE_DIR << "/utils/gen_data.py "
-        << "-n=" << n << " "
-        << "-k=" << k << " "
-        << "-c=" << c << " "
-        << "-d=float32 "
-        << "-o=" << exeDir;
-    system(cmd.str().c_str());
-
     std::vector<float> xData;
     if (!GetDataFromBin(exeDir + "/x.bin", xData)) {
         std::cerr << "Failed to load x.bin" << std::endl;
@@ -1244,7 +1126,7 @@ int main()
 
     // kernel call
     CHECK_ACL(aclrtSynchronizeStream(stream));
-    MoeInitRouting<<<coreNum, nullptr, stream>>>(xDevice, expertIdxDevice, scaleDevice, offsetDevice,
+    MoeInitRouting<<<coreNum, tilingData.ubSize, stream>>>(xDevice, expertIdxDevice, scaleDevice, offsetDevice,
         workspaceDevice, expandedXDevice, expandedRowIdxDevice, tokenCountDevice, expandedScaleDevice, tilingData);
     CHECK_ACL(aclrtSynchronizeStream(stream));
 
@@ -1254,69 +1136,20 @@ int main()
     CHECK_ACL(aclrtMemcpy(expandedScaleHost, scaleSize, expandedScaleDevice, scaleSize, ACL_MEMCPY_DEVICE_TO_HOST));
     CHECK_ACL(aclrtSynchronizeStream(stream));
 
-    // verify result
-    std::vector<float> expandedXGolden;
-    if (!GetDataFromBin(exeDir + "/expaned_x.bin", expandedXGolden)) {
-        std::cerr << "Failed to load expaned_x.bin" << std::endl;
+    // write result to files
+    if (!WriteDataToBin(exeDir + "/result_expanded_x.bin", expandedXHost, expandedXSize / sizeof(float))) {
+        std::cerr << "Failed to write result_expanded_x.bin" << std::endl;
         return 1;
     }
-
-    std::vector<int32_t> expandedRowIdxGolden;
-    if (!GetDataFromBin(exeDir + "/expanded_row_idx.bin", expandedRowIdxGolden)) {
-        std::cerr << "Failed to load expanded_row_idx.bin" << std::endl;
+    if (!WriteDataToBin(exeDir + "/result_expanded_row_idx.bin", expandedRowIdxHost, expertIdxSize / sizeof(int32_t))) {
+        std::cerr << "Failed to write result_expanded_row_idx.bin" << std::endl;
         return 1;
     }
-
-    std::vector<int64_t> tokenCountGolden;
-    if (!GetDataFromBin(exeDir + "/expert_token_count.bin", tokenCountGolden)) {
-        std::cerr << "Failed to load expert_token_count.bin" << std::endl;
+    if (!WriteDataToBin(exeDir + "/result_expert_token_count.bin", tokenCountHost, tokenCountSize / sizeof(int64_t))) {
+        std::cerr << "Failed to write result_expert_token_count.bin" << std::endl;
         return 1;
     }
-
-    int errorDataIndex = 0;
-    int elementNum = n * k * c;
-    for (int i = 0; i < elementNum; i++) {
-        if (abs(expandedXHost[i] - expandedXGolden[i]) > 0) {
-            errorDataIndex++;
-            std::cout << "Index: " << std::setfill('0') << std::setw(4) << errorDataIndex
-                      << " RealIndex: " << std::setfill('0') << std::setw(4) << i
-                      << " Expected: " << std::setw(3) << static_cast<int>(expandedXGolden[i])
-                      << " Actual: " << std::setw(3) << static_cast<int>(expandedXHost[i]) << std::endl;
-        }
-    }
-    std::cout << "ExpandedX Precision is " << std::setprecision(4)
-              << static_cast<float>((elementNum - errorDataIndex)) / elementNum * 100
-              << "%" << std::endl;
-
-    errorDataIndex = 0;
-    elementNum = n * k;
-    for (int i = 0; i < elementNum; i++) {
-        if (abs(expandedRowIdxHost[i] - expandedRowIdxGolden[i]) > 0) {
-            errorDataIndex++;
-            std::cout << "Index: " << std::setfill('0') << std::setw(4) << errorDataIndex
-                      << " RealIndex: " << std::setfill('0') << std::setw(4) << i
-                      << " Expected: " << std::setw(3) << static_cast<int>(expandedRowIdxGolden[i])
-                      << " Actual: " << std::setw(3) << static_cast<int>(expandedRowIdxHost[i]) << std::endl;
-        }
-    }
-    std::cout << "ExpandedRowIdx Precision is " << std::setprecision(4)
-              << static_cast<float>((elementNum - errorDataIndex)) / elementNum * 100
-              << "%" << std::endl;
-
-    errorDataIndex = 0;
-    elementNum = actualExpertNum;
-    for (int i = 0; i < elementNum; i++) {
-        if (abs(tokenCountHost[i] - tokenCountGolden[i]) > 0) {
-            errorDataIndex++;
-            std::cout << "Index: " << std::setfill('0') << std::setw(4) << errorDataIndex
-                      << " RealIndex: " << std::setfill('0') << std::setw(4) << i
-                      << " Expected: " << std::setw(3) << static_cast<int>(tokenCountGolden[i])
-                      << " Actual: " << std::setw(3) << static_cast<int>(tokenCountHost[i]) << std::endl;
-        }
-    }
-    std::cout << "TokenCount Precision is " << std::setprecision(4)
-              << static_cast<float>((elementNum - errorDataIndex)) / elementNum * 100
-              << "%" << std::endl;
+    VerifyResult();
 
     CHECK_ACL(aclrtFree(xDevice));
     CHECK_ACL(aclrtFree(expertIdxDevice));

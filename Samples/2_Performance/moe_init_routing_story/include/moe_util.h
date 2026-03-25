@@ -18,7 +18,16 @@
 #include <vector>
 #include <cstdint> 
 
+#define CHECK_ACL(x) do { \
+    aclError err = (x); \
+    if (err != ACL_SUCCESS) { \
+        printf("ACL Error %d at %s:%d\n", err, __FILE__, __LINE__); \
+        exit(1); \
+    } \
+} while(0)
+
 const static int64_t UB_BLOCK_SIZE = 32;
+const static int64_t MAX_BUFFER_NUM = 8;
 
 template <typename T>
 bool GetDataFromBin(const std::string &fileName, std::vector<T> &data)
@@ -70,6 +79,28 @@ bool GetDataFromBin(const std::string &fileName, std::vector<T> &data)
     return data.size() > 0;
 }
 
+template <typename T>
+bool WriteDataToBin(const std::string &fileName, const T *data, size_t numElements)
+{
+    std::ofstream file(fileName, std::ios::binary);
+
+    if (!file.is_open()) {
+        std::cerr << "Error: Cannot open file for writing: " << fileName << std::endl;
+        return false;
+    }
+
+    file.write(reinterpret_cast<const char *>(data), numElements * sizeof(T));
+    
+    if (file.fail()) {
+        std::cerr << "Error: Failed to write data to file: " << fileName << std::endl;
+        file.close();
+        return false;
+    }
+    
+    file.close();
+    return true;
+}
+
 std::string GetExeDir()
 {
     char path[PATH_MAX];
@@ -79,6 +110,30 @@ std::string GetExeDir()
         return std::string(dirname(path));
     }
     return ".";
+}
+
+void VerifyResult()
+{
+    std::string exeDir = GetExeDir();
+    std::ostringstream verifyCmd;
+    verifyCmd << "python3 " << SOURCE_DIR << "/utils/verify_result.py "
+              << "-o=" << exeDir;
+    if (system(verifyCmd.str().c_str()) != 0) {
+        std::cerr << "Verification failed" << std::endl;
+    }
+}
+
+void GenInputAndGolden(int64_t n, int64_t k, int64_t c)
+{
+    std::string exeDir = GetExeDir();
+    std::ostringstream genDataCmd;
+    genDataCmd << "python3 " << SOURCE_DIR << "/utils/gen_data.py "
+               << "-n=" << n << " "
+               << "-k=" << k << " "
+               << "-c=" << c << " "
+               << "-d=float32 "
+               << "-o=" << exeDir;
+    system(genDataCmd.str().c_str());
 }
 
 int64_t CeilLog4(int64_t x)

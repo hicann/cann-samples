@@ -52,6 +52,7 @@ struct MoeGatherOutTilingData {
     int64_t perLoopCols{0};
     int64_t lastLoopCols{0};
     int64_t activeNum{0};
+    int64_t bufferNum{0};
 };
 
 struct MoeInitRoutingTilingData {
