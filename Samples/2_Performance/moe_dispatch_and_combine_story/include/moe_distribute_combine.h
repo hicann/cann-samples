@@ -85,7 +85,7 @@ private:
     __aicore__ inline void AlltoAllBuffInit();
     __aicore__ inline void SetWaitStatusAndDisPatch();
     __aicore__ inline void ExpertAlltoAllDispatchInnerCopyAdd(uint32_t toRankId, uint32_t tokenId, uint32_t topkId,
-                                                              uint32_t tkIndex);
+                                                              uint32_t tkIndex, AscendC::TEventID copyEventId);
     __aicore__ inline void ExpertAlltoAllDispatchCopyAdd();
     __aicore__ inline void ProcessMoeExpert(uint32_t tokenIndexOffset, uint32_t topkId, float scaleVal);
     __aicore__ inline void LocalWindowCopy();
@@ -99,6 +99,14 @@ private:
 
     __aicore__ GM_ADDR GetWinStateAddrByRankId(const int32_t rankId) {
         return (GM_ADDR)GetShmemSignalAddr(shmemContextGM_, rankId) + winStatusOffset_;
+    }
+
+    __aicore__ GM_ADDR GetShmemWinAddr(const int32_t rankId) {
+        return (GM_ADDR)shmemContextGM_ + winDataSizeOffset_;
+    }
+
+    __aicore__ GM_ADDR GetShmemWinStateAddr(const int32_t rankId) {
+        return (GM_ADDR)shmemContextGM_ + 1022 * 1024 * 1024 + winStatusOffset_;
     }
 
     __aicore__ inline uint32_t MIN(uint32_t x, uint32_t y) {
@@ -333,6 +341,9 @@ __aicore__ inline void MoeDistributeCombineShmem<TemplateMC2TypeFunc>::ExpertAll
     LocalTensor<float> statusTensor = readStateBuf_.AllocTensor<float>();
     Duplicate<float>(statusTensor, (float)1, FLOAT_PER_UB_ALIGN);
 
+    __gm__ aclshmem_device_host_state_t *deviceState = aclshmemi_get_state();
+    AscendC::TEventID copyEventId = (AscendC::TEventID)deviceState->mte_config.sync_id;
+
     SyncFunc<AscendC::HardEvent::MTE2_S>();
     for (uint32_t loop = 0; loop < sendCntNum_; loop++) {
         uint32_t tkIndex = startTokenId_ + ((loop + epRankId_) % sendCntNum_);
@@ -341,32 +352,32 @@ __aicore__ inline void MoeDistributeCombineShmem<TemplateMC2TypeFunc>::ExpertAll
         uint32_t toRankId = rankIdExpandIdx;
         uint32_t tokenId = static_cast<uint32_t>(expandIdxLocal(baseOffset + 1));
         uint32_t topkId = static_cast<uint32_t>(expandIdxLocal(baseOffset + 2));
-        ExpertAlltoAllDispatchInnerCopyAdd(toRankId, tokenId, topkId, tkIndex);
+        ExpertAlltoAllDispatchInnerCopyAdd(toRankId, tokenId, topkId, tkIndex, copyEventId);
         PipeBarrier<PIPE_MTE3>();
         GM_ADDR stateGM =
-            GetWinStateAddrByRankId(toRankId) + tokenId * flagRcvCount_ * stateOffset_ + topkId * stateOffset_;
+            GetShmemWinStateAddr(toRankId) + tokenId * flagRcvCount_ * stateOffset_ + topkId * stateOffset_;
         GlobalTensor<float> stateGMTensor;
         stateGMTensor.SetGlobalBuffer((__gm__ float*)stateGM);
-        DataCopy<float>(stateGMTensor, statusTensor, FLOAT_PER_UB_ALIGN);
+        aclshmemx_mte_put_nbi<float>(stateGMTensor, statusTensor, FLOAT_PER_UB_ALIGN, toRankId, copyEventId);
     }
 }
 
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeDistributeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispatchInnerCopyAdd(
-    uint32_t toRankId, uint32_t tokenId, uint32_t topkId, uint32_t tkIndex) {
+    uint32_t toRankId, uint32_t tokenId, uint32_t topkId, uint32_t tkIndex, AscendC::TEventID copyEventId) {
     uint32_t dataCnt = axisH_;
     uint32_t epOffset = tokenId * axisK_ + topkId;
     const DataCopyExtParams expandXCopyParams{1U, static_cast<uint32_t>(hExpandXTypeSize_), 0U, 0U, 0U};
     DataCopyPadExtParams<ExpandXType> copyPadExtParams{false, 0U, 0U, 0U};
     uint32_t tokenGMOffset = tkIndex * axisH_;
     uint32_t tokenWinOffset = tkIndex * hAlignWinCnt_;
-    GM_ADDR rankGM = GetWinAddrByRankId(toRankId) + epOffset * hAlignWinSize_;
+    GM_ADDR rankGM = GetShmemWinAddr(toRankId) + epOffset * hAlignWinSize_;
     rankWindow_.SetGlobalBuffer((__gm__ XType*)rankGM);
     gmTpSendCountTensor_ = gmTpSendCountQueue_.AllocTensor<ExpandXType>();
     DataCopyPad(gmTpSendCountTensor_, expandXGM_[tokenGMOffset], expandXCopyParams, copyPadExtParams);
     gmTpSendCountQueue_.EnQue(gmTpSendCountTensor_);
     gmTpSendCountTensor_ = gmTpSendCountQueue_.DeQue<ExpandXType>();
-    DataCopyPad(rankWindow_, gmTpSendCountTensor_, expandXCopyParams);
+    aclshmemx_mte_put_nbi<float16_t>(rankWindow_, gmTpSendCountTensor_, axisH_, toRankId, copyEventId);
     gmTpSendCountQueue_.FreeTensor<ExpandXType>(gmTpSendCountTensor_);
 }
 
