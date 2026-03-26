@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/tensor/pointer_adaptor_impl.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
 * \file pointer_adaptor_impl.h
 * \brief
@@ -36,12 +44,14 @@ struct IterAdaptor
 
     template <typename Index>
     __aicore__ inline constexpr reference operator[](const Index& i) const {
-        return ptr[i];
+        auto ic = IndexCorrect(i);
+        return ptr[ic];
     }
 
     template <typename Index>
     __aicore__ inline constexpr DerivedType operator+(const Index& i) const {
-        return {ptr + i};
+        auto ic = IndexCorrect(i);
+        return {ptr + ic};
     }
 
     __aicore__ inline constexpr iterator Get() const {
@@ -72,6 +82,15 @@ struct IterAdaptor
         return x.ptr >= y.ptr; 
     }
 private:
+    template <typename Index>
+    __aicore__ inline constexpr Index IndexCorrect(const Index& i) const {
+        if constexpr (is_b4_type<valueType>) {
+            return i >> 1;
+        } else {
+            return i;
+        }
+    }
+
     iterator ptr;
 };
 
@@ -79,3 +98,8 @@ private:
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_TENSOR_POINTER_ADAPTOR_IMPL_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

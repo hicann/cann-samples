@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/arch/cube_datamove/data_copy/npu_arch_3510/data_copy_l12bt.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file data_copy_l12bt.h
  * \brief
@@ -58,12 +66,10 @@ private:
             convControl = true;
         }
         uint16_t blockCount = GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::ROW, 1>(srcLayout);
-        uint16_t blockLen = (srcCol * sizeof(dstType) + C0_SIZE - 1) / C0_SIZE;
-        uint16_t srcStride = (srcRow - srcCol) * sizeof(srcType) / C0_SIZE;
-        uint16_t dstStride = (dstRow - srcCol) * sizeof(dstType) / C0_SIZE;
-
-        CopyL12BTInstr copyInstr;
-        copyInstr.DataCopy(dst, src, convControl, blockCount, blockLen, srcStride, dstStride);
+        uint16_t blockLen = Std::ceil_division(srcCol, C0_ELEMENT<dstType>);
+        uint16_t srcStride = (srcRow - srcCol) / C0_ELEMENT<srcType>;
+        uint16_t dstStride = (dstRow - srcCol) / C0_ELEMENT<dstType>;
+        CopyL12BTInstr::DataCopy(dst, src, convControl, blockCount, blockLen, srcStride, dstStride);
     }
 };
 
@@ -71,3 +77,8 @@ private:
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_ARCH_CUBE_DATAMOVE_DATA_COPY_NPU_ARCH_3510_DATA_COPY_GM2L1_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

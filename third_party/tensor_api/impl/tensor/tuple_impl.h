@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/tensor/tuple_impl.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file tuple_impl.h
  * \brief
@@ -51,14 +59,6 @@ __aicore__ inline constexpr auto TransformApply(T0&& t0, T1&& t1, F&& f, G&& g)
     } else {
         return g(f(static_cast<T0&&>(t0), static_cast<T1&&>(t1)));
     }
-}
-
-__aicore__ inline int32_t CeilDivision(int32_t num1, int32_t num2)
-{
-    if (num2 == 0) {
-        return 0;
-    }
-    return (num1 + num2 - 1) / num2;
 }
 
 struct MultipliesUnaryLeftFold {
@@ -183,7 +183,7 @@ __aicore__ inline constexpr auto GetMax(const T0& t0, const Ts&... ts)
     if constexpr (sizeof...(Ts) == 0) {
         return t0;
     } else {
-        return Te::max(t0, GetMax(ts...));
+        return Std::max(t0, GetMax(ts...));
     }
 }
 
@@ -211,3 +211,8 @@ __aicore__ inline constexpr auto GetCapacity(const Shape& shape, const Stride& s
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_TENSOR_TUPLE_IMPL_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

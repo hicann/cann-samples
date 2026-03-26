@@ -7,6 +7,14 @@
 * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 * See LICENSE in the root of the software repository for the full text of the License.
 */
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/arch/utils/is_format.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file is_format.h
  * \brief
@@ -76,55 +84,87 @@ struct GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 1> {
 };
 
 template <typename T>
+struct CheckArrangement {
+    using type = typename T::elementType;
+    using ShapeRow0Type = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 0>::type;
+    using ShapeRow1Type = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 1>::type;
+    using ShapeColumn0Type = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::COLUMN, 0>::type;
+    using StrideRow0Type = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 0>::type;
+    using StrideRow1Type = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 1>::type;
+    using StrideColumn0Type = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 0>::type;
+    using StrideColumn1Type = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 1>::type;
+
+    __aicore__ inline static constexpr bool IsScaleType() {
+ 	    return is_one_of_attr_v<type, fp8_e8m0_t>;
+ 	}
+
+    static constexpr ShapeRow0Type ShapeRow0{};
+    static constexpr ShapeRow1Type ShapeRow1{};
+    static constexpr ShapeColumn0Type ShapeColumn0{};
+    static constexpr StrideRow0Type StrideRow0{};
+    static constexpr StrideRow1Type StrideRow1{};
+    static constexpr StrideColumn0Type StrideColumn0{};
+    static constexpr StrideColumn1Type StrideColumn1{};
+    static constexpr auto c0Ele = C0_ELEMENT<type>;
+};
+
+__aicore__ inline constexpr bool CheckPairs() {
+    return true;
+}
+
+template <typename T, typename U, typename... Args>
+__aicore__ inline constexpr bool CheckPairs(const T& left, const U& right, Args ...args) {
+    return (left == right) && CheckPairs(args...);
+}
+
+template <typename... Args>
+__aicore__ inline constexpr bool CheckEvenPairs(Args... args) {
+    static_assert((sizeof...(args) % 2) == 0, "parameters number must be an even number.");
+    return CheckPairs(args...);
+}
+
+template <typename T>
 struct IsZZFormat {
 private:
+    static constexpr CheckArrangement<T> arg{};
+
     __aicore__ inline static constexpr bool IsFractalZZFormatNormal() {
-        constexpr bool isShapeRight = Std::is_constant<FRACTAL_FIXED, ShapeRow0>::value 
-            && Std::is_constant<C0_SIZE / sizeof(type), ShapeColumn0>::value;
-        constexpr bool isStrideRight = Std::is_constant<C0_SIZE / sizeof(type), StrideRow0>::value 
-            && Std::is_constant<1, StrideColumn0>::value;
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<FRACTAL_FIXED>{}, arg.ShapeRow0, 
+                                      Std::Int<arg.c0Ele>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<arg.c0Ele>{}, arg.StrideRow0,
+                                      Std::Int<1>{}, arg.StrideColumn0);
         return (isShapeRight && isStrideRight);
     }
 
     __aicore__ inline static constexpr bool IsFractalScaleZZFormat() {
-        constexpr bool isShapeRight = Std::is_constant<FRACTAL_FIXED, ShapeRow0>::value 
-        && Std::is_constant<MX_SCALE_K0, ShapeColumn0>::value;
-        constexpr bool isStrideRight = Std::is_constant<MX_SCALE_K0, StrideRow0>::value 
-        && Std::is_constant<1, StrideColumn0>::value;
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<FRACTAL_FIXED>{}, arg.ShapeRow0,
+                                      Std::Int<MX_SCALE_K0>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<MX_SCALE_K0>{}, arg.StrideRow0,
+                                      Std::Int<1>{}, arg.StrideColumn0);
         return (isShapeRight && isStrideRight);
     }
 
     __aicore__ inline static constexpr bool IsFractalZZFormat() {
-        constexpr bool isScaleType = is_one_of_attr_v<type, fp8_e8m0_t>;
-        using ResultType = Std::conditional_t<isScaleType,
-            Std::bool_constant<IsFractalScaleZZFormat()>,
-            Std::bool_constant<IsFractalZZFormatNormal()>>;
+        using ResultType = Std::conditional_t<arg.IsScaleType(),
+                           Std::bool_constant<IsFractalScaleZZFormat()>,
+                           Std::bool_constant<IsFractalZZFormatNormal()>>;
         return ResultType::value;
     }
 public:
-    using type = typename T::elementType;
-    using ShapeRow0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 0>::type;
-    using ShapeColumn0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::COLUMN, 0>::type;
-    using StrideRow0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 0>::type;
-    using StrideColumn0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 0>::type;
     static constexpr bool value = IsFractalZZFormat();
 };
 
 template <typename T>
 struct IsNNFormat {
 private:
-    __aicore__ inline static constexpr bool IsFractalNNFormat() {
-        using type = typename T::elementType;
-        static_assert(Std::is_same_v<type, __cbuf__ fp8_e8m0_t>, "NnFormat Only support fp8_e8m0_t");
-        using ShapeRow0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 0>::type;
-        using ShapeColumn0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::COLUMN, 0>::type;
-        using StrideRow0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 0>::type;
-        using StrideColumn0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 0>::type;
+    static constexpr CheckArrangement<T> arg{};
 
-        constexpr bool isShapeRight = Std::is_constant<MX_SCALE_K0, ShapeRow0>::value 
-        && Std::is_constant<FRACTAL_FIXED, ShapeColumn0>::value;
-        constexpr bool isStrideRight = Std::is_constant<1, StrideRow0>::value 
-        && Std::is_constant<MX_SCALE_K0, StrideColumn0>::value;
+    __aicore__ inline static constexpr bool IsFractalNNFormat() {
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<MX_SCALE_K0>{}, arg.ShapeRow0,
+               Std::Int<FRACTAL_FIXED>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<1>{}, arg.StrideRow0,
+               Std::Int<MX_SCALE_K0>{}, arg.StrideColumn0);
+
         return (isShapeRight && isStrideRight);
     }
 public:
@@ -134,18 +174,13 @@ public:
 template <typename T>
 struct IsZNFormat {
 private:
-    __aicore__ inline static constexpr bool IsFractalZNFormat() {
-        using type = typename T::elementType;
-        using ShapeRow0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 0>::type;
-        using ShapeColumn0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::COLUMN, 0>::type;
-        using StrideRow0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 0>::type;
-        using StrideColumn0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 0>::type;
-        constexpr auto c0Size = is_b4_type<type> ? C0_SIZE * 2 : C0_SIZE / sizeof(type);
-        constexpr bool isShapeRight =
-            Std::is_constant<c0Size, ShapeRow0>::value && Std::is_constant<FRACTAL_FIXED, ShapeColumn0>::value;
-        constexpr bool isStrideRight =
-            Std::is_constant<1, StrideRow0>::value && Std::is_constant<c0Size, StrideColumn0>::value;
+    static constexpr CheckArrangement<T> arg{};
 
+    __aicore__ inline static constexpr bool IsFractalZNFormat() {
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<arg.c0Ele>{}, arg.ShapeRow0,
+               Std::Int<FRACTAL_FIXED>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<1>{}, arg.StrideRow0,
+               Std::Int<arg.c0Ele>{}, arg.StrideColumn0);
         return (isShapeRight && isStrideRight);
     }
 public:
@@ -155,20 +190,13 @@ public:
 template <typename T>
 struct IsNZFormat {
 private:
-    __aicore__ inline static constexpr bool IsFractalNZFormat() {
-        using type = typename T::elementType;
-        // NZ shape (Int<16>, row) , (Int<C0Size>, column))
-        using ShapeColumn0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::COLUMN, 0>::type;
-        using ShapeRow0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 0>::type;
-        // NZ stride (Int<C0Size>, N * C0Size + 16 * Int<C0Size>) , (Int<1>, row * (N * C0Size + 16 * Int<C0Size>)))
-        using StrideColumn0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 0>::type;
-        using StrideRow0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 0>::type;
-        constexpr auto c0Size = is_b4_type<type> ? C0_SIZE * 2 : C0_SIZE / sizeof(type);
-        constexpr bool isStrideRight =
-            Std::is_constant<c0Size, StrideRow0>::value && Std::is_constant<1, StrideColumn0>::value;
-        constexpr bool isShapeRight =
-            Std::is_constant<FRACTAL_FIXED, ShapeRow0>::value && Std::is_constant<c0Size, ShapeColumn0>::value;
+    static constexpr CheckArrangement<T> arg{};
 
+    __aicore__ inline static constexpr bool IsFractalNZFormat() {
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<FRACTAL_FIXED>{}, arg.ShapeRow0,
+               Std::Int<arg.c0Ele>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<arg.c0Ele>{}, arg.StrideRow0,
+               Std::Int<1>{}, arg.StrideColumn0);
         return (isShapeRight && isStrideRight);
     }
 public:
@@ -178,21 +206,13 @@ public:
 template <typename T>
 struct IsL0cNZFormat {
 private:
+    static constexpr CheckArrangement<T> arg{};
+
     __aicore__ inline static constexpr bool IsFractalL0cNZFormat() {
-        using type = typename T::elementType;
-        // NZ shape (Int<16>, row) , (Int<C0Size>, column))
-        using ShapeRow0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 0>::type;
-        using ShapeColumn0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::COLUMN, 0>::type;
-
-        // NZ stride (Int<C0Size>, N * C0Size + 16 * Int<C0Size>) , (Int<1>, row * (N * C0Size + 16 * Int<C0Size>)))
-        using StrideRow0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 0>::type;
-        using StrideColumn0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 0>::type;
-
-        constexpr bool isShapeRight = Std::is_constant<FRACTAL_FIXED, ShapeRow0>::value 
-            && Std::is_constant<FRACTAL_FIXED, ShapeColumn0>::value;
-        constexpr bool isStrideRight = Std::is_constant<FRACTAL_FIXED, StrideRow0>::value 
-            && Std::is_constant<1, StrideColumn0>::value;
-
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<FRACTAL_FIXED>{}, arg.ShapeRow0,
+               Std::Int<FRACTAL_FIXED>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<FRACTAL_FIXED>{}, arg.StrideRow0,
+               Std::Int<1>{}, arg.StrideColumn0);
         return (isShapeRight && isStrideRight);
     }
 public:
@@ -202,76 +222,68 @@ public:
 template <typename T>
 struct IsNDFormat {
 private:
-    __aicore__ inline static constexpr bool IsFractalNDFormatNormal() {
-        // shape = ((1, row),(1,col)) stride = ((0, col),(0, 1))
-        constexpr bool isShapeRight = Std::is_constant<1, ShapeRow0>::value && Std::is_constant<1, ShapeColumn0>::value;
-        constexpr bool isStrideRight = Std::is_constant<0, StrideRow0>::value && Std::is_constant<0, StrideColumn0>::value 
-                                                                                && Std::is_constant<1, StrideColumn1>::value;
+    static constexpr CheckArrangement<T> arg{};
 
+    __aicore__ inline static constexpr bool IsFractalNDFormatNormal() {
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<1>{}, arg.ShapeRow0,
+               Std::Int<1>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<0>{}, arg.StrideRow0,
+               Std::Int<0>{}, arg.StrideColumn0, Std::Int<1>{}, arg.StrideColumn1);
         return (isShapeRight && isStrideRight);
     }
 
     __aicore__ inline static constexpr bool IsFractalScaleNDFormat() {
-        // shape = ((2, row/2),(1,col)) stride = ((1, 2*col),(0, 2))
-        constexpr bool isShapeRight = Std::is_constant<2, ShapeRow0>::value && Std::is_constant<1, ShapeColumn0>::value;
-        constexpr bool isStrideRight = Std::is_constant<1, StrideRow0>::value && Std::is_constant<0, StrideColumn0>::value
-                                                                                && Std::is_constant<2, StrideColumn1>::value;
-
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<2>{}, arg.ShapeRow0,
+               Std::Int<1>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<1>{}, arg.StrideRow0,
+               Std::Int<0>{}, arg.StrideColumn0, Std::Int<2>{}, arg.StrideColumn1);
         return (isShapeRight && isStrideRight);
     }
 
+    __aicore__ inline static constexpr bool IsFractalNDFormatOneDim() {
+        return CheckPairs(Std::Int<1>{}, arg.ShapeRow1);
+    }
+
     __aicore__ inline static constexpr bool IsFractalNDFormat() {
-        constexpr bool isScaleType = is_one_of_attr_v<type, fp8_e8m0_t>;
-        using ResultType = Std::conditional_t<isScaleType,
-            Std::bool_constant<IsFractalScaleNDFormat()>,
-            Std::bool_constant<IsFractalNDFormatNormal()>>;
+        using ResultType = Std::conditional_t<arg.IsScaleType(),
+                           Std::bool_constant<IsFractalScaleNDFormat()>,
+                           Std::bool_constant<IsFractalNDFormatNormal()>>;
         return ResultType::value;
     }
 public:
-    using type = typename T::elementType;
-    using ShapeRow0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 0>::type;
-    using ShapeColumn0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::COLUMN, 0>::type;
-
-    using StrideRow0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 0>::type;
-    using StrideColumn0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 0>::type;
-    using StrideColumn1 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 1>::type;
     static constexpr bool value = IsFractalNDFormat();
     static constexpr bool normalValue = IsFractalNDFormatNormal();
+    static constexpr bool oneDimValue = IsFractalNDFormatOneDim();
 };
 
 template <typename T>
 struct IsDNFormat {
 private:
-    __aicore__ inline static constexpr bool IsFractalDNFormatNormal() {
-        // shape = ((1, row),(1,col)) stride = ((0, 1),(0, row))
-        constexpr bool isShapeRight = Std::is_constant<1, ShapeRow0>::value && Std::is_constant<1, ShapeColumn0>::value;
-        constexpr bool isStrideRight = Std::is_constant<0, StrideRow0>::value && Std::is_constant<1, StrideRow1>::value && Std::is_constant<0, StrideColumn0>::value;
+    static constexpr CheckArrangement<T> arg{};
 
+    __aicore__ inline static constexpr bool IsFractalDNFormatNormal() {
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<1>{}, arg.ShapeRow0,
+               Std::Int<1>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<0>{}, arg.StrideRow0,
+               Std::Int<1>{}, arg.StrideRow1, Std::Int<0>{}, arg.StrideColumn0);
         return (isShapeRight && isStrideRight);
     }
 
     __aicore__ inline static constexpr bool IsFractalScaleDNFormat() {
-         // shape = ((1, row),(2,col/2)) stride = ((0, 2),(1, row*2))
-        constexpr bool isShapeRight = Std::is_constant<1, ShapeRow0>::value && Std::is_constant<2, ShapeColumn0>::value;
-        constexpr bool isStrideRight = Std::is_constant<0, StrideRow0>::value && Std::is_constant<2, StrideRow1>::value && Std::is_constant<1, StrideColumn0>::value;
-
+        constexpr bool isShapeRight = CheckEvenPairs(Std::Int<1>{}, arg.ShapeRow0,
+               Std::Int<2>{}, arg.ShapeColumn0);
+        constexpr bool isStrideRight = CheckEvenPairs(Std::Int<0>{}, arg.StrideRow0,
+               Std::Int<2>{}, arg.StrideRow1, Std::Int<1>{}, arg.StrideColumn0);
         return (isShapeRight && isStrideRight);
     }
 
-     __aicore__ inline static constexpr bool IsFractalDNFormat() {
-        constexpr bool isScaleType = is_one_of_attr_v<type, fp8_e8m0_t>;
-        using ResultType = Std::conditional_t<isScaleType,
-            Std::bool_constant<IsFractalScaleDNFormat()>,
-            Std::bool_constant<IsFractalDNFormatNormal()>>;
+    __aicore__ inline static constexpr bool IsFractalDNFormat() {
+        using ResultType = Std::conditional_t<arg.IsScaleType(),
+                           Std::bool_constant<IsFractalScaleDNFormat()>,
+                           Std::bool_constant<IsFractalDNFormatNormal()>>;
         return ResultType::value;
     }
 public:
-        using type = typename T::elementType;
-        using ShapeRow0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::ROW, 0>::type;
-        using ShapeColumn0 = typename GetFourDimType<T, AttrInfo::SHAPE, AttrInfo::COLUMN, 0>::type;
-        using StrideRow0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 0>::type;
-        using StrideRow1 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::ROW, 1>::type;
-        using StrideColumn0 = typename GetFourDimType<T, AttrInfo::STRIDE, AttrInfo::COLUMN, 0>::type;
     static constexpr bool value = IsFractalDNFormat();
     static constexpr bool normalValue = IsFractalDNFormatNormal();
 };
@@ -300,3 +312,8 @@ struct IsScaleBDNFormat { // shape = ((1, row),(1,col)) stride = ((0, 1),(0, row
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_ARCH_UTILS_IS_FORMAT_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

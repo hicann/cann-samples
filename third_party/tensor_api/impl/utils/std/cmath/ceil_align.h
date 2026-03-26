@@ -9,10 +9,22 @@
 */
 
 /*!
-* \file gemm_impl.h
-* \brief
-*/
-#ifndef IMPL_TENSOR_API_ALGORITHM_GEMM_IMPL_H
-#define IMPL_TENSOR_API_ALGORITHM_GEMM_IMPL_H
+ * \file ceil_align.h
+ * \brief
+ */
+#ifndef IMPL_STD_CEIL_ALIGN_H
+#define IMPL_STD_CEIL_ALIGN_H
+#include "ceil_division.h"
 
-#endif // IMPL_TENSOR_API_ALGORITHM_GEMM_IMPL_H
+namespace AscendC {
+namespace Std {
+
+template <typename T, typename U>
+ASCENDC_HOST_AICORE inline constexpr auto ceil_align(const T& num1, const U& num2)
+{
+    return ceil_division(num1, num2) * num2;
+}
+
+}
+}
+#endif

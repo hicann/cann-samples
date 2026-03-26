@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/arch/cube_datamove/load_data/npu_arch_3510/load_data_l12l0b/zn2zn_with_coord.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file zn2zn_with_coord.h
  * \brief
@@ -19,22 +27,17 @@
 
 namespace AscendC {
 namespace Te {
-class LoadDataFourDim3510L12L0BZN2ZNWithCoord {
+class LoadDataL12L0BZN2ZNWithCoord3510 {
 
 public:
     template <const LoadDataTrait& trait, typename T, typename U, typename Coord>
-    __aicore__ inline void Run(const T& dst, const U& src, const Coord& coord) {
-        LoadDataImpl<TraitHolder<trait, false>::traitTransposed, T, U, Coord>(dst, src, coord);
+    __aicore__ inline static void Run(const T& dst, const U& src, const Coord& coord) {
+        LoadDataImpl<TransTrait<trait, false>, T, U, Coord>(dst, src, coord);
     }
 
 private:
-    template<const LoadDataTrait& trait, bool transpose>
-    struct TraitHolder {
-        static constexpr LoadDataTrait traitTransposed = LoadDataTrait(trait, transpose);
-    };
-
     template <const LoadDataTrait& trait, typename T, typename U>
-    __aicore__ inline constexpr void CheckTemplate()
+    __aicore__ inline static constexpr void CheckTemplate()
     {
         CheckFormat::CheckZNTemplate<T>();
         CheckFormat::CheckZNTemplate<U>();
@@ -42,32 +45,25 @@ private:
     }
 
     template <const LoadDataTrait& trait, typename T, typename U, typename Coord>
-    __aicore__ inline void LoadDataImpl(const T& dst, const U& src, const Coord& coord)
+    __aicore__ inline static void LoadDataImpl(const T& dst, const U& src, const Coord& coord)
     {
         CheckTemplate<trait, T, U>();
         using DstType = typename T::elementType;
         auto dstLayout = dst.Layout();
         auto srcLayout = src.Layout();
         uint16_t mStartPosition = Std::get<1>(coord) / FRACTAL_FIXED;
-        uint16_t kStartPosition = Std::get<0>(coord) * sizeof(typename U::elementType) / C0_SIZE;
+        uint16_t kStartPosition = Std::get<0>(coord) / C0_ELEMENT<typename U::elementType>;
         auto mStep = GetEleFromLayout<decltype(dstLayout), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(dstLayout);
         auto kStep = GetEleFromLayout<decltype(dstLayout), AttrInfo::SHAPE, AttrInfo::ROW, 1>(dstLayout);
         // Zn -> Zn
-        constexpr bool isFp4Type = Std::is_one_of_v<
-                Std::tuple<typename T::elementType, typename U::elementType>,
-                Std::tuple<__cb__ fp4x2_e2m1_t, __cbuf__ fp4x2_e2m1_t>,
-                Std::tuple<__cb__ fp4x2_e1m2_t, __cbuf__ fp4x2_e1m2_t>>;
-        constexpr int KHALF = 2;
-        uint32_t STRIDE_UNIT = isFp4Type ? FRACTAL_FIXED * (C0_SIZE / sizeof(DstType) * KHALF) : FRACTAL_FIXED * (C0_SIZE / sizeof(DstType));
+        uint32_t STRIDE_UNIT = C0_ELEMENT<DstType> * FRACTAL_FIXED;
         auto srcStride = GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(srcLayout) / STRIDE_UNIT;
         auto dstStride = GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(dstLayout) / STRIDE_UNIT;
-        if constexpr (isFp4Type) {
-            LoadCbufToCbS4Base loadCbufToCbS4;
-            loadCbufToCbS4.template LoadData<trait>(dst, src, mStartPosition, kStartPosition, mStep, kStep, srcStride, dstStride);   
+        if constexpr (is_b4_type<DstType>) {
+            LoadCbufToCbS43510::LoadData<trait>(dst, src, mStartPosition, kStartPosition, mStep, kStep, srcStride, dstStride);   
         }
         else {
-            LoadCbufToCbBase loadCbufToCb;
-            loadCbufToCb.template LoadData<trait>(dst, src, mStartPosition, kStartPosition, mStep, kStep, srcStride, dstStride);
+            LoadCbufToCb3510::LoadData<trait>(dst, src, mStartPosition, kStartPosition, mStep, kStep, srcStride, dstStride);
         }
     }
 };
@@ -75,3 +71,8 @@ private:
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_ARCH_CUBE_DATAMOVE_LOAD_DATA_NPU_ARCH_3510_LOAD_DATA_L12L0B_ZN2ZN_WITH_COORD_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

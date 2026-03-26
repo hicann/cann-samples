@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/arch/cube_datamove/load_data/npu_arch_3510/load_data_l12l0b.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file load_data_l12l0b.h
  * \brief
@@ -24,7 +32,7 @@
 
 namespace AscendC {
 namespace Te {
-class LoadDataFourDim3510L12L0B {
+class LoadDataL12L0B3510 {
 public:
     template <const LoadDataTrait& trait, typename T, typename U>
     __aicore__ inline void Run(const T& dst, const U& src) {
@@ -35,19 +43,16 @@ private:
     template <const LoadDataTrait& trait, typename T, typename U>
     __aicore__ inline void Execute(const T& dst, const U& src) {
         if constexpr (IsZNFormat<U>::value && IsZNFormat<T>::value) {
-            LoadDataFourDim3510L12L0BZN2ZN zn2znStrategy;
-            zn2znStrategy.Run<trait, T, U>(dst, src);
+            LoadDataL12L0BZN2ZN3510::Run<trait, T, U>(dst, src);
         } else if constexpr (IsNZFormat<U>::value && IsZNFormat<T>::value && (sizeof(typename U::elementType) == 1)) {
-            LoadDataFourDim3510L12L0BNZ2ZNB8B4 nz2znb8Strategy;
-            nz2znb8Strategy.Run<trait, T, U>(dst, src);
+            LoadDataL12L0BNZ2ZNB8B43510::Run<trait, T, U>(dst, src);
         } else if constexpr (IsNZFormat<U>::value && IsZNFormat<T>::value) {
-            LoadDataFourDim3510L12L0BNZ2ZN nz2znStrategy;
-            nz2znStrategy.Run<trait, T, U>(dst, src);
+            LoadDataL12L0BNZ2ZN3510::Run<trait, T, U>(dst, src);
         }
     }
 };
 
-class LoadDataFourDim3510L12L0BWithCoord {
+class LoadDataL12L0BWithCoord3510 {
 public:
     template <const LoadDataTrait& trait, typename T, typename U, class Coord>
     __aicore__ inline void Run(const T& dst, const U& src, const Coord& coord) {
@@ -58,14 +63,11 @@ private:
     template <const LoadDataTrait& trait, typename T, typename U, class Coord>
     __aicore__ inline void Execute(const T& dst, const U& src, const Coord& coord) {
         if constexpr (IsZNFormat<U>::value && IsZNFormat<T>::value) {
-            LoadDataFourDim3510L12L0BZN2ZNWithCoord zn2znStrategy;
-            zn2znStrategy.Run<trait, T, U, Coord>(dst, src, coord);
+            LoadDataL12L0BZN2ZNWithCoord3510::Run<trait, T, U, Coord>(dst, src, coord);
         } else if constexpr (IsNZFormat<U>::value && IsZNFormat<T>::value && (sizeof(typename U::elementType) == 1)) {
-            LoadDataFourDim3510L12L0BNZ2ZNB8B4WithCoord nz2znb8Strategy;
-            nz2znb8Strategy.Run<trait, T, U, Coord>(dst, src, coord);
+            LoadDataL12L0BNZ2ZNB8B4WithCoord3510::Run<trait, T, U, Coord>(dst, src, coord);
         } else if constexpr (IsNZFormat<U>::value && IsZNFormat<T>::value) {
-            LoadDataFourDim3510L12L0BNZ2ZNWithCoord nz2znStrategy;
-            nz2znStrategy.Run<trait, T, U, Coord>(dst, src, coord);
+            LoadDataL12L0BNZ2ZNWithCoord3510::Run<trait, T, U, Coord>(dst, src, coord);
         }
     }
 };
@@ -73,3 +75,8 @@ private:
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_ARCH_CUBE_DATAMOVE_LOAD_DATA_NPU_ARCH_3510_LOAD_DATA_L12L0B_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

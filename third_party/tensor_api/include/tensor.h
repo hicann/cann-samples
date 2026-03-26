@@ -8,6 +8,12 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H
+#endif
+
 /*!
 * \file tensor.h
 * \brief
@@ -15,13 +21,18 @@
 #ifndef INCLUDE_TENSOR_API_TENSOR_H
 #define INCLUDE_TENSOR_API_TENSOR_H
 
-#include "include/algorithm/algorithm.h"
-#include "include/arch/arch.h"
-#include "include/atom/atom.h"
-#include "include/tensor/layout.h"
-#include "include/tensor/local_tensor.h"
-#include "include/tensor/pointer.h"
-#include "include/tensor/layout_struct.h"
-#include "include/utils/utils.h"
+#include "algorithm/algorithm.h"
+#include "arch/arch.h"
+#include "atom/atom.h"
+#include "tensor/layout.h"
+#include "tensor/local_tensor.h"
+#include "tensor/pointer.h"
+#include "tensor/layout_struct.h"
+#include "utils/utils.h"
 
 #endif // INCLUDE_TENSOR_API_TENSOR_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H
+#endif

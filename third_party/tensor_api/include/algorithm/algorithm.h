@@ -8,6 +8,12 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H
+#endif
+
 /*!
  * \file algorithm.h
  * \brief
@@ -15,8 +21,12 @@
 #ifndef INCLUDE_TENSOR_API_ALGORITHM_ALGORITHM_H
 #define INCLUDE_TENSOR_API_ALGORITHM_ALGORITHM_H
 
-#include "include/algorithm/copy.h"
-#include "include/algorithm/gemm.h"
-#include "include/algorithm/mad.h"
+#include "copy.h"
+#include "mad.h"
 
 #endif // INCLUDE_TENSOR_API_ALGORITHM_ALGORITHM_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H
+#endif

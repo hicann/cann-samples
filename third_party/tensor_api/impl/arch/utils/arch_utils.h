@@ -7,6 +7,14 @@
 * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 * See LICENSE in the root of the software repository for the full text of the License.
 */
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/arch/utils/arch_utils.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file arch_utils.h
  * \brief
@@ -14,7 +22,6 @@
 #ifndef IMPL_TENSOR_API_ARCH_UTILS_ARCH_UTILS_H
 #define IMPL_TENSOR_API_ARCH_UTILS_ARCH_UTILS_H
 
-#include "impl/arch/utils/check_data_type_2201.h"
 #include "impl/arch/utils/check_data_type_3510.h"
 #include "impl/arch/utils/check_format.h"
 #include "impl/arch/utils/is_format.h"
@@ -22,10 +29,13 @@
 namespace AscendC {
 namespace Te {
 
+template<const LoadDataTrait& trait, bool transpose> 
+constexpr LoadDataTrait TransTrait = LoadDataTrait(trait, transpose); 
+
 template <typename T>
-__aicore__ inline uint8_t GetCacheModeFromTensor(__gm__ T* src) {
+__aicore__ inline uint8_t GetCacheModeFromTensor(const T& tensor) {
     if constexpr (CURRENT_ARCH_VERSION == ArchVersion::V3510) {
-        return static_cast<uint8_t>((reinterpret_cast<uint64_t>(src)) >> L2_CACHE_OFFSET);
+        return static_cast<uint8_t>((reinterpret_cast<uint64_t>(tensor.Data().Get())) >> L2_CACHE_OFFSET);
     } else {
         return 0;
     }
@@ -86,3 +96,8 @@ __aicore__ inline constexpr decltype(auto) GetEleFromLayout(const T& layout) {
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_ARCH_UTILS_ARCH_UTILS_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

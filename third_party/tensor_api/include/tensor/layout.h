@@ -8,6 +8,12 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H
+#endif
+
 /*!
  * \file layout.h
  * \brief
@@ -86,37 +92,37 @@ __aicore__ inline constexpr auto Crd2Idx(const T& coord, const Shape& shape, con
 
 // make_fractal.h
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeNzLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeNzLayout(U row, S column);
 
 template <typename U, typename S>
-__aicore__ inline decltype(auto) MakeL0CLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeL0CLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeDNLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeDNLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeNDLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeNDLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeZnLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeZnLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeZzLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeZzLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeNnLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeNnLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeScaleANDLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeScaleANDLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeScaleADNLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeScaleADNLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeScaleBNDLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeScaleBNDLayout(U row, S column);
 
 template <typename T, typename U, typename S>
-__aicore__ inline decltype(auto) MakeScaleBDNLayout(size_t row, size_t column);
+__aicore__ inline decltype(auto) MakeScaleBDNLayout(U row, S column);
 
  template <typename Layout, typename TileShape>
 __aicore__ inline decltype(auto) MakeTileLayout(const Layout& layout, const TileShape& tileShape);
@@ -125,3 +131,8 @@ __aicore__ inline decltype(auto) MakeTileLayout(const Layout& layout, const Tile
 } // namespace AscendC
 
 #endif // INCLUDE_TENSOR_API_TENSOR_LAYOUT_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC_TENSOR_API_H
+#endif

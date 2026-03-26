@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/arch/cube_datamove/fixpipe/fixpipe_utils.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file fixpipe_utils.h
  * \brief
@@ -55,19 +63,19 @@ __aicore__ inline void InsertSync()
 class CopyDeqTensorToFbuf3510 {
 public:
     template <typename T>
-    __aicore__ inline void CopyDeqTensorToFbufImpl(const T& src, uint16_t calNSize, uint16_t nIterIndex)
+    __aicore__ inline static void CopyDeqTensorToFbufImpl(const T& src, uint16_t calNSize, uint16_t nIterIndex)
     {
         auto dstAddr = reinterpret_cast<__fbuf__ uint64_t*>(AllocTempBuf(calNSize));
         auto dst = MakeTensor(MakeFixbufmemPtr(dstAddr), src.Layout());
         auto tileSrc = TileSrcTensor(src, calNSize, nIterIndex);
-        DataCopy(dst, tileSrc);
+        DataCopyL12FB3510::Run<DEFAULT_DATA_COPY_TRAIT>(dst, tileSrc);
         SetFpc(dstAddr);
     }
 private:
     template <typename T>
-    __aicore__ inline decltype(auto) TileSrcTensor(const T& src, uint16_t calNSize, uint16_t nIterIndex) {
-        auto coord = MakeCoord(MakeCoord(0, 0), MakeCoord(0, nIterIndex * MAIN_LOOP_N_SIZE_3510));
-        auto shape = MakeShape(MakeShape(Std::Int<1>{}, 1), MakeShape(Std::Int<1>{}, calNSize));
+    __aicore__ inline static decltype(auto) TileSrcTensor(const T& src, uint16_t calNSize, uint16_t nIterIndex) {
+        auto coord = MakeCoord(MakeCoord(Std::Int<0>{}, Std::Int<0>{}), MakeCoord(Std::Int<0>{}, nIterIndex * MAIN_LOOP_N_SIZE_3510));
+        auto shape = MakeShape(MakeShape(Std::Int<1>{}, Std::Int<1>{}), MakeShape(Std::Int<1>{}, calNSize));
         return src(coord, shape);
     }
 };
@@ -172,7 +180,7 @@ enum class QuantMode3510 : uint8_t { None, Scalar, Vector, Direct };
 template <typename T>
 __aicore__ inline constexpr Format3510 GetDataFormat()
 {
-    if constexpr (IsL0cNZFormat<T>::value) {
+    if constexpr (IsL0cNZFormat<T>::value || IsNZFormat<T>::value) {
         return Format3510::NZ;
     } else if constexpr (IsNDFormat<T>::value) {
         return Format3510::ND;
@@ -195,15 +203,12 @@ __aicore__ inline constexpr QuantMode3510 GetQuantMode()
     return QuantMode3510::None;
 }
 
-class FormatRegistorIgnore3510 {
-public:
-    template <const FixpipeTrait& trait, QuantMode_t quantPre, typename T, typename U, typename V, typename Coord>
-    __aicore__ inline void Run(const T& dst, const U& src, const V& quant, const Coord& coord) {}
-    template <const FixpipeTrait& trait, QuantMode_t quantPre, typename T, typename U, typename V>
-    __aicore__ inline void Run(const T& dst, const U& src, const V& quant) {}
-};
-
 } // namespace Te
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_ARCH_CUBE_DATAMOVE_FIXPIPE_FIXPIPE_UTILS_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

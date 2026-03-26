@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/tensor/layout_impl.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file layout_impl.h
  * \brief
@@ -29,42 +37,27 @@ struct LocalTensor;
 template <typename Coord, typename LayoutType, typename TileShape>
 __aicore__ inline decltype(auto) MakeTileLayout(const Coord& coord, const LayoutType& layout, const TileShape& tileShape) 
 {
-    static_assert(Std::is_tuple_v<TileShape>);
-
     using OriginShape = Std::remove_cvref_t<decltype(layout.Shape())>;
-    if constexpr (nesting_depth_v<TileShape> == nesting_depth_v<OriginShape>
-                  && Std::tuple_size_v<TileShape> == Std::tuple_size_v<OriginShape>) {
-        return MakeLayout(tileShape, layout.Stride());
+    if constexpr (nesting_depth_v<TileShape> == nesting_depth_v<OriginShape>	 
+            && Std::tuple_size_v<TileShape> == Std::tuple_size_v<OriginShape>) {	 
+        return MakeLayout(tileShape, layout.Stride());	 
     } else {
-        static_assert(Std::tuple_size_v<TileShape> == TWO_DIM_DATA);
+        static_assert(Std::is_tuple_v<TileShape>,"TileShape must be a tuple");
+        static_assert(nesting_depth_v<TileShape> == TWO_DIM_DATA, "Only Support Two Dim TileShape");
+        static_assert(nesting_depth_v<OriginShape> == FOUR_DIM_DATA, "Only Support Four Dim Layout");
 
-        const uint32_t rows = Std::get<0>(tileShape);
-        const uint32_t cols = Std::get<1>(tileShape);
-
-        const auto& innerRow = Std::get<0>(Std::get<0>(layout.Shape()));
-        const auto& innerCol = Std::get<0>(Std::get<1>(layout.Shape()));
-
-        using InnerRowType = Std::remove_cvref_t<decltype(innerRow)>;
-        using InnerColType = Std::remove_cvref_t<decltype(innerCol)>;
-
-        if constexpr (IsIntegralConstantV<InnerRowType> && IsIntegralConstantV<InnerColType>) {
-            return MakeLayout(
-                MakeShape(MakeShape(Std::Int<InnerRowType::value>{}, CeilDivision(rows, InnerRowType::value)),
-                          MakeShape(Std::Int<InnerColType::value>{}, CeilDivision(cols, InnerColType::value))),
-                layout.Stride());
-        } else {
-            return MakeLayout(
-                MakeShape(MakeShape(innerRow, CeilDivision(rows, innerRow)),
-                          MakeShape(innerCol, CeilDivision(cols, innerCol))),
-                layout.Stride());
-        }
-    }
+        auto innerRow = Std::get<0>(GetShape<0>(layout));
+        auto innerCol = Std::get<0>(GetShape<1>(layout));
+    
+        return MakeLayout(MakeFractalShape(tileShape, MakeShape(innerRow, innerCol)), layout.Stride()); 
+    } 
 }
 
 template <typename Coord, typename LayoutType, typename TensorType>
-__aicore__ inline decltype(auto) MakeTileLayout(const Coord& coord, const LayoutType& layout, const LocalTensor<TensorType>& tileTensor) 
+ __aicore__ inline decltype(auto) MakeTileLayout(const Coord& coord, const LayoutType& layout, const LocalTensor<TensorType>& tileTensor) 
 {
-    static_assert(tileTensor.rank == LayoutType::rank, "tensor rank is not equal layout");
+    using TensorLayoutType = typename LocalTensor<TensorType>::layoutType;
+    static_assert(TensorLayoutType::rank == LayoutType::rank, "Tensor Rank must be equal to Layout rank");
 
     auto innerRow = Std::get<0>(Std::get<0>(layout.Shape()));
     auto innerCol = Std::get<0>(Std::get<1>(layout.Shape()));
@@ -75,16 +68,19 @@ __aicore__ inline decltype(auto) MakeTileLayout(const Coord& coord, const Layout
     auto dstRow = Std::get<0>(Std::get<0>(tileTensor.Shape())) * Std::get<1>(Std::get<0>(tileTensor.Shape()));
     auto dstCol = Std::get<0>(Std::get<1>(tileTensor.Shape())) * Std::get<1>(Std::get<1>(tileTensor.Shape()));
 
-    auto realRow = Min(srcRow, dstRow);
-    auto realCol = Min(srcCol, dstCol);
+    auto realRow = Std::min(srcRow, dstRow);	 
+    auto realCol = Std::min(srcCol, dstCol);
 
-    auto row = MakeShape(innerRow, CeilDivision(realRow, innerRow));
-    auto col = MakeShape(innerCol, CeilDivision(realCol, innerCol));
+    return MakeLayout(MakeFractalShape(MakeShape(realRow, realCol), MakeShape(innerRow, innerCol)), layout.Stride()); 
 
-    return MakeTileLayout(coord, layout, MakeShape(row, col));
 }
 
 } // namespace Te
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_TENSOR_MAKE_LAYOUT_IMPL_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

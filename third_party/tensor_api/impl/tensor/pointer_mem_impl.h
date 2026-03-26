@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/tensor/pointer_mem_impl.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
 * \file pointer_mem_impl.h
 * \brief
@@ -24,16 +32,6 @@ template <Hardware hPos, typename Pointer>
 struct HardwareMemPtr : IterAdaptor<Pointer, HardwareMemPtr<hPos, Pointer>> {
     using IterAdaptor<Pointer, HardwareMemPtr<hPos, Pointer>>::IterAdaptor;
     static constexpr const Hardware hardPos = hPos;
-
-    template <typename Index>
-    __aicore__ inline constexpr HardwareMemPtr<hPos, Pointer> operator+(const Index& index) const
-    {
-        if constexpr (is_b4_type<typename IterVal<Pointer>::type>) {
-            return HardwareMemPtr<hPos, Pointer>{this->Get() + (static_cast<size_t>(index) >> 1)};
-        } else {
-            return HardwareMemPtr<hPos, Pointer>{this->Get() + static_cast<size_t>(index)};
-        }
-    }  
 };
 
 // is hardware mem
@@ -63,3 +61,8 @@ __aicore__ inline constexpr auto MakeMemPtr(Iterator iter)
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_TENSOR_POINTER_MEM_IMPL_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

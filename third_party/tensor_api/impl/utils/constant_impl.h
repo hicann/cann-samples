@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/utils/constant_impl.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
 * \file constant_impl.h
 * \brief
@@ -28,7 +36,6 @@ namespace AscendC {
 namespace Te {
 constexpr size_t TWO_DIM_DATA = 2;
 constexpr size_t FOUR_DIM_DATA = 4;
-constexpr size_t C0_SIZE = 32;
 constexpr size_t FRACTAL_FIXED = 16;
 constexpr size_t DISABLE_COORD = 0;
 constexpr size_t ENABLE_COORD = 1;
@@ -67,24 +74,28 @@ __aicore__ inline constexpr auto GetHardPos()
    return T::iterator::hardPos;
 }
 
-template <typename T, typename U>
-__aicore__ inline constexpr auto max(const T& src0, const U& src1)
-{
-    return (src0 > src1) ? src0 : src1;
-}
-
-template <typename T, typename U>
-__aicore__ inline constexpr auto Min(const T& src0, const U& src1)
-{
-    return (src0 < src1) ? src0 : src1;
-}
-
 template <typename ElementType, typename DataType>
 inline constexpr bool is_one_of_attr_v = Std::is_one_of_v<ElementType, __gm__ DataType, __cbuf__ DataType, __ca__ DataType, 
                                                         __cb__ DataType, __cc__ DataType, __ubuf__ DataType, DataType>;
 
 template <typename DataType>
 inline constexpr bool is_b4_type = is_one_of_attr_v<DataType, fp4x2_e1m2_t> || is_one_of_attr_v<DataType, fp4x2_e2m1_t>;
+
+template<typename T = Std::ignore_t>
+__aicore__ inline constexpr size_t GetC0Size() {
+    constexpr size_t c0Size = 32;
+    if constexpr (is_b4_type<T>) {
+        return c0Size * 2;
+    } else {
+        return c0Size;
+    }
+}
+
+template<typename T = Std::ignore_t>
+constexpr size_t C0_SIZE = GetC0Size<T>();
+
+template<typename T>
+constexpr size_t C0_ELEMENT = C0_SIZE<T> / sizeof(T);
 
 template <size_t N, typename = Std::make_index_sequence<N>>
 struct EmptyGenerator;
@@ -126,3 +137,8 @@ constexpr bool IsIntegralConstantV = IsIntegralConstant<T>::value;
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_UTILS_CONSTANT_IMPL_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

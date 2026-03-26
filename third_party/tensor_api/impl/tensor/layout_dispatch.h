@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/tensor/layout_dispatch.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
 * \file layout_dispatch.h
 * \brief
@@ -15,17 +23,10 @@
 #ifndef IMPL_TENSOR_API_TENSOR_LAYOUT_DISPATCH_H
 #define IMPL_TENSOR_API_TENSOR_LAYOUT_DISPATCH_H
 
-#include "impl/utils/utils_impl.h"
+#include "../utils/utils_impl.h"
 
 namespace AscendC {
 namespace Te {
-
-__aicore__ inline int64_t CeilAlign(int64_t a, int64_t b) {
-    if (b == 0) {
-        return 0;
-    }
-    return (a + b - 1) / b * b;
-}
 
 struct MakeTupleCons {
     template <typename... Ts>
@@ -70,149 +71,167 @@ struct TupleDispatcher;
 // make shape
 template <typename T>
 struct TupleDispatcher<LayoutFormat::NZ, TupleFormat::Shape, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        constexpr auto c0Size = is_b4_type<T> ? C0_SIZE * 2 : C0_SIZE / sizeof(T);
-        return GetTuple(Std::Int<FRACTAL_FIXED>{},  CeilDivision(row, FRACTAL_FIXED), 
-                                Std::Int<c0Size / sizeof(T)>{},  CeilDivision(column, (c0Size / sizeof(T)))); 
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<FRACTAL_FIXED>{},  Std::ceil_division(row, FRACTAL_FIXED), 
+                                Std::Int<C0_ELEMENT<T>>{},  Std::ceil_division(column, C0_ELEMENT<T>)); 
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::NZ, TupleFormat::Shape, Std::ignore_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return GetTuple(Std::Int<FRACTAL_FIXED>{},  CeilDivision(row, FRACTAL_FIXED), 
-                                Std::Int<C0_SIZE / sizeof(uint16_t)>{},  CeilDivision(column, (C0_SIZE / sizeof(uint16_t)))); 
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<FRACTAL_FIXED>{},  Std::ceil_division(row, FRACTAL_FIXED), 
+                                Std::Int<C0_ELEMENT<uint16_t>>{},  Std::ceil_division(column, C0_ELEMENT<uint16_t>)); 
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ZN, TupleFormat::Shape, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return GetTuple(Std::Int<C0_SIZE / sizeof(T)>{},  CeilDivision(row, (C0_SIZE / sizeof(T))),
-                                Std::Int<FRACTAL_FIXED>{},  CeilDivision(column, FRACTAL_FIXED));
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<C0_ELEMENT<T>>{},  Std::ceil_division(row, C0_ELEMENT<T>),
+                                Std::Int<FRACTAL_FIXED>{},  Std::ceil_division(column, FRACTAL_FIXED));
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::DN, TupleFormat::Shape, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return GetTuple(Std::Int<1>{}, row, Std::Int<1>{}, column);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::DN, TupleFormat::Shape, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return GetTuple(Std::Int<1>{}, row, Std::Int<2>{}, column / MX_SCALE_K0);
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ND, TupleFormat::Shape, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return GetTuple(Std::Int<1>{}, row, Std::Int<1>{}, column);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::ND, TupleFormat::Shape, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return GetTuple(Std::Int<2>{}, row / MX_SCALE_K0, Std::Int<1>{}, column);
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ZZ, TupleFormat::Shape, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return GetTuple(Std::Int<FRACTAL_FIXED>{}, CeilDivision(row, FRACTAL_FIXED),
-                                    Std::Int<C0_SIZE / sizeof(T)>{}, CeilDivision(column, (C0_SIZE / sizeof(T))));
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<FRACTAL_FIXED>{}, Std::ceil_division(row, FRACTAL_FIXED),
+                                    Std::Int<C0_ELEMENT<T>>{}, Std::ceil_division(column, C0_ELEMENT<T>));
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::ZZ, TupleFormat::Shape, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return GetTuple(Std::Int<FRACTAL_FIXED>{}, CeilDivision(row, FRACTAL_FIXED),
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<FRACTAL_FIXED>{}, Std::ceil_division(row, FRACTAL_FIXED),
                                     Std::Int<MX_SCALE_K0>{}, column / MX_SCALE_K0);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::NN, TupleFormat::Shape, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) { // (scaleK, n)
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) { // (scaleK, n)
         return GetTuple(Std::Int<MX_SCALE_K0>{}, row / MX_SCALE_K0,
-                                    Std::Int<FRACTAL_FIXED>{}, CeilDivision(column, FRACTAL_FIXED));
+                                    Std::Int<FRACTAL_FIXED>{}, Std::ceil_division(column, FRACTAL_FIXED));
     }
 };
 
 // make stride
 template <typename T>
 struct TupleDispatcher<LayoutFormat::NZ, TupleFormat::Stride, T> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
-        constexpr auto c0Size = is_b4_type<T> ? C0_SIZE * 2 : C0_SIZE / sizeof(T);
-        return GetTuple(Std::Int<c0Size / sizeof(T)>{},  stride0, Std::Int<1>{},  stride1); 
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
+        return GetTuple(Std::Int<C0_ELEMENT<T>>{}, stride0, Std::Int<1>{}, stride1); 
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::NZ, TupleFormat::Stride, Std::ignore_t> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
-        return GetTuple(Std::Int<C0_SIZE / sizeof(uint16_t)>{},  stride0, Std::Int<1>{},  stride1); 
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
+        return GetTuple(Std::Int<C0_ELEMENT<uint16_t>>{}, stride0, Std::Int<1>{}, stride1); 
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ZN, TupleFormat::Stride, T> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
-        return GetTuple(Std::Int<1>{},  stride0, Std::Int<C0_SIZE / sizeof(T)>{},  stride1);
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
+        return GetTuple(Std::Int<1>{},  stride0, Std::Int<C0_ELEMENT<T>>{},  stride1);
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::DN, TupleFormat::Stride, T> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
         return GetTuple(Std::Int<0>{}, stride0, Std::Int<0>{}, stride1);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::DN, TupleFormat::Stride, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
         return GetTuple(Std::Int<0>{}, stride0, Std::Int<1>{}, stride1);
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ND, TupleFormat::Stride, T> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
         return GetTuple(Std::Int<0>{}, stride0, Std::Int<0>{}, stride1);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::ND, TupleFormat::Stride, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
         return GetTuple(Std::Int<1>{}, stride0, Std::Int<0>{}, stride1);
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ZZ, TupleFormat::Stride, T> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
-        return GetTuple(Std::Int<C0_SIZE / sizeof(T)>{}, stride0, Std::Int<1>{}, stride1);
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
+        return GetTuple(Std::Int<C0_ELEMENT<T>>{}, stride0, Std::Int<1>{}, stride1);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::ZZ, TupleFormat::Stride, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) {
         return GetTuple(Std::Int<MX_SCALE_K0>{}, stride0, Std::Int<1>{}, stride1);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::NN, TupleFormat::Stride, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t stride0, size_t stride1) { // (scaleK, n)
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U stride0, S stride1) { // (scaleK, n)
         return GetTuple(Std::Int<1>{}, stride0, Std::Int<MX_SCALE_K0>{}, stride1);
     }
 };
@@ -220,26 +239,28 @@ struct TupleDispatcher<LayoutFormat::NN, TupleFormat::Stride, fp8_e8m0_t> {
 // make coord
 template <typename T>
 struct TupleDispatcher<LayoutFormat::NZ, TupleFormat::Coord, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        constexpr auto c0Size = is_b4_type<T> ? C0_SIZE * 2 : C0_SIZE / sizeof(T);
-        return GetTuple(Std::Int<0>{},  CeilDivision(row, FRACTAL_FIXED), 
-                                Std::Int<0>{},  CeilDivision(column, (c0Size / sizeof(T)))); 
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<0>{},  Std::ceil_division(row, FRACTAL_FIXED), 
+                                Std::Int<0>{},  Std::ceil_division(column, C0_ELEMENT<T>)); 
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::NZ, TupleFormat::Coord, Std::ignore_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return GetTuple(Std::Int<0>{},  CeilDivision(row, FRACTAL_FIXED), 
-                                Std::Int<0>{},  CeilDivision(column, (C0_SIZE / sizeof(uint16_t)))); 
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<0>{},  Std::ceil_division(row, FRACTAL_FIXED), 
+                                Std::Int<0>{},  Std::ceil_division(column, C0_ELEMENT<uint16_t>)); 
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ZN, TupleFormat::Coord, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return GetTuple(Std::Int<0>{},  CeilDivision(row, (C0_SIZE / sizeof(T))),
-                                Std::Int<0>{},  CeilDivision(column, FRACTAL_FIXED));
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<0>{},  Std::ceil_division(row, C0_ELEMENT<T>),
+                                Std::Int<0>{},  Std::ceil_division(column, FRACTAL_FIXED));
     }
 };
 
@@ -252,46 +273,52 @@ struct TupleDispatcher<LayoutFormat::DN, TupleFormat::Coord, T> {
 
 template <>
 struct TupleDispatcher<LayoutFormat::DN, TupleFormat::Coord, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return GetTuple(Std::Int<0>{}, row, Std::Int<0>{}, column / MX_SCALE_K0);
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ND, TupleFormat::Coord, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return GetTuple(Std::Int<0>{}, row, Std::Int<0>{}, column);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::ND, TupleFormat::Coord, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return GetTuple(Std::Int<0>{}, row / MX_SCALE_K0, Std::Int<0>{}, column);
     }
 };
 
 template <typename T>
 struct TupleDispatcher<LayoutFormat::ZZ, TupleFormat::Coord, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return GetTuple(Std::Int<0>{}, CeilDivision(row, FRACTAL_FIXED),
-                                    Std::Int<0>{}, CeilDivision(column, (C0_SIZE / sizeof(T))));
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<0>{}, Std::ceil_division(row, FRACTAL_FIXED),
+                                    Std::Int<0>{}, Std::ceil_division(column, C0_ELEMENT<T>));
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::ZZ, TupleFormat::Coord, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return GetTuple(Std::Int<0>{}, CeilDivision(row, FRACTAL_FIXED),
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return GetTuple(Std::Int<0>{}, Std::ceil_division(row, FRACTAL_FIXED),
                                     Std::Int<0>{}, column / MX_SCALE_K0);
     }
 };
 
 template <>
 struct TupleDispatcher<LayoutFormat::NN, TupleFormat::Coord, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) { // (scaleK, n)
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) { // (scaleK, n)
         return GetTuple(Std::Int<0>{}, row / MX_SCALE_K0,
-                                    Std::Int<0>{}, CeilDivision(column, FRACTAL_FIXED));
+                                    Std::Int<0>{}, Std::ceil_division(column, FRACTAL_FIXED));
     }
 };
 
@@ -302,37 +329,40 @@ struct LayoutDispatcher;
 template <typename T>
 struct LayoutDispatcher<LayoutFormat::NZ, T> {
     __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        constexpr auto c0Size = is_b4_type<T> ? C0_SIZE * 2 : C0_SIZE / sizeof(T);
-        return LayoutConstructor(Std::Int<FRACTAL_FIXED>{}, CeilDivision(row, FRACTAL_FIXED), Std::Int<c0Size>{},
-                                 CeilDivision(column, (c0Size)), Std::Int<c0Size>{}, Std::Int<c0Size * FRACTAL_FIXED>{},
-                                 Std::Int<1>{}, c0Size * CeilAlign(row, FRACTAL_FIXED));
+        constexpr auto c0Ele = C0_ELEMENT<T>;
+        return LayoutConstructor(Std::Int<FRACTAL_FIXED>{}, Std::ceil_division(row, FRACTAL_FIXED), Std::Int<c0Ele>{},
+                                 Std::ceil_division(column, c0Ele), Std::Int<c0Ele>{}, Std::Int<c0Ele * FRACTAL_FIXED>{},
+                                 Std::Int<1>{}, c0Ele * Std::ceil_align(row, FRACTAL_FIXED));
     }
 };
 
 template <>
 struct LayoutDispatcher<LayoutFormat::NZ, Std::ignore_t> {
     __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return LayoutConstructor(Std::Int<FRACTAL_FIXED>{},  CeilDivision(row, FRACTAL_FIXED), 
-                                Std::Int<C0_SIZE / sizeof(uint16_t)>{},  CeilDivision(column, (C0_SIZE / sizeof(uint16_t))), 
-                                Std::Int<C0_SIZE / sizeof(uint16_t)>{},  Std::Int<C0_SIZE / sizeof(uint16_t) * FRACTAL_FIXED>{},
-                                Std::Int<1>{},  C0_SIZE / sizeof(uint16_t) * CeilAlign(row, FRACTAL_FIXED)); 
+        constexpr auto c0Ele = C0_ELEMENT<uint16_t>;
+        return LayoutConstructor(Std::Int<FRACTAL_FIXED>{},  Std::ceil_division(row, FRACTAL_FIXED), 
+                                Std::Int<c0Ele>{},  Std::ceil_division(column, c0Ele), 
+                                Std::Int<c0Ele>{},  Std::Int<c0Ele * FRACTAL_FIXED>{},
+                                Std::Int<1>{},  c0Ele * Std::ceil_align(row, FRACTAL_FIXED)); 
     }
 };
 
 template <typename T>
 struct LayoutDispatcher<LayoutFormat::ZN, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        constexpr auto c0Size = is_b4_type<T> ? C0_SIZE * 2 : C0_SIZE / sizeof(T);
-        return LayoutConstructor(Std::Int<c0Size>{},  CeilDivision(row, (c0Size)),
-                                Std::Int<FRACTAL_FIXED>{},  CeilDivision(column, FRACTAL_FIXED),
-                                Std::Int<1>{},  c0Size * CeilAlign(column, FRACTAL_FIXED),
-                                Std::Int<c0Size>{},  Std::Int<c0Size * FRACTAL_FIXED>{});
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        constexpr auto c0Ele = C0_ELEMENT<T>;
+        return LayoutConstructor(Std::Int<c0Ele>{},  Std::ceil_division(row, c0Ele),
+                                Std::Int<FRACTAL_FIXED>{},  Std::ceil_division(column, FRACTAL_FIXED),
+                                Std::Int<1>{},  c0Ele * Std::ceil_align(column, FRACTAL_FIXED),
+                                Std::Int<c0Ele>{},  Std::Int<c0Ele * FRACTAL_FIXED>{});
     }
 };
 
 template <typename T>
 struct LayoutDispatcher<LayoutFormat::DN, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return LayoutConstructor(Std::Int<1>{}, row, Std::Int<1>{}, column,
                                     Std::Int<0>{}, Std::Int<1>{}, Std::Int<0>{}, row);
     }
@@ -340,7 +370,8 @@ struct LayoutDispatcher<LayoutFormat::DN, T> {
 
 template <>
 struct LayoutDispatcher<LayoutFormat::DN, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return LayoutConstructor(Std::Int<1>{}, row, Std::Int<2>{}, column / MX_SCALE_K0,
                                     Std::Int<0>{}, Std::Int<MX_SCALE_K0>{}, Std::Int<1>{}, MX_SCALE_K0 * row);
     }
@@ -348,7 +379,8 @@ struct LayoutDispatcher<LayoutFormat::DN, fp8_e8m0_t> {
 
 template <typename T>
 struct LayoutDispatcher<LayoutFormat::ND, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return LayoutConstructor(Std::Int<1>{}, row, Std::Int<1>{}, column,
                                     Std::Int<0>{}, column, Std::Int<0>{}, Std::Int<1>{});
     }
@@ -356,7 +388,8 @@ struct LayoutDispatcher<LayoutFormat::ND, T> {
 
 template <>
 struct LayoutDispatcher<LayoutFormat::ND, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
         return LayoutConstructor(Std::Int<2>{}, row / MX_SCALE_K0, Std::Int<1>{}, column,
                                     Std::Int<1>{}, MX_SCALE_K0 * column, Std::Int<0>{}, Std::Int<MX_SCALE_K0>{});
     }
@@ -364,30 +397,34 @@ struct LayoutDispatcher<LayoutFormat::ND, fp8_e8m0_t> {
 
 template <typename T>
 struct LayoutDispatcher<LayoutFormat::ZZ, T> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return LayoutConstructor(Std::Int<FRACTAL_FIXED>{}, CeilDivision(row, FRACTAL_FIXED),
-                                    Std::Int<C0_SIZE / sizeof(T)>{}, CeilDivision(column, (C0_SIZE / sizeof(T))),
-                                    Std::Int<C0_SIZE / sizeof(T)>{}, FRACTAL_FIXED * CeilAlign(column, (C0_SIZE / sizeof(T))),
-                                    Std::Int<1>{}, Std::Int<C0_SIZE / sizeof(T) * FRACTAL_FIXED>{});
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        constexpr auto c0Ele = C0_ELEMENT<T>;
+        return LayoutConstructor(Std::Int<FRACTAL_FIXED>{}, Std::ceil_division(row, FRACTAL_FIXED),
+                                    Std::Int<c0Ele>{}, Std::ceil_division(column, c0Ele),
+                                    Std::Int<c0Ele>{}, FRACTAL_FIXED * Std::ceil_align(column, c0Ele),
+                                    Std::Int<1>{}, Std::Int<c0Ele * FRACTAL_FIXED>{});
     }
 };
 
 template <>
 struct LayoutDispatcher<LayoutFormat::ZZ, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) {
-        return LayoutConstructor(Std::Int<FRACTAL_FIXED>{}, CeilDivision(row, FRACTAL_FIXED),
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) {
+        return LayoutConstructor(Std::Int<FRACTAL_FIXED>{}, Std::ceil_division(row, FRACTAL_FIXED),
                                     Std::Int<MX_SCALE_K0>{}, column / MX_SCALE_K0,
                                     Std::Int<MX_SCALE_K0>{}, column * FRACTAL_FIXED,
-                                    Std::Int<1>{}, Std::Int<C0_SIZE>{});
+                                    Std::Int<1>{}, Std::Int<C0_SIZE<>>{});
     }
 };
 
 template <>
 struct LayoutDispatcher<LayoutFormat::NN, fp8_e8m0_t> {
-    __aicore__ inline static decltype(auto) apply(size_t row, size_t column) { // (scaleK, n)
+    template <typename U, typename S>
+    __aicore__ inline static decltype(auto) apply(U row, S column) { // (scaleK, n)
         return LayoutConstructor(Std::Int<MX_SCALE_K0>{}, row / MX_SCALE_K0,
-                                    Std::Int<FRACTAL_FIXED>{}, CeilDivision(column, FRACTAL_FIXED),
-                                    Std::Int<1>{}, Std::Int<C0_SIZE>{},
+                                    Std::Int<FRACTAL_FIXED>{}, Std::ceil_division(column, FRACTAL_FIXED),
+                                    Std::Int<1>{}, Std::Int<C0_SIZE<>>{},
                                     Std::Int<MX_SCALE_K0>{}, row * FRACTAL_FIXED);
     }
 };
@@ -396,3 +433,8 @@ struct LayoutDispatcher<LayoutFormat::NN, fp8_e8m0_t> {
 } // namespace AscendC
 
 #endif // IMPL_TENSOR_API_TENSOR_LAYOUT_DISPTACH_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

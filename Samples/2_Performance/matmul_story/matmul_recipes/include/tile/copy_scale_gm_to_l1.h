@@ -68,7 +68,7 @@ struct CopyScaleGM2L1 {
         uint64_t srcDValue =
             GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(srcLayout) / MX_SCALE_K0;
         uint16_t dstNzC0Stride =
-            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(dstLayout) / C0_SIZE;
+            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(dstLayout) / C0_SIZE<T>;
         CopyGmToCbufDn2nz<Tp, traits, T, U>(dst, src, nValue, dValue, srcDValue, dstNzC0Stride);
     }
 
@@ -89,7 +89,7 @@ struct CopyScaleGM2L1 {
         uint64_t srcDValue =
             GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(srcLayout) / MX_SCALE_K0;
         uint16_t dstNzC0Stride =
-            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(dstLayout) / C0_SIZE;
+            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(dstLayout) / C0_SIZE<T>;
         CopyGmToCbufNd2nz<Tp, traits, T, U>(dst, src, nValue, dValue, srcDValue, dstNzC0Stride);
     }
 
@@ -110,7 +110,7 @@ struct CopyScaleGM2L1 {
         uint64_t srcDValue =
             GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(srcLayout) / MX_SCALE_K0;
         uint16_t dstNzC0Stride =
-            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(dstLayout) / C0_SIZE;
+            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(dstLayout) / C0_SIZE<T>;
         CopyGmToCbufDn2nz<Tp, traits, T, U>(dst, src, nValue, dValue, srcDValue, dstNzC0Stride);
     }
 
@@ -131,7 +131,7 @@ struct CopyScaleGM2L1 {
         uint64_t srcDValue =
             GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(srcLayout) / MX_SCALE_K0;
         uint16_t dstNzC0Stride =
-            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(dstLayout) / C0_SIZE;
+            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(dstLayout) / C0_SIZE<T>;
         CopyGmToCbufNd2nz<Tp, traits, T, U>(dst, src, nValue, dValue, srcDValue, dstNzC0Stride);
     }
 
@@ -149,10 +149,10 @@ struct CopyScaleGM2L1 {
 
         uint16_t loop2DstStride = dstNzNStride;  // loop2_dst_stride = dst_nz_n_stride
         uint16_t loop3DstStride = dstNzC0Stride; // loop3_dst_stride = dst_nz_c0_Stride
-        // loop4_dst_stride: dst_nz_matrix_stride * size_of_dst_type / C0_size
-        uint16_t loop4DstStride = static_cast<uint16_t>(dstNzMatrixStride * sizeof(half) / C0_SIZE);
+        // loop4_dst_stride: dst_nz_matrix_stride * size_of_dst_type / C0_SIZE<T>
+        uint16_t loop4DstStride = static_cast<uint16_t>(dstNzMatrixStride * sizeof(half) / C0_SIZE<T>);
 
-        uint8_t cacheMode = GetCacheModeFromTensor(src.Data().Get());
+        uint8_t cacheMode = GetCacheModeFromTensor(src);
         // The hardware DN2NZ DMA expects a packed register describing the
         // destination NZ strides. The helper derives those fields once here.
         uint64_t mte2NzPara = static_cast<uint64_t>(loop4DstStride) << 48; // MTE2_NZ_PARA[63:48]
@@ -180,10 +180,10 @@ struct CopyScaleGM2L1 {
 
         uint16_t loop2DstStride = dstNzNStride;  // loop2_dst_stride = dst_nz_n_stride
         uint16_t loop3DstStride = dstNzC0Stride; // loop3_dst_stride = dst_nz_c0_Stride
-        // loop4_dst_stride: dst_nz_matrix_stride * size_of_dst_type / C0_size
-        uint16_t loop4DstStride = static_cast<uint16_t>(dstNzMatrixStride * sizeof(half) / C0_SIZE);
+        // loop4_dst_stride: dst_nz_matrix_stride * size_of_dst_type / C0_SIZE<T>
+        uint16_t loop4DstStride = static_cast<uint16_t>(dstNzMatrixStride * sizeof(half) / C0_SIZE<T>);
 
-        uint8_t cacheMode = GetCacheModeFromTensor(src.Data().Get());
+        uint8_t cacheMode = GetCacheModeFromTensor(src);
         // The ND2NZ path uses the same register layout as DN2NZ; only the
         // source indexing logic differs in how ND tiles are walked in GM.
         uint64_t mte2NzPara = static_cast<uint64_t>(loop4DstStride) << 48; // MTE2_NZ_PARA[63:48]

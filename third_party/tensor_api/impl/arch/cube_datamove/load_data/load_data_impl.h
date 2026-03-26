@@ -8,6 +8,14 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/arch/cube_datamove/load_data/load_data_impl.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file load_data_impl.h
  * \brief
@@ -34,8 +42,7 @@ LoadData(const T& dst, const U& src)
 {
     constexpr Hardware dstPos = GetHardPos<T>();
     constexpr Hardware srcPos = GetHardPos<U>();
-    using Tensor2Tensor = typename LoadDataTensor2TensorNoCoord<dstPos, srcPos, 
-        CURRENT_ARCH_VERSION, FOUR_DIM_DATA>::type;
+    using Tensor2Tensor = typename LoadDataTensor2TensorNoCoord<dstPos, srcPos, CURRENT_ARCH_VERSION>::type;
     Tensor2Tensor{}.template Run<trait, T, U>(dst, src);
 }
 
@@ -45,10 +52,14 @@ LoadData(const T& dst, const U& src, const Coord& coord)
 {
     constexpr Hardware dstPos = GetHardPos<T>();
     constexpr Hardware srcPos = GetHardPos<U>();
-    using Tensor2Tensor = typename LoadDataTensor2Tensor<dstPos, srcPos, 
-        CURRENT_ARCH_VERSION, FOUR_DIM_DATA>::type;
+    using Tensor2Tensor = typename LoadDataTensor2Tensor<dstPos, srcPos, CURRENT_ARCH_VERSION>::type;
     Tensor2Tensor{}.template Run<trait, T, U, Coord>(dst, src, coord);
 }
 } // namespace Te
 } // namespace AscendC
 #endif // IMPL_TENSOR_API_ARCH_CUBE_DATAMOVE_LOAD_DATA_LOAD_DATA_IMPL_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif

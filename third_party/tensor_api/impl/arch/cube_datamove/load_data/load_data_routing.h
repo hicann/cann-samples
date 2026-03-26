@@ -7,6 +7,14 @@
 * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 * See LICENSE in the root of the software repository for the full text of the License.
 */
+
+#if !defined(ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS)
+#warning                                                                                                               \
+    "tensor_api/impl/arch/cube_datamove/load_data/load_data_routing.h is an internal header file and must not be used directly. Functions or variables defined in this file maybe removed in the future. Please use "#include "tensor_api/tensor.h"" and use public functions or variables defined in interface headers files."
+#define ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#define UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
+
 /*!
  * \file load_data_routing.h
  * \brief
@@ -14,9 +22,6 @@
 
 #ifndef IMPL_TENSOR_API_ARCH_CUBE_DATAMOVE_LOAD_DATA_LOAD_DATA_ROUTING_H
 #define IMPL_TENSOR_API_ARCH_CUBE_DATAMOVE_LOAD_DATA_LOAD_DATA_ROUTING_H
-
-#include "impl/arch/cube_datamove/load_data/npu_arch_2201/load_data_l12l0a.h"
-#include "impl/arch/cube_datamove/load_data/npu_arch_2201/load_data_l12l0b.h"
 
 #include "impl/arch/cube_datamove/load_data/npu_arch_3510/load_data_l12l0a.h"
 #include "impl/arch/cube_datamove/load_data/npu_arch_3510/load_data_l12l0b.h"
@@ -26,58 +31,48 @@ namespace Te {
 
 class LoadDataIgnore {
 public:
-    template<const LoadDataTrait& trait, typename T, typename U, typename Coord>
-    __aicore__ inline void Run(const T& dst, const U& src, const Coord& coord) {}
-
-    template<const LoadDataTrait& trait, typename T, typename U>
-    __aicore__ inline void Run(const T& dst, const U& src) {}
+    template <const LoadDataTrait& trait, typename ...Args>
+    __aicore__ inline void Run(const Args&... args) {}
 };
 
-template <Hardware dstPos, Hardware srcPos, uint32_t Version, size_t dimension>
+template <Hardware dstPos, Hardware srcPos, uint32_t Version>
 struct LoadDataTensor2Tensor {
     using type = LoadDataIgnore;
 };
 
-template <Hardware dstPos, Hardware srcPos, uint32_t Version, size_t dimension>
+template <Hardware dstPos, Hardware srcPos, uint32_t Version>
 struct LoadDataTensor2TensorNoCoord {
     using type = LoadDataIgnore;
 };
 
 template <>
-struct LoadDataTensor2Tensor<Hardware::L0A, Hardware::L1, ArchVersion::V2201, FOUR_DIM_DATA>
+struct LoadDataTensor2TensorNoCoord<Hardware::L0A, Hardware::L1, ArchVersion::V3510>
 {
-    using type = LoadDataFourDim2201L12L0A;
+    using type = LoadDataL12L0A3510;
 };
 
 template <>
-struct LoadDataTensor2Tensor<Hardware::L0B, Hardware::L1, ArchVersion::V2201, FOUR_DIM_DATA>
+struct LoadDataTensor2TensorNoCoord<Hardware::L0B, Hardware::L1, ArchVersion::V3510>
 {
-    using type = LoadDataFourDim2201L12L0B;
+    using type = LoadDataL12L0B3510;
 };
 
 template <>
-struct LoadDataTensor2TensorNoCoord<Hardware::L0A, Hardware::L1, ArchVersion::V3510, FOUR_DIM_DATA>
+struct LoadDataTensor2Tensor<Hardware::L0A, Hardware::L1, ArchVersion::V3510>
 {
-    using type = LoadDataFourDim3510L12L0A;
+    using type = LoadDataL12L0AWithCoord3510;
 };
 
 template <>
-struct LoadDataTensor2TensorNoCoord<Hardware::L0B, Hardware::L1, ArchVersion::V3510, FOUR_DIM_DATA>
+struct LoadDataTensor2Tensor<Hardware::L0B, Hardware::L1, ArchVersion::V3510>
 {
-    using type = LoadDataFourDim3510L12L0B;
-};
-
-template <>
-struct LoadDataTensor2Tensor<Hardware::L0A, Hardware::L1, ArchVersion::V3510, FOUR_DIM_DATA>
-{
-    using type = LoadDataFourDim3510L12L0AWithCoord;
-};
-
-template <>
-struct LoadDataTensor2Tensor<Hardware::L0B, Hardware::L1, ArchVersion::V3510, FOUR_DIM_DATA>
-{
-    using type = LoadDataFourDim3510L12L0BWithCoord;
+    using type = LoadDataL12L0BWithCoord3510;
 };
 } // namespace Te
 } // namespace AscendC
 #endif // IMPL_TENSOR_API_ARCH_CUBE_DATAMOVE_LOAD_DATA_LOAD_DATA_ROUTING_H
+
+#if defined(UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC)
+#undef ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS
+#undef UNDEF_ASCENDC_TENSOR_API_INCLUDE_COMPILER_INTERNAL_HEADERS_ASCENDC
+#endif
