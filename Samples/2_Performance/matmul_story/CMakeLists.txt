@@ -106,6 +106,10 @@ add_matmul_tutorial(matmul_tutorial_mxfp4_base 0_naive/matmul_tutorial_mxfp4_bas
 add_matmul_tutorial(matmul_tutorial_mxfp4_swat  3_block_swat/matmul_tutorial_mxfp4_swat.cpp  3_block_swat)
 add_matmul_tutorial(matmul_tutorial_mxfp4_swat_balance  4_last_round_tile_balance/matmul_tutorial_mxfp4_swat_balance.cpp  4_last_round_tile_balance)
 add_matmul_tutorial(matmul_tutorial_mxfp4_swat_unitflag  5_unit_flag/matmul_tutorial_mxfp4_swat_unitflag.cpp  5_unit_flag)
+add_matmul_tutorial(matmul_tutorial_mxfp4_openpingpong  1_pingpong/matmul_tutorial_mxfp4_openpingpong.cpp  1_pingpong)
+add_matmul_tutorial(matmul_tutorial_mxfp4_splithalfl1  5_halfl1_ping_halfl1_pong/matmul_tutorial_mxfp4_splithalfl1.cpp  5_halfl1_ping_halfl1_pong)
+add_matmul_tutorial(matmul_tutorial_mxfp4_a_mul_fullload  7_fullload/matmul_tutorial_mxfp4_a_mul_fullload.cpp  7_fullload)
+add_matmul_tutorial(matmul_tutorial_mxfp4_scale_once_load_mulblock  6_scale_memory_access_coalescing/matmul_tutorial_mxfp4_scale_once_load_mulblock.cpp  6_scale_memory_access_coalescing)
 
 # ============================================================================
 # Install layout

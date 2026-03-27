@@ -1,0 +1,174 @@
+#ifndef TILE_COPY_SCALE_GM_TO_L1_H
+#define TILE_COPY_SCALE_GM_TO_L1_H
+
+#include "include/tensor.h"
+#include "impl/atom/copy_traits_impl.h"
+
+using AscendC::Te::AttrInfo;
+using AscendC::Te::GetCacheModeFromTensor;
+using AscendC::Te::GetEleFromLayout;
+using AscendC::Te::IsScaleANDFormat;
+using AscendC::Te::IsScaleBNDFormat;
+using AscendC::Te::IsZZFormat;
+using AscendC::Te::MX_SCALE_K0;
+
+namespace Tile {
+struct CopyScaleGM2L1 {
+    template <typename Tp, const Tp& traits, typename T, typename U>
+    __aicore__ inline static void Copy(const T& dst, const U& src)
+    {
+        if constexpr (IsZZFormat<T>::value) {
+            if constexpr (IsScaleANDFormat<U>::value) {
+                CopyScaleADn2nz<Tp, traits, T, U>(dst, src);
+            } else {
+                CopyScaleANd2nz<Tp, traits, T, U>(dst, src);
+            }
+        } else {
+            if constexpr (IsScaleBNDFormat<U>::value) {
+                CopyScaleBNd2nz<Tp, traits, T, U>(dst, src);
+            } else {
+                CopyScaleBDn2nz<Tp, traits, T, U>(dst, src);
+            }
+        }
+    }
+
+    template <typename Tp, const Tp& traits, typename T, typename U>
+    __aicore__ inline static void CopyScaleADn2nz(const T& dst, const U& src)
+    {
+        using type = typename U::elementType;
+        static_assert(AscendC::Std::is_same_v<type, __gm__ fp8_e8m0_t>, "The data type is not supported.");
+
+        auto dstLayout = dst.Layout();
+        auto srcLayout = src.Layout();
+
+        uint16_t nValue =
+            GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(srcLayout) / MX_SCALE_K0;
+        uint32_t dValue = GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::ROW, 1>(srcLayout);
+        uint64_t srcDValue =
+            GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(srcLayout) / MX_SCALE_K0;
+        uint16_t dstNzC0Stride =
+            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(dstLayout) / AscendC::Te::C0_SIZE<>;
+        CopyGmToCbufDn2nz<Tp, traits, T, U>(dst, src, nValue, dValue, srcDValue, dstNzC0Stride);
+    }
+
+    template <typename Tp, const Tp& traits, typename T, typename U>
+    __aicore__ inline static void CopyScaleANd2nz(const T& dst, const U& src)
+    {
+        using type = typename U::elementType;
+        static_assert(AscendC::Std::is_same_v<type, __gm__ fp8_e8m0_t>, "The data type is not supported.");
+
+        auto dstLayout = dst.Layout();
+        auto srcLayout = src.Layout();
+
+        uint16_t nValue = GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(srcLayout);
+        uint32_t dValue = GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::ROW, 1>(srcLayout);
+
+        uint64_t srcDValue =
+            GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(srcLayout) / MX_SCALE_K0;
+        uint16_t dstNzC0Stride =
+            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(dstLayout) / AscendC::Te::C0_SIZE<>;
+        CopyGmToCbufNd2nz<Tp, traits, T, U>(dst, src, nValue, dValue, srcDValue, dstNzC0Stride);
+    }
+
+    template <typename Tp, const Tp& traits, typename T, typename U>
+    __aicore__ inline static void CopyScaleBDn2nz(const T& dst, const U& src)
+    {
+        using type = typename U::elementType;
+        static_assert(AscendC::Std::is_same_v<type, __gm__ fp8_e8m0_t>, "The data type is not supported.");
+
+        auto dstLayout = dst.Layout();
+        auto srcLayout = src.Layout();
+
+        uint16_t dValue = GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(srcLayout);
+        uint32_t nValue =
+            GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::ROW, 1>(srcLayout) / MX_SCALE_K0;
+        uint64_t srcDValue =
+            GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(srcLayout) / MX_SCALE_K0;
+        uint16_t dstNzC0Stride =
+            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(dstLayout) / AscendC::Te::C0_SIZE<>;
+        CopyGmToCbufDn2nz<Tp, traits, T, U>(dst, src, nValue, dValue, srcDValue, dstNzC0Stride);
+    }
+
+    template <typename Tp, const Tp& traits, typename T, typename U>
+    __aicore__ inline static void CopyScaleBNd2nz(const T& dst, const U& src)
+    {
+        using type = typename U::elementType;
+        static_assert(AscendC::Std::is_same_v<type, __gm__ fp8_e8m0_t>, "The data type is not supported.");
+
+        auto dstLayout = dst.Layout();
+        auto srcLayout = src.Layout();
+
+        uint16_t nValue = GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::ROW, 1>(srcLayout);
+        uint32_t dValue = GetEleFromLayout<decltype(srcLayout), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(srcLayout);
+
+        uint64_t srcDValue =
+            GetEleFromLayout<decltype(srcLayout), AttrInfo::STRIDE, AttrInfo::ROW, 1>(srcLayout) / MX_SCALE_K0;
+        uint16_t dstNzC0Stride =
+            GetEleFromLayout<decltype(dstLayout), AttrInfo::STRIDE, AttrInfo::COLUMN, 1>(dstLayout) / AscendC::Te::C0_SIZE<>;
+        CopyGmToCbufNd2nz<Tp, traits, T, U>(dst, src, nValue, dValue, srcDValue, dstNzC0Stride);
+    }
+
+    template <typename Tp, const Tp& traits, typename T, typename U>
+    __aicore__ inline static void CopyGmToCbufDn2nz(
+        const T& dst, const U& src, uint16_t nValue, uint32_t dValue, uint64_t srcDValue, uint16_t dstNzC0Stride)
+    {
+        uint16_t dnNum = 1;
+        uint64_t srcDnMatrixStride = 0;
+        uint16_t dstNzNStride = 1;
+        uint32_t dstNzMatrixStride = 0;
+
+        uint64_t loop1SrcStride = srcDValue * sizeof(half);
+        uint64_t loop4SrcStride = srcDnMatrixStride * sizeof(half);
+
+        uint16_t loop2DstStride = dstNzNStride;
+        uint16_t loop3DstStride = dstNzC0Stride;
+        uint16_t loop4DstStride = static_cast<uint16_t>(dstNzMatrixStride * sizeof(half) / AscendC::Te::C0_SIZE<>);
+
+        uint8_t cacheMode = GetCacheModeFromTensor(src);
+        uint64_t mte2NzPara = static_cast<uint64_t>(loop4DstStride) << 48;
+        mte2NzPara |= static_cast<uint64_t>(loop3DstStride) << 32;
+        mte2NzPara |= static_cast<uint64_t>(loop2DstStride) << 16;
+        mte2NzPara |= static_cast<uint64_t>(dnNum);
+        set_mte2_nz_para(mte2NzPara);
+        copy_gm_to_cbuf_multi_dn2nz(
+            (__cbuf__ half*)dst.Data().Get(), (__gm__ half*)src.Data().Get(), 0, loop1SrcStride, cacheMode, nValue,
+            dValue, loop4SrcStride, false);
+    }
+
+    template <typename Tp, const Tp& traits, typename T, typename U>
+    __aicore__ inline static void CopyGmToCbufNd2nz(
+        const T& dst, const U& src, uint16_t nValue, uint32_t dValue, uint64_t srcDValue, uint16_t dstNzC0Stride)
+    {
+        uint16_t ndNum = 1;
+        uint64_t srcNdMatrixStride = 0;
+
+        uint16_t dstNzNStride = 1;
+        uint32_t dstNzMatrixStride = 0;
+
+        uint64_t loop1SrcStride = srcDValue * sizeof(half);
+        uint64_t loop4SrcStride = srcNdMatrixStride * sizeof(half);
+
+        uint16_t loop2DstStride = dstNzNStride;
+        uint16_t loop3DstStride = dstNzC0Stride;
+        uint16_t loop4DstStride = static_cast<uint16_t>(dstNzMatrixStride * sizeof(half) / AscendC::Te::C0_SIZE<>);
+
+        uint8_t cacheMode = GetCacheModeFromTensor(src);
+        uint64_t mte2NzPara = static_cast<uint64_t>(loop4DstStride) << 48;
+        mte2NzPara |= static_cast<uint64_t>(loop3DstStride) << 32;
+        mte2NzPara |= static_cast<uint64_t>(loop2DstStride) << 16;
+        mte2NzPara |= static_cast<uint64_t>(ndNum);
+        set_mte2_nz_para(mte2NzPara);
+        copy_gm_to_cbuf_multi_nd2nz(
+            (__cbuf__ half*)dst.Data().Get(), (__gm__ half*)src.Data().Get(), 0, loop1SrcStride, cacheMode, nValue,
+            dValue, loop4SrcStride, false);
+    }
+};
+} // namespace Tile
+
+template <>
+struct AscendC::Te::CopyTraits<::Tile::CopyScaleGM2L1>
+    : public CopyTraits<
+        ::Tile::CopyScaleGM2L1, AscendC::Te::LoadDataTraitDefault, ::Tile::CopyScaleGM2L1,
+        AscendC::Te::LoadDataTraitDefault> {};
+
+#endif // TILE_COPY_SCALE_GM_TO_L1_H
