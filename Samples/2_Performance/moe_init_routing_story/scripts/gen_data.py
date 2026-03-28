@@ -17,6 +17,20 @@ import argparse
 import numpy
 
 
+def _find_project_root():
+    path = os.path.dirname(os.path.abspath(__file__))
+    while path != os.path.dirname(path):
+        if os.path.isdir(os.path.join(path, "cmake")):
+            return path
+        path = os.path.dirname(path)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+_PROJECT_ROOT = _find_project_root()
+_DEFAULT_OUTPUT_DIR = os.path.join(_PROJECT_ROOT, "build", "Samples",
+                                    "2_Performance", "moe_init_routing_story")
+
+
 def moe_init_routing_numpy(x, expert_idx, k):
     expert_start = 0
     expert_end = 8
@@ -43,14 +57,13 @@ def moe_init_routing_numpy(x, expert_idx, k):
     return expaned_x, expanded_row_idx, expert_token_count
 
 
-def gen_input_data(n, k, h, dtype, output_dir):
-    x_shape = (n, h)
-    expert_idx_shape = (n, k)
-
-    # 确保输出目录存在
+def gen_input_data(n, k, h):
+    output_dir = _DEFAULT_OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
+    
+    x_shape = (n, h)
 
-    x = numpy.random.uniform(low=-10, high=10, size=x_shape).astype(dtype)
+    x = numpy.random.uniform(low=-10, high=10, size=x_shape).astype(numpy.float32)
     x.tofile(os.path.join(output_dir, "x.bin"))
 
     rng = numpy.random.default_rng()
@@ -74,15 +87,9 @@ def gen_input_data(n, k, h, dtype, output_dir):
     expert_token_count.tofile(os.path.join(output_dir, "expert_token_count.bin"))
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='处理命令行参数')
-
-    # 添加参数
-    parser.add_argument('-n', '--ndim', type=int)
-    parser.add_argument('-k', '--kdim', type=int)
-    parser.add_argument('-c', '--coldim', type=int)
-    parser.add_argument('-d', '--dtype', type=str)
-    parser.add_argument('-o', '--output', type=str, default='.', help='输出目录路径')
-
-    # 解析参数
+    parser = argparse.ArgumentParser(description='生成 MoeInitRouting 测试数据')
+    parser.add_argument('-n', '--ndim', type=int, required=True)
+    parser.add_argument('-k', '--kdim', type=int, required=True)
+    parser.add_argument('-c', '--coldim', type=int, required=True)
     args = parser.parse_args()
-    gen_input_data(args.ndim, args.kdim, args.coldim, args.dtype, args.output)
+    gen_input_data(args.ndim, args.kdim, args.coldim)

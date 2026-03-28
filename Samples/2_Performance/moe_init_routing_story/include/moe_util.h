@@ -112,30 +112,6 @@ std::string GetExeDir()
     return ".";
 }
 
-void VerifyResult()
-{
-    std::string exeDir = GetExeDir();
-    std::ostringstream verifyCmd;
-    verifyCmd << "python3 " << SOURCE_DIR << "/utils/verify_result.py "
-              << "-o=" << exeDir;
-    if (system(verifyCmd.str().c_str()) != 0) {
-        std::cerr << "Verification failed" << std::endl;
-    }
-}
-
-void GenInputAndGolden(int64_t n, int64_t k, int64_t c)
-{
-    std::string exeDir = GetExeDir();
-    std::ostringstream genDataCmd;
-    genDataCmd << "python3 " << SOURCE_DIR << "/utils/gen_data.py "
-               << "-n=" << n << " "
-               << "-k=" << k << " "
-               << "-c=" << c << " "
-               << "-d=float32 "
-               << "-o=" << exeDir;
-    system(genDataCmd.str().c_str());
-}
-
 int64_t CeilLog4(int64_t x)
 {
     return static_cast<int64_t>(std::ceil(std::log(x) / std::log(4)));

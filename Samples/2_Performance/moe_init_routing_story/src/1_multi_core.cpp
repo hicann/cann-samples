@@ -1006,7 +1006,7 @@ void CalSortTiling(MoeInitRoutingTilingData *tilingData)
     tilingData->sortOutOneLoopMaxElements = MRG_SORT_API_MAX_ELEM;
 }
 
-int main()
+int main(int argc, char* argv[])
 {
     CHECK_ACL(aclInit(nullptr));
     int32_t deviceId = 0;
@@ -1014,9 +1014,10 @@ int main()
     aclrtStream stream = nullptr;
     CHECK_ACL(aclrtCreateStream(&stream));
 
-    int64_t n = 2048;
-    int64_t k = 8;
-    int64_t c = 32;
+    int64_t n = (argc > 1) ? std::stoll(argv[1]) : 2048;
+    int64_t k = (argc > 2) ? std::stoll(argv[2]) : 8;
+    int64_t c = (argc > 3) ? std::stoll(argv[3]) : 32;
+
     MoeInitRoutingTilingData tilingData;
     tilingData.n = n;
     tilingData.cols = c;
@@ -1083,7 +1084,6 @@ int main()
     CHECK_ACL(aclrtMallocHost((void **)&tokenCountHost, tokenCountSize));
     CHECK_ACL(aclrtMallocHost((void **)&expandedScaleHost, scaleSize));
 
-    GenInputAndGolden(n, k ,c);
     std::string exeDir = GetExeDir();
     std::vector<float> xData;
     if (!GetDataFromBin(exeDir + "/x.bin", xData)) {
@@ -1126,7 +1126,6 @@ int main()
         std::cerr << "Failed to write result_expert_token_count.bin" << std::endl;
         return 1;
     }
-    VerifyResult();
 
     CHECK_ACL(aclrtFree(xDevice));
     CHECK_ACL(aclrtFree(expertIdxDevice));

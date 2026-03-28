@@ -16,6 +16,20 @@ import argparse
 import numpy
 
 
+def _find_project_root():
+    path = os.path.dirname(os.path.abspath(__file__))
+    while path != os.path.dirname(path):
+        if os.path.isdir(os.path.join(path, "cmake")):
+            return path
+        path = os.path.dirname(path)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+_PROJECT_ROOT = _find_project_root()
+_DEFAULT_OUTPUT_DIR = os.path.join(_PROJECT_ROOT, "build", "Samples",
+                                    "2_Performance", "moe_init_routing_story")
+
+
 def compare_result(actual_data, golden_data, name, verbose=False):
     error_count = 0
     element_num = len(actual_data)
@@ -32,7 +46,8 @@ def compare_result(actual_data, golden_data, name, verbose=False):
     return error_count == 0
 
 
-def verify_results(data_dir, verbose=False):
+def verify_results(verbose=False):
+    data_dir = _DEFAULT_OUTPUT_DIR
     golden_files = {
         'expanded_x': os.path.join(data_dir, 'expaned_x.bin'),
         'expanded_row_idx': os.path.join(data_dir, 'expanded_row_idx.bin'),
@@ -82,10 +97,9 @@ def verify_results(data_dir, verbose=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='验证 MOE Init Routing 结果')
-    parser.add_argument('-o', '--output', type=str, default='.', help='数据文件目录')
     parser.add_argument('-v', '--verbose', action='store_true', help='显示详细错误信息')
     
     args = parser.parse_args()
     
-    passed = verify_results(args.output, args.verbose)
+    passed = verify_results(args.verbose)
     exit(0 if passed else 1)
