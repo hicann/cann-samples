@@ -123,11 +123,11 @@ matmul run failed!
 ```
 
 3. 测试性能
-切换到可执行目录文件的所在目录`build/Samples/0_Introduction/matmul/`,使用msprof工具执行算子用例，指定矩阵乘维度后执行。
+切换到可执行目录文件的所在目录`build/Samples/1_Features/memory_optimization/swat/`,使用msprof工具执行算子用例，指定矩阵乘维度后执行。
 ```shell
-msprof ./matmul 1024 2048 4096
+msprof ./swat 1024 2048 4096
 ```
-运行完成后，在 `PROF_{序号}_{时间信息}CJEMEBCM/mindstudio_profiler_output/` 目录下获取 `op_summary_{时间信息}.csv` 文件，查看统计耗时以评估性能。
+运行完成后，在 `PROF_*/mindstudio_profiler_output/` 目录下获取 `op_summary_{时间戳}.csv` 文件，查看统计耗时以评估性能。
 
 ## 6. 支持架构
 
