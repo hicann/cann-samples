@@ -91,7 +91,7 @@ MXFP4执行时的完整数据搬运流程如下图所示：
 | **缓冲区变化** | **Shape排布变化** | **Layout变化** | **所属流水** | **所用指令** |
 |-|-|-|-|-|
 | GM -> L1 | (n, ceil(ceil(k/32)/2), 2) -> (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) | ND -> Zz | MTE2 | DataCopy with ND2NZ |
-| L1 -> L0B_MX | (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) -> (ceil(baseN/n0), ceil(ceil(baseK/32)/k0), n0, k0) | Zz -> Zz | MTE1 | LoadData with Load2D_MX |
+| L1 -> L0B_MX | (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) -> (ceil(baseN/n0), ceil(ceil(baseK/32)/k0), n0, k0) | Zz -> Nn | MTE1 | LoadData with Load2D_MX |
 
   <div align="center">
     <img src="figures/image27.png" width="1500" />
