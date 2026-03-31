@@ -62,8 +62,7 @@ def gen_golden_data_simple(m, k, n):
     a_scale = np.random.uniform(1, 8, size=(M, math.ceil(K / 64), 2)).astype(float8_e8m0)
     b_scale = np.random.uniform(1, 8, size=(N, math.ceil(K / 64), 2)).astype(float8_e8m0)
 
-    # Expand A-side scales directly in [M, K] order, then transpose the B-side
-    # activations and scales so the CPU reference matches the sample's B^T view.
+    # Transpose and broadcast scale tensors.
     a_scale_reshape = a_scale.reshape(M, -1)
     a_scale_broadcast = np.repeat(a_scale_reshape, 32, axis=-1)[..., :K]
 

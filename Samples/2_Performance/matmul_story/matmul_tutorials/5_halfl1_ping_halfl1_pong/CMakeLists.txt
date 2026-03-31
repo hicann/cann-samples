@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong matmul_tutorial_mxfp4_splithalfl1.cpp)
+add_executable(matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong.cpp)
 target_include_directories(matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -20,5 +20,5 @@ target_link_libraries(matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong PRIVATE
     cann_samples::tensor_api
 )
 install(TARGETS matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong
-    RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials/5_halfl1_ping_halfl1_pong
+    RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials
 )

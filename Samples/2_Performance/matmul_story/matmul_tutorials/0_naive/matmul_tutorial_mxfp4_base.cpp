@@ -9,7 +9,7 @@
  */
 
 #include <iostream>
-#include <limits.h>
+#include <iomanip>
 #include <unistd.h>
 #include <memory>
 #include <string>
@@ -96,23 +96,7 @@ int main(int argc, char* argv[])
     auto sizeScaleA = static_cast<size_t>(1) * hostScaleA.size() * sizeof(uint8_t);
     auto sizeScaleB = static_cast<size_t>(1) * hostScaleB.size() * sizeof(uint8_t);
     auto sizeOutput = static_cast<size_t>(1) * hostOutput.size() * sizeof(half);
-    // Resolve scripts/input|output next to gen_data.py (readlink avoids std::filesystem for older GCC).
-    char exePath[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-    std::string baseDir = ".";
-    if (len > 0) {
-        exePath[len] = '\0';
-        baseDir = exePath;
-        for (int up = 0; up < 2; ++up) {
-            size_t lastSlash = baseDir.find_last_of('/');
-            if (lastSlash != std::string::npos && lastSlash > 0) {
-                baseDir.resize(lastSlash);
-            } else {
-                break;
-            }
-        }
-        baseDir += "/scripts";
-    }
+    std::string baseDir = ResolveMatmulTutorialWorkspaceDir();
     std::string inputDir = baseDir + "/input";
     std::string outputDir = baseDir + "/output";
     ReadFile(inputDir + "/input_a.bin", sizeA, hostA.data(), sizeA);

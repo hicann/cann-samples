@@ -20,5 +20,5 @@ target_link_libraries(matmul_tutorial_mxfp4_swat PRIVATE
     cann_samples::tensor_api
 )
 install(TARGETS matmul_tutorial_mxfp4_swat
-    RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials/2_block_swat
+    RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials
 )

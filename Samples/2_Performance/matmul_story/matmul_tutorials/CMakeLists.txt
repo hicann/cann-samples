@@ -19,6 +19,6 @@ add_subdirectory(6_scale_memory_access_coalescing)
 add_subdirectory(7_fullload)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
-    DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials/scripts
+    DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials
     FILES_MATCHING PATTERN "*.py"
 )

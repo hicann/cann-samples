@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(matmul_tutorial_mxfp4_pingpong matmul_tutorial_mxfp4_openpingpong.cpp)
+add_executable(matmul_tutorial_mxfp4_pingpong matmul_tutorial_mxfp4_pingpong.cpp)
 target_include_directories(matmul_tutorial_mxfp4_pingpong PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -20,5 +20,5 @@ target_link_libraries(matmul_tutorial_mxfp4_pingpong PRIVATE
     cann_samples::tensor_api
 )
 install(TARGETS matmul_tutorial_mxfp4_pingpong
-    RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials/1_pingpong
+    RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials
 )

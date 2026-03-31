@@ -17,10 +17,52 @@
 #define IO_UTILS_H
 
 #include <fcntl.h>
+#include <limits.h>
+#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "common_utils.h"
+
+// Flat install: gen_data.py next to the executable. Source tree: under matmul_tutorials/scripts/.
+inline std::string ResolveMatmulTutorialWorkspaceDir()
+{
+    char exePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    if (len <= 0) {
+        return ".";
+    }
+    exePath[len] = '\0';
+    std::string path(exePath);
+    size_t slash = path.find_last_of('/');
+    if (slash != std::string::npos) {
+        path.resize(slash);
+    }
+    const std::string exeDir = path;
+
+    auto hasGenData = [](const std::string& dir) {
+        return access((dir + "/gen_data.py").c_str(), F_OK) == 0;
+    };
+
+    if (hasGenData(exeDir)) {
+        return exeDir;
+    }
+    if (hasGenData(exeDir + "/scripts")) {
+        return exeDir + "/scripts";
+    }
+    slash = exeDir.find_last_of('/');
+    if (slash != std::string::npos && slash > 0) {
+        const std::string parent = exeDir.substr(0, slash);
+        if (hasGenData(parent + "/scripts")) {
+            return parent + "/scripts";
+        }
+        if (hasGenData(parent)) {
+            return parent;
+        }
+        return parent + "/scripts";
+    }
+    return exeDir + "/scripts";
+}
 
 inline bool ReadFile(const std::string& filePath, size_t& fileSize, void* buffer, size_t bufferSize)
 {

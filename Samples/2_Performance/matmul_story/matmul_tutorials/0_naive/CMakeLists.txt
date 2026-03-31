@@ -20,5 +20,5 @@ target_link_libraries(matmul_tutorial_mxfp4_base PRIVATE
     cann_samples::tensor_api
 )
 install(TARGETS matmul_tutorial_mxfp4_base
-    RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials/0_naive
+    RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_tutorials
 )

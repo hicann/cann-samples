@@ -27,7 +27,7 @@ NPU ARCH 3510
 
 ## 性能优化指南
 
-关于算子涉及的模板实现及优化策略，请参考[MXFP4量化矩阵乘算子性能优化指南](../../docs/quant_matmul_mxfp4_performance.md)。
+关于算子涉及的模板实现及优化策略，请参考[MXFP4量化矩阵乘算子性能优化指南](../../../docs/quant_matmul_mxfp4_performance.md)。
 
 ## API参考
 
@@ -75,7 +75,7 @@ NPU ARCH 3510
 cmake -S . -B build
 cmake --build build --parallel
 cmake --install build --prefix ./build_out
-cd build_out/2_Performance/matmul_story/matmul_recipes/examples/quant_matmul_mxfp4
+cd build_out/2_Performance/matmul_story/matmul_recipes/quant_matmul_mxfp4
 ```
 
 ### 1. 生成测试数据

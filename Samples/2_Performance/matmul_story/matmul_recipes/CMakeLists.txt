@@ -21,7 +21,7 @@ function(add_matmul_recipe target_name source variant)
         cann_samples::tensor_api
     )
     install(TARGETS ${target_name}
-        RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_recipes/examples/${variant}
+        RUNTIME DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_recipes/${variant}
     )
 endfunction()
 
@@ -30,17 +30,13 @@ add_matmul_recipe(quant_matmul_mxfp4_swat
 add_matmul_recipe(quant_matmul_mxfp4_a_full_load
     quant_matmul_mxfp4/quant_matmul_mxfp4_a_full_load.cpp quant_matmul_mxfp4)
 
-# Install helper scripts alongside executables.
+# Install helper scripts into the same directory as the executables. Host code
+# uses the executable directory as baseDir and runs `python3 verify_result.py`
+# there; gen_data.py is also documented as run from that cwd.
 set(RECIPE_VARIANTS quant_matmul_mxfp4)
 foreach(variant IN LISTS RECIPE_VARIANTS)
-    install(FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/examples/${variant}/gen_data.py
-        ${CMAKE_CURRENT_SOURCE_DIR}/examples/${variant}/verify_result.py
-        DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_recipes/examples/${variant}
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/examples/${variant}/scripts/
+        DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_recipes/${variant}
+        FILES_MATCHING PATTERN "*.py"
     )
 endforeach()
-
-install(FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_algorithm_recommend.py
-    DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_recipes/examples/quant_matmul_mxfp4
-)
