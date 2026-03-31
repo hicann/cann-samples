@@ -9,7 +9,8 @@
 # ----------------------------------------------------------------------------------------------------------
 
 import os
-import re
+import csv
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -17,7 +18,12 @@ from pathlib import Path
 from typing import List, Optional
 
 
-KERNEL_TIME_PATTERN = re.compile(r"Kernel elapsed time:\s*([0-9]+(?:\.[0-9]+)?)\s+us")
+MSPROF_OUTPUT_DIR_NAME = "msprof_recommend"
+MSPROF_PROF_DIR_PREFIX = "PROF_"
+MSPROF_OP_SUMMARY_GLOB = "op_summary_*.csv"
+MSPROF_TASK_DURATION_COLUMN = "Task Duration(us)"
+# Number of profiling runs executed for each candidate.
+MSPROF_RUN_COUNT = 2
 
 
 @dataclass(frozen=True)
@@ -74,11 +80,6 @@ def parse_arguments(argv: List[str]) -> tuple[int, int, int]:
     if k % 2 != 0:
         raise ValueError("k must be an even number")
     return m, k, n
-
-
-def resolve_story_root(script_path: Path) -> Path:
-    # The recommendation helper lives three levels below `matmul_story`.
-    return script_path.resolve().parents[3]
 
 
 def resolve_executable(script_dir: Path, executable_name: str) -> Path:
@@ -148,24 +149,142 @@ def generate_input(script_dir: Path, m: int, k: int, n: int) -> None:
         raise RuntimeError(f"Failed to generate input data.\n{output}")
 
 
-def parse_kernel_time_us(output: str) -> Optional[float]:
-    match = KERNEL_TIME_PATTERN.search(output)
-    return float(match.group(1)) if match else None
+def cleanup_msprof_output_dir(msprof_output_dir: Path) -> None:
+    # Recommendation only needs profiling artifacts transiently, so always
+    # clean the output directory before returning control to the user.
+    if msprof_output_dir.exists():
+        shutil.rmtree(msprof_output_dir, ignore_errors=True)
 
 
-def run_candidate(script_dir: Path, story_root: Path, candidate: Candidate, m: int, k: int, n: int) -> CandidateResult:
-    # Each candidate executable is run against the same generated input so the
-    # ranking compares kernel time under identical data and shape conditions.
+def list_prof_directories(msprof_output_dir: Path) -> set[Path]:
+    if not msprof_output_dir.exists():
+        return set()
+
+    return {
+        entry.resolve()
+        for entry in msprof_output_dir.iterdir()
+        if entry.is_dir() and entry.name.startswith(MSPROF_PROF_DIR_PREFIX)
+    }
+
+
+def resolve_new_prof_directory(msprof_output_dir: Path, existing_prof_dirs: set[Path]) -> Path:
+    current_prof_dirs = list_prof_directories(msprof_output_dir)
+    new_prof_dirs = [entry for entry in current_prof_dirs if entry not in existing_prof_dirs]
+    if not new_prof_dirs:
+        raise FileNotFoundError(
+            f"No new {MSPROF_PROF_DIR_PREFIX}* directory was generated under {msprof_output_dir}"
+        )
+
+    # `msprof` should generate exactly one fresh profile directory per run. If
+    # multiple appear, prefer the newest one because it corresponds to the most
+    # recent profiling session.
+    return max(new_prof_dirs, key=lambda entry: entry.stat().st_mtime_ns)
+
+
+def resolve_op_summary_csv(prof_dir: Path) -> Path:
+    profiler_output_dir = prof_dir / "mindstudio_profiler_output"
+    if not profiler_output_dir.is_dir():
+        raise FileNotFoundError(f"mindstudio_profiler_output was not found in {prof_dir}")
+
+    csv_files = sorted(
+        profiler_output_dir.glob(MSPROF_OP_SUMMARY_GLOB),
+        key=lambda entry: entry.stat().st_mtime_ns,
+        reverse=True,
+    )
+    if not csv_files:
+        raise FileNotFoundError(f"No {MSPROF_OP_SUMMARY_GLOB} file was found in {profiler_output_dir}")
+    return csv_files[0]
+
+
+def parse_kernel_time_us_from_csv(csv_path: Path) -> float:
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
+        reader = csv.reader(csv_file)
+        header = next(reader, None)
+        first_row = next(reader, None)
+
+    if not header:
+        raise ValueError(f"CSV header is missing in {csv_path}")
+    if not first_row:
+        raise ValueError(f"CSV data row is missing in {csv_path}")
+
+    normalized_header = [column.strip() for column in header]
+    try:
+        duration_index = normalized_header.index(MSPROF_TASK_DURATION_COLUMN)
+    except ValueError as error:
+        raise ValueError(
+            f"{MSPROF_TASK_DURATION_COLUMN} column was not found in {csv_path}"
+        ) from error
+
+    if duration_index >= len(first_row):
+        raise ValueError(
+            f"{MSPROF_TASK_DURATION_COLUMN} value is missing from the first data row in {csv_path}"
+        )
+
+    raw_value = first_row[duration_index].strip().replace(",", "")
+    if not raw_value:
+        raise ValueError(f"{MSPROF_TASK_DURATION_COLUMN} is empty in {csv_path}")
+
+    try:
+        return float(raw_value)
+    except ValueError as error:
+        raise ValueError(
+            f"Failed to parse {MSPROF_TASK_DURATION_COLUMN} value '{raw_value}' from {csv_path}"
+        ) from error
+
+
+def run_candidate_with_msprof(script_dir: Path, executable_path: Path, m: int, k: int, n: int) -> tuple[float, str]:
+    msprof_output_dir = script_dir / MSPROF_OUTPUT_DIR_NAME
+    timed_kernel_time_us: Optional[float] = None
+    outputs: List[str] = []
+
+    for run_index in range(MSPROF_RUN_COUNT):
+        existing_prof_dirs = list_prof_directories(msprof_output_dir)
+        application = f"./{executable_path.name} {m} {k} {n}"
+        result = run_command(
+            ["msprof", f"--output=./{MSPROF_OUTPUT_DIR_NAME}", f"--application={application}"],
+            script_dir,
+        )
+        output = result.stdout + result.stderr
+        outputs.append(f"[msprof run {run_index + 1}]\n{output}".strip())
+        if result.returncode != 0:
+            raise RuntimeError("\n".join(outputs))
+
+        try:
+            prof_dir = resolve_new_prof_directory(msprof_output_dir, existing_prof_dirs)
+            op_summary_csv = resolve_op_summary_csv(prof_dir)
+            current_kernel_time_us = parse_kernel_time_us_from_csv(op_summary_csv)
+        except Exception as error:
+            outputs.append(f"[msprof parse error run {run_index + 1}]\n{error}")
+            raise RuntimeError("\n".join(outputs)) from error
+
+        # Use the final profiling run as the ranking sample.
+        if run_index == MSPROF_RUN_COUNT - 1:
+            timed_kernel_time_us = current_kernel_time_us
+
+    if timed_kernel_time_us is None:
+        outputs.append(f"Failed to collect the timed kernel duration for {executable_path.name}")
+        raise RuntimeError("\n".join(outputs))
+
+    return timed_kernel_time_us, "\n".join(outputs)
+
+
+def run_candidate(script_dir: Path, candidate: Candidate, m: int, k: int, n: int) -> CandidateResult:
+    # Each candidate executable is profiled against the same generated input so
+    # the ranking compares kernel time under identical data and shape conditions.
     executable_path = resolve_executable(script_dir, candidate.executable_name)
-    # The executable resolves its own data paths relative to its install
-    # directory, so the working directory only needs to be a stable project path.
-    result = run_command([str(executable_path), str(m), str(k), str(n)], story_root)
-    output = result.stdout + result.stderr
+    try:
+        kernel_time_us, output = run_candidate_with_msprof(script_dir, executable_path, m, k, n)
+        return_code = 0
+    except Exception as error:
+        kernel_time_us = None
+        output = str(error)
+        return_code = 1
+
     return CandidateResult(
         label=candidate.label,
         executable_path=executable_path,
-        kernel_time_us=parse_kernel_time_us(output),
-        return_code=result.returncode,
+        kernel_time_us=kernel_time_us,
+        return_code=return_code,
         output=output,
     )
 
@@ -196,29 +315,31 @@ def main(argv: List[str]) -> int:
         print_usage(Path(argv[0]).name)
         return 1
 
-    script_path = Path(__file__).resolve()
-    script_dir = script_path.parent
-    story_root = resolve_story_root(script_path)
+    script_dir = Path(__file__).resolve().parent
+    msprof_output_dir = script_dir / MSPROF_OUTPUT_DIR_NAME
     candidates = discover_candidates(script_dir)
     if not candidates:
         print(f"ERROR: No executable files were found in {script_dir}")
         return 1
 
     try:
-        generate_input(script_dir, m, k, n)
-    except Exception as error:
-        print(f"ERROR: {error}")
-        return 1
+        try:
+            generate_input(script_dir, m, k, n)
+        except Exception as error:
+            print(f"ERROR: {error}")
+            return 1
 
-    results: List[CandidateResult] = []
-    for candidate in candidates:
-        # Preserve per-candidate outputs so failures can still be inspected if
-        # no compatible implementation is found.
-        candidate_result = run_candidate(script_dir, story_root, candidate, m, k, n)
-        results.append(candidate_result)
+        results: List[CandidateResult] = []
+        for candidate in candidates:
+            # Preserve per-candidate outputs so failures can still be inspected if
+            # no compatible implementation is found.
+            candidate_result = run_candidate(script_dir, candidate, m, k, n)
+            results.append(candidate_result)
 
-    print_ranking(results)
-    return 0 if any(result.succeeded for result in results) else 1
+        print_ranking(results)
+        return 0 if any(result.succeeded for result in results) else 1
+    finally:
+        cleanup_msprof_output_dir(msprof_output_dir)
 
 
 if __name__ == "__main__":

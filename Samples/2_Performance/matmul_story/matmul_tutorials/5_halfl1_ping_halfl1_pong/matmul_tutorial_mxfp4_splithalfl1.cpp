@@ -9,8 +9,8 @@
  */
 
  #include <cmath>
+ #include <cstdlib>
  #include <iostream>
- #include <iomanip>
  #include <limits.h>
  #include <unistd.h>
  #include <memory>
@@ -83,8 +83,6 @@ int main(int argc, char* argv[])
 
     int32_t deviceId = 0;
     aclrtStream stream;
-    aclrtEvent kernelStartEvent = nullptr;
-    aclrtEvent kernelEndEvent = nullptr;
 
     auto ret = aclInit(nullptr);
     CHECK_COND(ret == ACL_SUCCESS, "aclInit failed.");
@@ -161,25 +159,11 @@ int main(int argc, char* argv[])
     CHECK_COND(ascendcPlatform != nullptr, "get ascendcPlatform failed.");
     uint32_t blockDim = ascendcPlatform->GetCoreNumAic();
 
-    ret = aclrtCreateEvent(&kernelStartEvent);
-    CHECK_COND(ret == ACL_SUCCESS, "Failed to create the start event for kernel timing.");
-    ret = aclrtCreateEvent(&kernelEndEvent);
-    CHECK_COND(ret == ACL_SUCCESS, "Failed to create the end event for kernel timing.");
-    ret = aclrtRecordEvent(kernelStartEvent, stream);
-    CHECK_COND(ret == ACL_SUCCESS, "Failed to record the start event for kernel timing.");
     Kernel::QuantMatmulMxfp4BaseKernel<<<blockDim, nullptr, stream>>>(
         m, k, n, deviceA, deviceB, deviceScaleA, deviceScaleB, deviceOutput);
 
-    ret = aclrtRecordEvent(kernelEndEvent, stream);
-    CHECK_COND(ret == ACL_SUCCESS, "Failed to record the end event for kernel timing.");
-
     ret = aclrtSynchronizeStream(stream);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtSynchronizeStream failed.");
-
-    float kernelElapsedMs = 0.0F;
-    ret = aclrtEventElapsedTime(&kernelElapsedMs, kernelStartEvent, kernelEndEvent);
-    CHECK_COND(ret == ACL_SUCCESS, "Failed to query the kernel elapsed time.");
-    double kernelElapsedUs = static_cast<double>(kernelElapsedMs) * 1000.0;
 
     ret = aclrtMemcpy(hostOutput.data(), sizeOutput, deviceOutput, sizeOutput, ACL_MEMCPY_DEVICE_TO_HOST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceOutput failed.");
@@ -190,20 +174,6 @@ int main(int argc, char* argv[])
                       std::to_string(n);
     if (std::system(cmd.c_str()) != 0) {
         return 1;
-    }
-    std::cout << std::fixed << std::setprecision(3)
-              << "Kernel elapsed time: " << kernelElapsedUs << " us" << std::endl;
-    std::cout << "Timing note: event-based timing may be skewed when the NPU is shared. "
-                 "If the device is not exclusively owned, or the reported time is unstable, "
-                 "use the `msprof` command for precise profiling."
-              << std::endl;
-    if (kernelEndEvent != nullptr) {
-        aclrtDestroyEvent(kernelEndEvent);
-        kernelEndEvent = nullptr;
-    }
-    if (kernelStartEvent != nullptr) {
-        aclrtDestroyEvent(kernelStartEvent);
-        kernelStartEvent = nullptr;
     }
     aclrtDestroyStream(stream);
     aclrtResetDevice(deviceId);

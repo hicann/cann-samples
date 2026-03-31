@@ -16,7 +16,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
-#include <iomanip>
 #include <iostream>
 #include <limits.h>
 #include <memory>
@@ -144,19 +143,9 @@ int main(int argc, char* argv[])
 
     constexpr int32_t deviceId = 0;
     aclrtStream stream = nullptr;
-    aclrtEvent kernelStartEvent = nullptr;
-    aclrtEvent kernelEndEvent = nullptr;
     bool aclInitialized = false;
     bool deviceSet = false;
     auto cleanupAcl = [&]() {
-        if (kernelEndEvent != nullptr) {
-            aclrtDestroyEvent(kernelEndEvent);
-            kernelEndEvent = nullptr;
-        }
-        if (kernelStartEvent != nullptr) {
-            aclrtDestroyEvent(kernelStartEvent);
-            kernelStartEvent = nullptr;
-        }
         if (stream != nullptr) {
             aclrtDestroyStream(stream);
             stream = nullptr;
@@ -186,10 +175,6 @@ int main(int argc, char* argv[])
         CHECK_COND(aclrtSetDevice(deviceId) == ACL_SUCCESS, "Failed to set the ACL device.");
         deviceSet = true;
         CHECK_COND(aclrtCreateStream(&stream) == ACL_SUCCESS, "Failed to create the ACL stream.");
-        CHECK_COND(aclrtCreateEvent(&kernelStartEvent) == ACL_SUCCESS,
-                  "Failed to create the start event for kernel timing.");
-        CHECK_COND(aclrtCreateEvent(&kernelEndEvent) == ACL_SUCCESS,
-                  "Failed to create the end event for kernel timing.");
 
         size_t sizeA = ((m * k) >> 1) * sizeof(uint8_t);
         size_t sizeB = ((k * n) >> 1) * sizeof(uint8_t);
@@ -278,17 +263,11 @@ int main(int argc, char* argv[])
         CHECK_COND(
             aclrtMemcpyAsync(dScaleB, sizeScaleB, hScaleB, sizeScaleB, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
             "Failed to copy scaleB from host to device.");
-        CHECK_COND(
-            aclrtRecordEvent(kernelStartEvent, stream) == ACL_SUCCESS,
-            "Failed to record the start event for kernel timing.");
 
         // Launch exactly the number of AICs requested by the tiling result so
         // scheduler-side load balancing and runtime launch geometry match.
         QuantMatmulMxfp4SwatKernel<<<tilingData.usedCoreNum, nullptr, stream>>>(
             dA, dB, dScaleA, dScaleB, dC, tilingData);
-        CHECK_COND(
-            aclrtRecordEvent(kernelEndEvent, stream) == ACL_SUCCESS,
-            "Failed to record the end event for kernel timing.");
 
         CHECK_COND(
             aclrtMemcpyAsync(hC, sizeC, dC, sizeC, ACL_MEMCPY_DEVICE_TO_HOST, stream) == ACL_SUCCESS,
@@ -296,14 +275,6 @@ int main(int argc, char* argv[])
         CHECK_COND(
             aclrtSynchronizeStream(stream) == ACL_SUCCESS,
             "Failed to synchronize the ACL stream after kernel execution.");
-        float kernelElapsedMs = 0.0F;
-        // Event timing measures the work observed on this stream, but it still
-        // reflects device-level contention. If the NPU is shared with other
-        // workloads, the result is not a pure isolated kernel time.
-        CHECK_COND(
-            aclrtEventElapsedTime(&kernelElapsedMs, kernelStartEvent, kernelEndEvent) == ACL_SUCCESS,
-            "Failed to query the kernel elapsed time.");
-        double kernelElapsedUs = static_cast<double>(kernelElapsedMs) * 1000.0;
 
         WriteFile(outputDir + "/npu_out.bin", hC, sizeC);
         std::string cmd = "cd \"" + baseDir + "\" && python3 verify_result.py " + std::to_string(m) + " " +
@@ -312,11 +283,6 @@ int main(int argc, char* argv[])
             cleanupAcl();
             return 1;
         }
-        std::cout << std::fixed << std::setprecision(3)
-                  << "[Profiling] Kernel elapsed time: " << kernelElapsedUs << " us" << std::endl;
-        std::cout << "[Profiling Note] Event timing may be affected by NPU contention. "
-                     "Use `msprof` for precise profiling."
-                  << std::endl;
         cleanupAcl();
         return 0;
     } catch (const std::exception& e) {
