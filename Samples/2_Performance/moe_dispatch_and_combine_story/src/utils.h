@@ -14,9 +14,14 @@
 #include <algorithm>
 #include <acl/acl.h>
 #include <climits>
+#include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <fstream>
+#include <string>
+#include <vector>
 #include <sys/file.h>
+#include <sys/wait.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "shmem.h"
@@ -163,6 +168,90 @@ inline int32_t test_set_attr(int32_t my_pe, int32_t n_pes, uint64_t local_mem_si
 
     attributes->comm_args = reinterpret_cast<void *>(&default_flag_uid);
     return ACLSHMEM_SUCCESS;
+}
+
+// -----------------------------
+// Demo host-side common helpers
+// -----------------------------
+
+inline void InitData(uint8_t **hostPtr, uint8_t **devicePtr, size_t aSize, const std::string &path = "")
+{
+    std::cout << path << std::endl;
+    ACL_CHECK(aclrtMalloc(reinterpret_cast<void **>(devicePtr), aSize, ACL_MEM_MALLOC_HUGE_FIRST));
+    ACL_CHECK(aclrtMallocHost(reinterpret_cast<void **>(hostPtr), aSize));
+    if (path.empty()) {
+        return;
+    }
+    ReadFile(path, *hostPtr, aSize);
+    ACL_CHECK(aclrtMemcpy(*devicePtr, aSize, *hostPtr, aSize, ACL_MEMCPY_HOST_TO_DEVICE));
+}
+
+inline void FinalizeData(uint8_t *hostPtr, uint8_t *devicePtr, size_t aSize = 0, const std::string &path = "")
+{
+    std::cout << path << std::endl;
+    if (!path.empty() && aSize > 0) {
+        ACL_CHECK(aclrtMemcpy(hostPtr, aSize, devicePtr, aSize, ACL_MEMCPY_DEVICE_TO_HOST));
+        WriteFile(path, hostPtr, aSize);
+    }
+    ACL_CHECK(aclrtFreeHost(reinterpret_cast<void *>(hostPtr)));
+    ACL_CHECK(aclrtFree(reinterpret_cast<void *>(devicePtr)));
+}
+
+inline std::string GetInputFilePath(const std::string &tensorName, int rankId)
+{
+    return "./input/chip_" + std::to_string(rankId) + "/" + tensorName + "_" + std::to_string(rankId) + ".bin";
+}
+
+inline std::string GetOutputFilePath(const std::string &tensorName, int rankId)
+{
+    return "./output/chip_" + std::to_string(rankId) + "/" + tensorName + "_" + std::to_string(rankId) + ".bin";
+}
+
+using MoeRankWorkerFunc = int (*)(int rankNum, int rankId, int bs, uint64_t shmemSpaceSize);
+
+inline int MoeDemoForkMain(int argc, char *argv[], MoeRankWorkerFunc worker, uint64_t defaultShmemBytes)
+{
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <rankNum> <bs> [shmemSizeInBytes]" << std::endl;
+        return -1;
+    }
+    const int rankNum = std::atoi(argv[1]);
+    const int bs = std::atoi(argv[2]);
+    uint64_t shmemSpaceSize = defaultShmemBytes;
+    if (argc >= 4) {
+        shmemSpaceSize = std::stoull(argv[3]);
+    }
+
+    INFO_LOG("Master (PID=%d) will fork %d processes", getpid(), rankNum);
+
+    std::vector<pid_t> pids(static_cast<size_t>(rankNum));
+    for (int rankId = 0; rankId < rankNum; ++rankId) {
+        const pid_t pid = fork();
+        if (pid < 0) {
+            ERROR_LOG("Fork failed for rank %d", rankId);
+            return -1;
+        }
+        if (pid == 0) {
+            const int ret = worker(rankNum, rankId, bs, shmemSpaceSize);
+            std::exit(ret);
+        }
+        pids[static_cast<size_t>(rankId)] = pid;
+        INFO_LOG("Forked Rank %d -> PID %d", rankId, pid);
+    }
+
+    bool allSuccess = true;
+    for (int rankId = 0; rankId < rankNum; ++rankId) {
+        int status = 0;
+        const pid_t pid = pids[static_cast<size_t>(rankId)];
+        waitpid(pid, &status, 0);
+        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            allSuccess = false;
+            ERROR_LOG("Worker PID %d failed", pid);
+        }
+    }
+
+    std::cout << "All workers finished. Status: " << (allSuccess ? "SUCCESS" : "FAILURE") << std::endl;
+    return allSuccess ? 0 : -1;
 }
 
 #endif // UTILS_H

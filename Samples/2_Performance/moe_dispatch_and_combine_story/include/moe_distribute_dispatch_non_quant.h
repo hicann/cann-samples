@@ -24,23 +24,9 @@
 #include "adv_api/reduce/sum.h"
 #include "kernel_tiling/kernel_tiling.h"
 #include "shmem.h"
+#include "moe_distribute_comm.h"
 
 #define FLOAT_OVERFLOW_MODE_CTRL 60
-
-namespace AscendC {
-constexpr uint32_t ALIGN_UP_TO_128_MASK = 127;
-template <typename T1, typename T2>
-__aicore__ inline T2 Ceil(T1 x, T1 y)
-{
-    return (x + y - 1) / y;
-}
-
-template <typename T>
-__aicore__ inline T Align128(T x)
-{
-    return (x + ALIGN_UP_TO_128_MASK) & (~ALIGN_UP_TO_128_MASK);
-}
-}
 
 struct alignas(8) DispatchTilingData {
     uint32_t epWorldSize;
@@ -55,42 +41,21 @@ struct alignas(8) DispatchTilingData {
 };
 
 namespace DispatchImplNonQuant {
-constexpr uint8_t BUFFER_NUM = 2;        // 多buf
-constexpr uint32_t STATE_OFFSET = 32U;  // 状态空间偏移地址
-constexpr uint32_t BITS_PER_BYTE = 8U;
-constexpr uint64_t STATUS_REGION_OFFSET = 1022UL * 1024UL * 1024UL;
 constexpr uint64_t WIN_STATE_OFFSET = 384UL * 1024UL; // 64 + 320
 constexpr uint64_t FLAG_FIELD_OFFSET = 768UL * 1024UL; // 384 * 2，0/1标识区偏移
 constexpr uint64_t CUMSUM_CAL_OFFSET = 868UL * 1024UL; // 768 + 100
 constexpr uint64_t CUMSUM_FLAG_OFFSET = 876UL * 1024UL; // 868 + 8
-constexpr uint32_t UB_ALIGN = 32U;
-constexpr uint64_t WIN_ADDR_ALIGN = 512UL;
-constexpr uint64_t SPLIT_BLOCK_SIZE = 512UL;
-constexpr uint32_t EXPAND_IDX_INFO = 3U;  // expand_idx是按3元组保存信息，分别为rank_id token_id topk_id
 constexpr int32_t  MAX_UB_SIZE = 190 * 1024;
 constexpr uint32_t COMPARE_COUNT_PER_BLOCK = 256 / sizeof(int32_t);
 constexpr uint32_t SPLIT_BLOCK_DATA_SIZE = 480U;
-constexpr uint32_t SFFVALUE_SIZE = 64U;
-constexpr uint32_t SIZE_ALIGN_256 = 256U;
-constexpr uint32_t CUMSUM_MAX_CORE_NUM = 16U;
-constexpr uint64_t OP_CNT_POSUL = 3UL;
-constexpr uint32_t ZERONE_STATE_POS = 0U;
 constexpr uint32_t OPOSITION_POS = 1U;
 constexpr uint32_t MOE_NUM_POS = 3U;
 constexpr uint32_t TILING_WORLDSIZE_POS = 4U;
 constexpr uint32_t GLOBALBS_POS = 5U;
-constexpr uint8_t UB_ALIGN_DATA_COUNT = 8U; // 8 = UB_ALIGN / sizeof(float) = UB_ALIGN / sizeof(int32_t)
 constexpr AscendC::CumSumConfig cumSumConfig{true, true, false};
 
-template<AscendC::HardEvent event>
-__aicore__ inline void SyncFunc() {
-    AscendC::TEventID eventID = GetTPipePtr()->FetchEventID(event);
-    AscendC::SetFlag<event>(eventID);
-    AscendC::WaitFlag<event>(eventID);
-}
-
+using namespace Mc2Kernel;
 using namespace AscendC;
-
 class MoeDistributeDispatch {
 public:
     using XType = float16_t;

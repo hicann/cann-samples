@@ -16,6 +16,11 @@
 #ifndef MOE_DISTRIBUTE_COMBINE_H
 #define MOE_DISTRIBUTE_COMBINE_H
 
+#include "kernel_operator.h"
+#include "kernel_tiling/kernel_tiling.h"
+#include "shmem.h"
+#include "moe_distribute_comm.h"
+
 struct MoeDistributeCombineShmemTilingData {
     uint32_t epWorldSize;
     uint32_t epRankId;
@@ -29,22 +34,13 @@ struct MoeDistributeCombineShmemTilingData {
     uint64_t totalWinSize;
 };
 
-#include "kernel_operator.h"
-#include "kernel_tiling/kernel_tiling.h"
-#include "shmem.h"
-
 namespace MoeDistributeCombineShmemImpl {
-constexpr uint8_t BUFFER_NUM = 2;
-constexpr uint32_t STATE_OFFSET = 32U;
 constexpr uint32_t STATE_SIZE = 1024UL * 1024UL;
-constexpr uint32_t UB_ALIGN = 32U;
 constexpr uint32_t COMBINE_STATE_OFFSET = 64U * 1024U;
 constexpr uint32_t FLOAT_PER_UB_ALIGN = 8U;
 constexpr uint64_t WIN_STATE_OFFSET = 500UL * 1024UL;
 constexpr uint64_t STATE_WIN_OFFSET = 975UL * 1024UL;
-constexpr uint32_t EXPAND_IDX_INFO = 3U;
 constexpr uint64_t ALIGNED_LEN_256 = 256UL;
-constexpr uint64_t WIN_ADDR_ALIGN = 512UL;
 constexpr uint32_t FLAG_AFTER_WAIT = 10;
 
 __aicore__ inline int64_t GetShmemDataAddr(__gm__ uint8_t* shmemSpace, int32_t pe) {
@@ -55,17 +51,10 @@ __aicore__ inline int64_t GetShmemSignalAddr(__gm__ uint8_t* shmemSpace, int32_t
     return (int64_t)aclshmem_ptr(shmemSpace, pe) + 1022 * 1024 * 1024;
 }
 
-template <AscendC::HardEvent event>
-__aicore__ inline void SyncFunc() {
-    int32_t eventID = static_cast<int32_t>(GetTPipePtr()->FetchEventID(event));
-    AscendC::SetFlag<event>(eventID);
-    AscendC::WaitFlag<event>(eventID);
-}
-
 #define TemplateMC2TypeClass typename ExpandXType, typename XType, typename ExpandIdxType
-
 #define TemplateMC2TypeFunc ExpandXType, XType, ExpandIdxType
 
+using namespace Mc2Kernel;
 using namespace AscendC;
 
 template <TemplateMC2TypeClass>

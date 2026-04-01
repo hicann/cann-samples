@@ -24,6 +24,7 @@
 #include "adv_api/reduce/sum.h"
 #include "kernel_tiling/kernel_tiling.h"
 #include "shmem.h"
+#include "moe_distribute_comm.h"
 #include "moe_distribute_dispatch_quant.h"
 
 struct alignas(8) DispatchTilingData {
@@ -39,40 +40,21 @@ struct alignas(8) DispatchTilingData {
 };
 
 namespace DispatchImpl {
-constexpr uint8_t BUFFER_NUM = 2;        // 多buf
-constexpr uint32_t STATE_OFFSET = 32U;  // 状态空间偏移地址
-constexpr uint32_t BITS_PER_BYTE = 8U;
-constexpr uint64_t STATUS_REGION_OFFSET = 1022UL * 1024UL * 1024UL;
 constexpr uint64_t WIN_STATE_OFFSET = 384UL * 1024UL; // 64 + 320
 constexpr uint64_t FLAG_FIELD_OFFSET = 768UL * 1024UL; // 384 * 2，0/1标识区偏移
 constexpr uint64_t CUMSUM_CAL_OFFSET = 868UL * 1024UL; // 768 + 100
 constexpr uint64_t CUMSUM_FLAG_OFFSET = 876UL * 1024UL; // 868 + 8
-constexpr uint32_t UB_ALIGN = 32U;
-constexpr uint64_t WIN_ADDR_ALIGN = 512UL;
-constexpr uint64_t SPLIT_BLOCK_SIZE = 512UL;
-constexpr uint32_t EXPAND_IDX_INFO = 3U;  // expand_idx是按3元组保存信息，分别为rank_id token_id topk_id
 constexpr int32_t  MAX_UB_SIZE = 240 * 1024;
 constexpr uint32_t COMPARE_COUNT_PER_BLOCK = 256 / sizeof(int32_t);
 constexpr uint32_t SPLIT_BLOCK_DATA_SIZE = 480U;
-constexpr uint32_t SFFVALUE_SIZE = 64U;
-constexpr uint32_t SIZE_ALIGN_256 = 256U;
 constexpr uint8_t QUANT_PADDING_VALUE = 0;
-constexpr uint32_t CUMSUM_MAX_CORE_NUM = 16U;
-constexpr uint64_t OP_CNT_POSUL = 3UL;
-constexpr uint32_t ZERONE_STATE_POS = 0U;
-constexpr uint8_t UB_ALIGN_DATA_COUNT = 8U; // 8 = UB_ALIGN / sizeof(float) = UB_ALIGN / sizeof(int32_t)
 constexpr int8_t FLOAT_OVERFLOW_MODE_CTRL = 60;
 constexpr AscendC::CumSumConfig cumSumConfig{true, true, false};
 
-template<AscendC::HardEvent event>
-__aicore__ inline void SyncFunc() {
-    AscendC::TEventID eventID = GetTPipePtr()->FetchEventID(event);
-    AscendC::SetFlag<event>(eventID);
-    AscendC::WaitFlag<event>(eventID);
-}
-
-using namespace AscendC;
 using namespace Mc2Kernel;
+using namespace AscendC;
+using namespace Mc2QuantKernel;
+
 class MoeDistributeDispatch {
 public:
     using XType = float16_t;

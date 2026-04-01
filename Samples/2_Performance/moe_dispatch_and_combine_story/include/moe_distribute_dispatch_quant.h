@@ -16,86 +16,7 @@
 #ifndef MOE_DISTRIBUTE_DISPATCH_QUANT_H
 #define MOE_DISTRIBUTE_DISPATCH_QUANT_H
 
-namespace AscendC {
-constexpr uint32_t NEED_ONE_HUNDRED_AND_TWENTY_SEVEN = 127;
-constexpr uint32_t RIGHT_SHIFT_BIT_SEVEN = 7;
-constexpr uint32_t NEED_THIRTY_FIRST = 31;
-constexpr uint32_t ALIGN_UP_TO_2_MASK = 1;
-constexpr uint32_t ALIGN_UP_TO_32_MASK = 31;
-constexpr uint32_t ALIGN_UP_TO_64_MASK = 63;
-constexpr uint32_t ALIGN_UP_TO_128_MASK = 127;
-constexpr uint32_t ALIGN_UP_TO_256_MASK = 255;
-constexpr uint32_t ALIGN_UP_TO_512_MASK = 511;
-constexpr uint32_t RIGHT_SHIFT_BIT_FIVE = 5;
-constexpr uint32_t FIVE_HUNDRED_AND_ELEVEN = 511;
-constexpr uint32_t RIGHT_SHIFT_BIT_NINE = 9;
-
-template <typename T1, typename T2>
-__aicore__ inline T2 Ceil(T1 x, T1 y)
-{
-    return (x + y - 1) / y;
-}
-
-template <typename T>
-__aicore__ inline T Ceil32(T x)
-{
-    return (x + NEED_THIRTY_FIRST) >> RIGHT_SHIFT_BIT_FIVE;
-}
-
-template <typename T>
-__aicore__ inline T Ceil128(T x)
-{
-    return (x + NEED_ONE_HUNDRED_AND_TWENTY_SEVEN) >> RIGHT_SHIFT_BIT_SEVEN;
-}
-
-template <typename T>
-__aicore__ inline T Ceil512(T x)
-{
-    return (x + FIVE_HUNDRED_AND_ELEVEN) >> RIGHT_SHIFT_BIT_NINE;
-}
-
-template <typename T1, typename T2>
-__aicore__ inline T2 Align(T1 x, T1 y)
-{
-    return Ceil<T1, T2>(x, y) * y;
-}
-
-template <typename T>
-__aicore__ inline T Align2(T x)
-{
-    return (x + ALIGN_UP_TO_2_MASK) & (~ALIGN_UP_TO_2_MASK);
-}
-
-template <typename T>
-__aicore__ inline T Align32(T x)
-{
-    return (x + ALIGN_UP_TO_32_MASK) & (~ALIGN_UP_TO_32_MASK);
-}
-
-template <typename T>
-__aicore__ inline T Align64(T x)
-{
-    return (x + ALIGN_UP_TO_64_MASK) & (~ALIGN_UP_TO_64_MASK);
-}
-
-template <typename T>
-__aicore__ inline T Align128(T x)
-{
-    return (x + ALIGN_UP_TO_128_MASK) & (~ALIGN_UP_TO_128_MASK);
-}
-
-template <typename T>
-__aicore__ inline T Align256(T x)
-{
-    return (x + ALIGN_UP_TO_256_MASK) & (~ALIGN_UP_TO_256_MASK);
-}
-
-template <typename T>
-__aicore__ inline T Align512(T x)
-{
-    return (x + ALIGN_UP_TO_512_MASK) & (~ALIGN_UP_TO_512_MASK);
-}
-}
+#include "moe_distribute_comm.h"
 
 namespace Quant {
 
@@ -352,18 +273,9 @@ __aicore__ inline void ComputeData(__ubuf__ T* srcAddr, __ubuf__ uint16_t* halfS
 }
 }
 
-namespace Mc2Kernel {
-constexpr uint32_t UB_ALIGN = 32U;
-constexpr uint32_t EXPAND_IDX_INFO = 3U;  // expand_idx是按3元组保存信息，分别为rank_id token_id topk_id
-
-template<AscendC::HardEvent event>
-__aicore__ inline void SyncFunc() {
-    AscendC::TEventID eventID = GetTPipePtr()->FetchEventID(event);
-    AscendC::SetFlag<event>(eventID);
-    AscendC::WaitFlag<event>(eventID);
-}
-
+namespace Mc2QuantKernel {
 using namespace AscendC;
+using namespace Mc2Kernel;
 
 class MoeDistributeDispatchQuant{
 public:

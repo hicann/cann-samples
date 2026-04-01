@@ -1,5 +1,63 @@
 # moe dispatch 和 combine 通信算子性能优化实践与效果分析
 
+
+## 背景介绍
+
+在大模型训练与推理中，MoE（Mixture-of-Experts）架构凭借动态专家激活带来的计算稀疏性优势，以及在千亿参数规模下的高吞吐推理能力，已成为超大规模模型的关键技术路线。MoE 主要通过 `Dispatch` 与 `Combine` 两个核心过程，实现输入 token 的动态分发与多专家输出的高效聚合，从而在维持海量参数规模的同时获得较高计算效率。但随着专家并行（EP）规模持续扩大，专家之间更频繁的数据交换会带来显著的通信开销，逐步演化为影响端到端推理性能的主要瓶颈。
+
+在整网推理过程中，各层的 TopK 路由结果会动态变化。若采用传统的 `alltoallv` 通信流程，通常需要先交换各 rank 的发送量信息，再通过排序/重排将发往同一专家的数据聚集，最后再进行一次 `alltoallv` 发送 token 数据。这一流程链路长、同步点多，整体效率不高。因此，我们考虑将 `Dispatch/Combine` 的数据收发过程进一步细粒度拆分：基于共享内存的写入机制按 token 逐个发送与接收，通过流水并行（pipeline）重叠通信与数据整理开销，以获得更好的整体性能。
+
+## Dispatch 功能介绍
+
+- 完成 token 分发：根据 token 选中的专家，将 token 发送到对应卡上。
+- 为支持后续 FFN 计算，将各卡发送过来的 token 连续重排。
+- 为支持后续 `Combine` 处理，统计接收 token 信息，支撑 `Combine` 将 FFN 计算后的 token 发送回源端。
+- 将量化提前到通信之前，将量化后的 `int8 token` 与 `fp32 scale` 合并发送，并在接收端重排分离。
+
+### 计算步骤
+
+1. **循环发送数据（`写UB -> quant -> 写远端内存` 流水并行）**
+   - 从 HBM 搬运待发送数据到 AIV 核内的 UBuffer。
+   - 对 UBuffer 上的 token 进行量化，并将量化后的 `int8 token` 与 `fp32 scale` 拼接。
+   - 将源端信息（`rank_id`、`bs_id`、`k_offset`，即三元组）拼接到量化后的 UBuffer。
+   - 根据 `expert_ids` 查找对端 rank 地址，并通过 `AIV + UBmem` 执行 `写远端` 发送。
+
+2. **发送 `flag` 标识与 `count` 到所有对端**
+   - 根据 `expert_id` 统计发往每个 expert 的 token 数（分核处理）。
+   - 统计后执行 `SyncAll` 多核同步；确认所有核发送完成后，将完成 `flag` 与 `count` 通过 `AIV + UBmem` 发送到对端。
+
+3. **等待对端写入完成并计算偏移**
+   - 分核读取状态区 `flag`，直到全部为 `1`（表示对应对端已完成发送）。
+   - 读取状态区 `count`，计算各 rank 数据搬运到输出中的偏移。
+   - 执行 `SyncAll` 多核同步。
+
+4. **本地数据整理**
+   - 分核并行将通信 Shared Memory 中的数据整理到最终输出（`data`、`scale`、`expert token num`）。
+   - 输出各 expert 的 token 数量。
+
+## Combine 功能介绍
+
+- 将 FFN 计算后的 token 发送回源端。
+- 将选中的 `K`（MoE 专家数）个 FFN 结果加权求和，完成 `combine` 计算。
+
+### 计算步骤
+
+1. **循环发送数据与发送 `flag`（按总 token 数分核）**
+   - 从 `recv_count` 读取总 token 数，并平均分配到各核。
+   - 每个 token 携带三元组信息（`rank_id`、`bs_id`、`k_offset`）；发送时根据三元组计算对端地址偏移。
+   - 使用 `AIV + UBmem` 将数据发送到对端。
+   - 每个 token 发送完成后，按 token 发送 `flag`。
+
+2. **循环等待并执行 `combine`（按 batch size 分核）**
+   - 按 batch 循环处理。
+   - 等待对应 batch 状态（`K+1` 个状态位全部为 `1`）。
+   - 状态齐备后，从通信 Shared Memory 搬运各 FFN 结果。
+   - 从输入 HBM 搬运 `expert scale`。
+   - 执行 `combine`：对各 MoE FFN 结果乘以 `expert scale` 后求和，再叠加 shared FFN 结果。
+
+
+## 示例演示
+
 本示例演示 **MoE（Mixture-of-Experts）场景下的分布式 Dispatch + Combine** 的端到端流程：
 
 - **Dispatch**：按 `expert_ids`（TopK 路由结果）将 token 特征从各 rank “发往”目标 expert（跨 rank all-to-all），并输出用于 Combine 的辅助信息（如 `expand_idx`、`ep_recv_count`、`expert_token_nums` 等）。
@@ -102,4 +160,3 @@ python3 scripts/verify_result.py --golden-dir ./golden --op-out-dir ./output
 该脚本会逐个比对 `golden/**/*.bin` 与 `output/**/*.bin`（按相对路径对应），并打印每个 bin 的一致性结果。
 
 ---
-

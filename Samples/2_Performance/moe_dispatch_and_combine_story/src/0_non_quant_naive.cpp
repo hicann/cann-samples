@@ -9,14 +9,12 @@
  */
 
 /*!
- * \file dispatch_and_combine_final.cpp
- * \brief
+ * \file 0_non_quant_naive.cpp
+ * \brief 
  */
 #include <iostream>
 #include <cstdlib>
 #include <memory>
-#include <unistd.h>
-#include <sys/wait.h>
 
 #include "acl/acl.h"
 #include "tiling/platform/platform_ascendc.h"
@@ -81,41 +79,6 @@ void SetCombineTilingData(MoeDistributeCombineShmemTilingData& combineTilingData
     combineTilingData.h = 7168;
     combineTilingData.aivNum = aivNum;
     combineTilingData.totalWinSize = totalWinSize;
-}
-
-void InitData(uint8_t **hostPtr, uint8_t **devicePtr, size_t aSize, std::string path = "")
-{
-    std::cout << path << std::endl;
-    ACL_CHECK(aclrtMalloc(reinterpret_cast<void**> (devicePtr), aSize, ACL_MEM_MALLOC_HUGE_FIRST));
-    ACL_CHECK(aclrtMallocHost(reinterpret_cast<void **>(hostPtr), aSize));
-    if (path.length() == 0) {
-        return;
-    }
-    ReadFile(path, *hostPtr, aSize);
-    ACL_CHECK(aclrtMemcpy(*devicePtr, aSize, *hostPtr, aSize, ACL_MEMCPY_HOST_TO_DEVICE));
-}
-
-void FinalizeData(uint8_t *hostPtr, uint8_t *devicePtr, size_t aSize = 0, std::string path = "")
-{
-    std::cout << path << std::endl;
-    if (path.length() > 0 && aSize > 0) {
-        ACL_CHECK(aclrtMemcpy(hostPtr, aSize, devicePtr, aSize, ACL_MEMCPY_DEVICE_TO_HOST));
-        WriteFile(path, hostPtr, aSize);
-    }
-    ACL_CHECK(aclrtFreeHost(reinterpret_cast<void *>(hostPtr)));
-    ACL_CHECK(aclrtFree(reinterpret_cast<void *>(devicePtr)));
-}
-
-std::string GetInputFilePath(std::string tensorName, int rankId)
-{
-    std::string rankIdStr = std::to_string(rankId);
-    return "./input/chip_" + rankIdStr + "/" + tensorName + "_" + rankIdStr + ".bin";
-}
-
-std::string GetOuputFilePath(std::string tensorName, int rankId)
-{
-    std::string rankIdStr = std::to_string(rankId);
-    return "./output/chip_" + rankIdStr + "/" + tensorName + "_" + rankIdStr + ".bin";
 }
 
 int runDispatchAndCombine(int rankNum, int rankId, int bs, uint64_t shmemSpaceSize) {
@@ -236,14 +199,14 @@ int runDispatchAndCombine(int rankNum, int rankId, int bs, uint64_t shmemSpaceSi
     FinalizeData(xInHost, xInDevice);
     FinalizeData(expertIdsHost, expertIdsDevice);
 
-    FinalizeData(expandXOutHost, expandXOutDevice, expandXOutSize, GetOuputFilePath("expand_x", rankId));
+    FinalizeData(expandXOutHost, expandXOutDevice, expandXOutSize, GetOutputFilePath("expand_x", rankId));
     FinalizeData(
-        dynamicScalesHost, dynamicScalesDevice, dynamicScalesSize, GetOuputFilePath("dynamic_scales", rankId));
+        dynamicScalesHost, dynamicScalesDevice, dynamicScalesSize, GetOutputFilePath("dynamic_scales", rankId));
     FinalizeData(
-        tokenSrcInfoHost, tokenSrcInfoDevice, tokenSrcInfoSize, GetOuputFilePath("assist_info_for_combine", rankId));
+        tokenSrcInfoHost, tokenSrcInfoDevice, tokenSrcInfoSize, GetOutputFilePath("assist_info_for_combine", rankId));
     FinalizeData(
-        expertTokenNumsHost, expertTokenNumsDevice, expertTokenNumsSize, GetOuputFilePath("expert_token_nums", rankId));
-    FinalizeData(sendCountsHost, sendCountsDevice, sendCountSize, GetOuputFilePath("ep_recv_count", rankId));
+        expertTokenNumsHost, expertTokenNumsDevice, expertTokenNumsSize, GetOutputFilePath("expert_token_nums", rankId));
+    FinalizeData(sendCountsHost, sendCountsDevice, sendCountSize, GetOutputFilePath("ep_recv_count", rankId));
 
     ACL_CHECK(aclrtFree(reinterpret_cast<void *>(disaptchWorkspaceGM)));
 
@@ -251,7 +214,7 @@ int runDispatchAndCombine(int rankNum, int rankId, int bs, uint64_t shmemSpaceSi
     FinalizeData(expandXInHost, expandXInDevice);
     FinalizeData(expertScalestHost, expertScalesDevice);
 
-    FinalizeData(xOutHost, xOutDevice, xOutSize, GetOuputFilePath("x", rankId));
+    FinalizeData(xOutHost, xOutDevice, xOutSize, GetOutputFilePath("x", rankId));
 
     ACL_CHECK(aclrtFree(reinterpret_cast<void *>(combineWorkspaceGM)));
 
@@ -265,50 +228,11 @@ int runDispatchAndCombine(int rankNum, int rankId, int bs, uint64_t shmemSpaceSi
     return 0;
 }
 
+namespace {
+constexpr uint64_t kDefaultShmemBytes = 1024UL * 1024UL * 1024UL;
+} // namespace
+
 int main(int argc, char* argv[])
 {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <rankNum> <bs> [shmemSizeInBytes]" << std::endl;
-        return -1;
-    }
-    int rankNum = atoi(argv[1]);
-    int bs = atoi(argv[2]);
-    uint64_t shmemSpaceSize = 1024UL * 1024UL * 1024UL; // 默认 1GB
-    if (argc >= 4) {
-        shmemSpaceSize = std::stoull(argv[3]);
-    }
-    INFO_LOG("Master (PID=%d) will fork %d processes", getpid(), rankNum);
-
-    pid_t pids[rankNum];
-    for (int rankId = 0; rankId < rankNum; ++rankId) {
-        pid_t pid = fork();
-
-        if (pid < 0) {
-            ERROR_LOG("Fork failed for rank %d", rankId);
-            exit(-1);
-        } else if (pid == 0) {
-            // [Child Process] Execute kernels on the device corresponding to this rankId
-            int ret = runDispatchAndCombine(rankNum, rankId, bs, shmemSpaceSize);
-            exit(ret); // exit after work finished, no need to get back to main
-        } else {
-            // [Parent Process] Record the PID of each spawned child
-            pids[rankId] = pid;
-            INFO_LOG("Forked Rank %d -> PID %d", rankId, pid);
-        }
-    }
-
-    // Wait for all processes to finish (i.e., ensure every chip completes the operator execution)
-    int status;
-    bool all_success = true;
-    for (int rankId = 0; rankId < rankNum; ++rankId) {
-        pid_t pid = pids[rankId];
-        waitpid(pid, &status, 0);
-        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-            all_success = false;
-            ERROR_LOG("Worker PID %d failed", pid);
-        }
-    }
-
-    std::cout << "All workers finished. Status: " << (all_success ? "SUCCESS" : "FAILURE") << std::endl;
-    return all_success ? 0 : -1;
+    return MoeDemoForkMain(argc, argv, runDispatchAndCombine, kDefaultShmemBytes);
 }
