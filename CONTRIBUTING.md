@@ -57,7 +57,7 @@
 本仓库要求以下环境：
 
 - 已安装社区版 CANN Toolkit，并正确配置 `ASCEND_HOME_PATH`
-- CANN Toolkit 版本要求与 [README.md](README.md) 保持一致。请优先使用 README 中说明的最新版本社区包。
+- CANN Toolkit 版本要求与 [README.md](README.md) 保持一致。请使用 README 中说明的最低支持基线或更高版本的社区包。
 - `CMake >= 3.16`
 - `Python >= 3.10`
 - `GCC >= 11.3.0`

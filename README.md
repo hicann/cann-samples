@@ -6,15 +6,24 @@
 
 ## 🚀概述
 
-cann-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture for Neural Networks）算子库中提供算子领域高性能实战演进样例与体系化调优知识库。
+`cann-samples` 是 [CANN](https://hiascend.com/software/cann)（Compute Architecture for Neural Networks）算子领域的实战样例仓库，提供高性能实现示例与体系化调优知识库。
 
 ## 📝环境部署
 
-**请获取最新版本的CANN toolkit包以获得完整的体验。**
+当前仓库已验证通过的社区版 CANN Toolkit 如下：
 
-单击[下载链接](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/master/)，根据实际环境架构，获取```Ascend-cann-toolkit_${cann_version}_linux-${arch}.run```。
+| CANN 版本 | 时间戳 | 验证结果 | 下载链接 |
+| --- | --- | --- | --- |
+| `9.0.0` | `20260325000325538` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260325000325538/aarch64/) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260325000325538/x86_64/) |
 
-1. **安装社区CANN toolkit包**
+请根据实际 CPU 架构，从上述链接目录中自行选择对应的 `.run` 安装包。
+
+toolkit 安装包文件名格式如下：
+
+- `Ascend-cann-toolkit_${cann_version}_linux-aarch64.run`
+- `Ascend-cann-toolkit_${cann_version}_linux-x86_64.run`
+
+1. **安装社区版 CANN Toolkit**
 
     ```bash
     # 确保安装包具有可执行权限
@@ -22,45 +31,53 @@ cann-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture
     # 安装命令
     ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --install --force --install-path=${install_path}
     ```
-    - \$\{cann\_version\}：表示CANN包版本号。
-    - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
-    - \$\{install\_path\}：表示指定安装路径，默认安装在`/usr/local/Ascend`目录。
+    - `${cann_version}`：表示 toolkit 安装包版本号，需满足上文的最低版本要求。
+    - `${arch}`：表示 CPU 架构，如 `aarch64`、`x86_64`。
+    - `${install_path}`：表示指定安装路径，默认安装在 `/usr/local/Ascend` 目录。
+
+2. **配置环境变量**
+
+   安装完成后，请先执行：
+
+    ```bash
+    source ${install_path}/ascend-toolkit/set_env.sh
+    ```
+
+   请将 `${install_path}` 替换为 toolkit 的实际安装目录，例如 `/usr/local/Ascend` 或 `${HOME}/Ascend`。
 
 ## ⚡️快速入门
 
 1. 配置项目
 
-   使用以下命令初始化构建配置，CMake会自动创建`build`文件夹
+   使用以下命令初始化构建配置，CMake 会自动创建 `build` 目录：
    ```sh
    cmake -S . -B build
    ```
 
-2. 查看可用的Target(可选)
+2. 查看可用 Target（可选）
 
-   在编译前，可查看当前项目中所有支持单独编译的目标列表
+   编译前可先查看当前项目中支持单独构建的目标列表：
    ```sh
    cmake --build build --target help
    ```
 
-3. 执行编译安装
+3. 编译与安装
 
-   - 选项A: 编译指定的Target(部分构建)
+   - 选项 A：编译指定 Target（部分构建）
 
-     将`<target_name>` 替换为上一步查到的名称：
+     将 `<target_name>` 替换为上一步查到的目标名称：
      ```sh
      cmake --build build --target <target_name>
      ```
 
-   - 选项B: 编译所有Target(推荐，全量构建)
+   - 选项 B：编译所有 Target（推荐，全量构建）
 
-     支持多线程加速：
+     支持多线程加速构建：
      ```sh
      cmake --build build --parallel
      ```
 
-     安装编译产物：
-
-     执行安装命令，将编译生成的二进制文件整理到`build_out`文件夹下：
+     安装编译产物，将生成的二进制文件整理到 `build_out` 目录：
      ```sh
      cmake --install build --prefix ./build_out
      ```
@@ -68,24 +85,22 @@ cann-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture
 ## 📂目录结构
 
 ```
-├── Samples                        # 样例目录
-│   ├── 0_Introduction            # 入门介绍样例
-│   ├── 1_Features                # 功能特性样例
-│   │   ├── memory_optimization   # 访存优化方法
-│   │   ├── instruction_optimization # 指令优化方法
-│   │   ├── system_optimization   # 系统优化方法
-│   │   └── hardware_features     # 芯片特性样例
-│   ├── 2_Performance             # 性能调优样例
+├── Samples                                  # 样例目录
+│   ├── 0_Introduction                       # 入门样例
+│   ├── 1_Features                           # 功能特性样例
+│   │   ├── memory_optimization              # 访存优化方法
+│   │   ├── instruction_optimization         # 指令优化方法
+│   │   ├── system_optimization              # 系统优化方法
+│   │   └── hardware_features                # 芯片特性样例
+│   ├── 2_Performance                        # 性能调优样例
 │   └── CMakeLists.txt
-├── cmake                         # 项目工程编译目录
-├── .clang-format                 # 代码格式配置
-├── CMakeLists.txt                # 项目根编译配置
-├── LICENSE                       # 许可证
-├── SECURITY.md                   # 安全声明
-└── README.md                     # 项目说明文档
+├── cmake                                    # 工程编译配置
+├── .clang-format                            # 代码格式配置
+├── CMakeLists.txt                           # 根 CMake 配置
+├── LICENSE                                  # 许可证
+├── SECURITY.md                              # 安全声明
+└── README.md                                # 项目说明文档
 ```
-
-当前 `1_Features` 下已有样例统一归类在 `hardware_features`，其余分类目录预留用于后续扩展。
 
 ## 💬相关信息
 
@@ -94,7 +109,7 @@ cann-samples是[CANN](https://hiascend.com/software/cann)（Compute Architecture
 
 ## 🤝联系我们
 
-本项目功能和文档正在持续更新和完善中，欢迎您关注最新版本。
+本项目的功能与文档会持续更新。
 
-- **问题反馈**：通过GitCode[【Issues】](https://gitcode.com/cann/cann-samples/issues)提交问题
-- **社区互动**：通过GitCode[【讨论】](https://gitcode.com/cann/cann-samples/discussions)参与交流
+- **问题反馈**：通过 GitCode [Issues](https://gitcode.com/cann/cann-samples/issues) 提交问题
+- **社区互动**：通过 GitCode [Discussions](https://gitcode.com/cann/cann-samples/discussions) 参与交流
