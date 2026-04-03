@@ -47,11 +47,11 @@ __global__ __aicore__ __vector__ void DispatchKernel(
 __global__ __aicore__ __vector__ void CombineKernel(
     __gm__ void* shmemSpace, GM_ADDR expandX, GM_ADDR expertIds, 
     GM_ADDR expandIdx, GM_ADDR epSendCount, GM_ADDR expertScales, GM_ADDR XOut, 
-    GM_ADDR workspaceGM, MoeDistributeCombineShmemTilingData combineTilingData)
+    MoeDistributeCombineShmemTilingData combineTilingData)
 {
     AscendC::TPipe pipe;
-    MoeDistributeCombineShmemImpl::MoeDistributeCombineShmem<float16_t, float16_t, int32_t> op;
-    op.Init((GM_ADDR)shmemSpace, expandX, expertIds, expandIdx, epSendCount, expertScales, XOut, workspaceGM, &pipe, combineTilingData);
+    MoeDistributeCombineShmemImpl::MoeDistributeCombineShmem<float16_t, float16_t, int32_t, true> op;
+    op.Init((GM_ADDR)shmemSpace, expandX, expertIds, expandIdx, epSendCount, expertScales, XOut, &pipe, combineTilingData);
     op.Process();
     return;
 }
@@ -173,11 +173,6 @@ int runDispatchAndCombine(int rankNum, int rankId, int bs) {
     size_t xOutSize = combineTilingData.bs * combineTilingData.h * sizeof(float16_t);
     InitData(&xOutHost, &xOutDevice, xOutSize);
 
-    uint8_t *combineWorkspaceGM;
-    size_t combineWorkspaceSize = 16 * 1024 * 1024;
-    ACL_CHECK(
-        aclrtMalloc(reinterpret_cast<void**>(&combineWorkspaceGM), combineWorkspaceSize, ACL_MEM_MALLOC_HUGE_FIRST));
-
     int loopTimes = 20;
     for (int i = 0; i < loopTimes; ++i) {
         DispatchKernel<<<AIV_CORE_NUM, nullptr, stream>>>(
@@ -186,7 +181,7 @@ int runDispatchAndCombine(int rankNum, int rankId, int bs) {
             disaptchWorkspaceGM, dispatchTilingData);
         CombineKernel<<<AIV_CORE_NUM, nullptr, stream>>>(
             shmemSpace, expandXInDevice, expertIdsDevice, tokenSrcInfoDevice, sendCountsDevice, expertScalesDevice,
-            xOutDevice, combineWorkspaceGM, combineTilingData);
+            xOutDevice, combineTilingData);
     }
     ACL_CHECK(aclrtSynchronizeStream(stream));
 
@@ -213,8 +208,6 @@ int runDispatchAndCombine(int rankNum, int rankId, int bs) {
     FinalizeData(expertScalestHost, expertScalesDevice);
 
     FinalizeData(xOutHost, xOutDevice, xOutSize, GetOutputFilePath("x", rankId));
-
-    ACL_CHECK(aclrtFree(reinterpret_cast<void *>(combineWorkspaceGM)));
 
     // release resource
     ACL_CHECK(aclshmem_finalize());
