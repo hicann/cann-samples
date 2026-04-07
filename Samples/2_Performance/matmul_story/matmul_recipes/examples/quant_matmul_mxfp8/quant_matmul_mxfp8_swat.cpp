@@ -52,8 +52,8 @@ __global__ __aicore__ void QuantMatmulMxfp8SwatKernel(
 
     using BlockScheduler = QuantMatmulMxSwatScheduler<SWAT_NO_FULL_LOAD_MODE>;
     using DispatchPolicy =
-        QuantMatmulMxMultiBlockWithSwat<AscendC::Shape<_0, _0, _0, _0>, SWAT_NO_FULL_LOAD_MODE>;
-    using BlockMmad = Block::BlockMmadMxSwat<
+        QuantMatmulMxMultiBlockWithSwat<SWAT_NO_FULL_LOAD_MODE>;
+    using BlockMmad = Block::BlockMmad<
         DispatchPolicy, AType, layoutA, BType, layoutB, CType, layoutC>;
     using ProblemShape = MatmulShape;
     using QuantMatmulKernelImpl =

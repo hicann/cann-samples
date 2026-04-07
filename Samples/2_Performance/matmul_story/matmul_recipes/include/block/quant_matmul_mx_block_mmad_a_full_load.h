@@ -32,19 +32,35 @@ namespace Block {
 using namespace AscendC;
 
 template <
-    class DispatchPolicy_, class AType_, class LayoutA_, class BType_, class LayoutB_, class CType_, class LayoutC_,
+    class DispatchPolicy_, 
+    class AType_, 
+    class LayoutA_, 
+    class BType_, 
+    class LayoutB_, 
+    class CType_, 
+    class LayoutC_,
     class Enable = void>
-class BlockMmadMxAFullLoad {
+class BlockMmad {
     static_assert(AscendC::Std::always_false_v<DispatchPolicy_>, "Should not be here!");
 };
 
 template <
-    class DispatchPolicy_, class AType_, class LayoutA_, class BType_, class LayoutB_, class CType_, class LayoutC_>
-class BlockMmadMxAFullLoad<
-    DispatchPolicy_, AType_, LayoutA_, BType_, LayoutB_, CType_, LayoutC_,
-    AscendC::Std::enable_if_t<
-        AscendC::Std::is_base_of_v<
-            QuantMatmulMxMultiBlockWithSwat<AscendC::Shape<_0, _0, _0, _0>, ENABLE_A_FULL_LOAD>, DispatchPolicy_>>> {
+    class DispatchPolicy_, 
+    class AType_, 
+    class LayoutA_, 
+    class BType_, 
+    class LayoutB_, 
+    class CType_, 
+    class LayoutC_>
+class BlockMmad<
+    DispatchPolicy_, 
+    AType_, 
+    LayoutA_, 
+    BType_, 
+    LayoutB_, 
+    CType_, 
+    LayoutC_,
+    AscendC::Std::enable_if_t<DispatchPolicy_::fullLoadMode == SWAT_A_FULL_LOAD_MODE>> {
 public:
     using AType = AType_;
     using BType = BType_;
@@ -100,7 +116,7 @@ public:
         uint64_t l1BufNum;
     };
 
-    __aicore__ inline BlockMmadMxAFullLoad()
+    __aicore__ inline BlockMmad()
     {
         // Prime all producer/consumer events so the first iteration can enter
         // the pipelined copy-and-compute loop without special-case branches.
@@ -113,7 +129,7 @@ public:
         AscendC::SetMMLayoutTransform(true);
     }
 
-    __aicore__ inline ~BlockMmadMxAFullLoad()
+    __aicore__ inline ~BlockMmad()
     {
         // Drain every in-flight transfer before leaving so later blocks do not
         // observe stale event state from the previous pipeline instance.

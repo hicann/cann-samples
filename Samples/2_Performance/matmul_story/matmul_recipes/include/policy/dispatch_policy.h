@@ -25,16 +25,11 @@ struct KernelMultiBlockOnKAxisWithScale {};
 /**
  * @brief Dispatch tag for MXFP4 quantized matmul kernels that use the SWAT
  *        scheduling family.
- * @tparam SingleCoreShape Placeholder for the per-core tile shape recorded in
- *         the dispatch traits.
  * @tparam FULL_LOAD_MODE_ Selects the SWAT variant: streaming or A-full-load.
  */
-template <class SingleCoreShape = AscendC::Shape<_0, _0, _0>, uint64_t FULL_LOAD_MODE_ = SWAT_NO_FULL_LOAD_MODE>
+template <uint64_t FULL_LOAD_MODE_ = SWAT_NO_FULL_LOAD_MODE>
 struct QuantMatmulMxMultiBlockWithSwat {
-    // `SingleShape` records the per-core tile shape, while `fullLoadMode`
-    // selects which SWAT specialization is instantiated by later traits.
     using ScheduleType = KernelMultiBlockOnKAxisWithScale;
-    using SingleShape = SingleCoreShape;
     constexpr static uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
 

@@ -29,8 +29,9 @@ matmul_recipes/
 
 | 样例 | 数据类型 | 说明 |
 |------|----------|------|
-| [quant_matmul_mxfp4](examples/quant_matmul_mxfp4/README.md) | MXFP4 | 4 位浮点量化矩阵乘，包含 SWAT 与 A 全载两种实现 |
 | [matmul_a16w16](examples/matmul_a16w16/README.md) | Float16 | A16W16 非量化矩阵乘 |
+| [quant_matmul_mxfp4](examples/quant_matmul_mxfp4/README.md) | MXFP4 | 4 位浮点量化矩阵乘，包含 SWAT 与 A 全载两种实现 |
+| [quant_matmul_mxfp8](examples/quant_matmul_mxfp8/README.md) | MXFP8 | 8 位浮点量化矩阵乘，包含 SWAT 与 A 全载两种实现 |
 
 ## 使用方式
 
@@ -39,4 +40,4 @@ matmul_recipes/
 
 ## 性能优化指南
 
-各样例涉及的模板实现及优化策略详见 [MXFP4 量化矩阵乘算子性能优化指南](../docs/quant_matmul_mxfp4_performance.md)。
+各样例涉及的模板实现及优化策略详见 [MX 量化矩阵乘算子性能优化指南](../docs/quant_matmul_mx_performance.md)。

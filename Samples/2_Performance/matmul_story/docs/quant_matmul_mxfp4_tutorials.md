@@ -6,7 +6,7 @@
 
 本文档说明 `matmul_tutorials` 目录内 **MXFP4 量化矩阵乘** Step 样例的组织方式：自 **Step 0 基准** 出发，经各 Step 优化，依次交代各步 **问题背景**、**优化思路** 及与 **Shape**、**硬件流水** 的对照读法。读者可据此选用或排布样例，亦可将同一分析范式迁移至其他 `m×k×n` 组合。
 
-性能建模、Bound 判定与策略取舍的系统性论述，见 [MXFP4 量化矩阵乘算子性能优化指南](quant_matmul_mxfp4_performance.md)。
+性能建模、Bound 判定与策略取舍的系统性论述，见 [MX 量化矩阵乘算子性能优化指南](quant_matmul_mx_performance.md)。
 
 ---
 
