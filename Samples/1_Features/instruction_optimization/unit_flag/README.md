@@ -129,16 +129,25 @@ AscendC::Te::Copy(copyL0C2GM, gmBlockC_, tensorL0C, AscendC::Te::FixpipeParams{U
 
 从项目根目录启动构建，参考项目[README.md](../../../README.md)
 
-指定matmul的编译命令：
+在仓库根目录下完成编译和安装后，进入当前样例目录：
+```shell
+cmake -S . -B build
+cmake --build build --parallel
+cmake --install build --prefix ./build_out
+cd ./build_out/1_Features/instruction_optimization/unit_flag/
+```
+
+如需单独编译当前样例，可使用以下指令：
 ```shell
 cmake --build build --target unit_flag
+cp ./Samples/1_Features/instruction_optimization/unit_flag/scripts/profile_matmul.py ./build/Samples/1_Features/instruction_optimization/unit_flag/
+cd ./build/Samples/1_Features/instruction_optimization/unit_flag/
 ```
 
 2. 运行样例
 
-切换到可执行目录文件的所在目录`build/Samples/1_Features/instruction_optimization/unit_flag/`, 使用可执行文件直接执行算子用例，需要指定矩阵乘维度，并随机生成输入数据。
+使用可执行文件直接执行算子用例，需要指定矩阵乘维度，并随机生成输入数据。
 ```shell
-cd ./build/Samples/1_Features/instruction_optimization/unit_flag/
 ./unit_flag 1024 2048 4096
 ```
 打印如下执行结果，证明样例执行成功。
@@ -151,11 +160,29 @@ matmul run failed!
 ```
 
 3. 测试性能
-切换到可执行目录文件的所在目录`build/Samples/1_Features/instruction_optimization/unit_flag/`,使用msprof工具执行算子用例，指定矩阵乘维度后执行。
+运行性能测试脚本，指定矩阵乘法的维度后执行。
 ```shell
-msprof ./unit_flag 1024 2048 4096
+python3 profile_matmul.py 1024 2048 4096
 ```
-运行完成后，在 `PROF_*/mindstudio_profiler_output/` 目录下获取 `op_summary_{时间戳}.csv` 文件，查看统计耗时以评估性能。
+打印如下执行结果，证明样例性能测试成功。
+```shell
+[Profile Breakdowm]
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+| candidate | kernel(us) | mac(us) | scalar(us) | mte1(us) | mte2(us) | fixpipe(us) | icache_miss(%) |
++===========+============+=========+============+==========+==========+=============+================+
+| unit_flag |     85.907 |  42.257 |      2.677 |   11.139 |   35.639 |      22.802 |          1.100 |
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+```
+与相同输入规模下的基础 matmul 算子相比：
+```shell
+[Profile Breakdowm]
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+| candidate | kernel(us) | mac(us) | scalar(us) | mte1(us) | mte2(us) | fixpipe(us) | icache_miss(%) |
++===========+============+=========+============+==========+==========+=============+================+
+| matmul    |     86.870 |  43.804 |      1.850 |   12.997 |   51.857 |       2.970 |          2.200 |
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+```
+可以看到，FixPipe 数据搬移流水线与 MMAD 计算流水线并行执行，提升了整体性能。
 
 ## 6. 支持架构
 

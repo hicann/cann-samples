@@ -9,25 +9,25 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(matmul main.cpp)
+add_executable(tail_rebalance main.cpp)
 
-target_compile_options(matmul PRIVATE
+target_compile_options(tail_rebalance PRIVATE
     "-xasc"
     "--npu-arch=dav-3510"
     "-w"
     "-O3"
 )
 
-target_link_libraries(matmul PRIVATE
+target_link_libraries(tail_rebalance
     cann_samples::ascend_base
     cann_samples::tensor_api
 )
 
 set(DIST_PATH
-    0_Introduction/matmul
+    1_Features/system_optimization/tail_rebalance
 )
 
-install(TARGETS matmul
+install(TARGETS tail_rebalance
     RUNTIME DESTINATION ${DIST_PATH}
 )
 

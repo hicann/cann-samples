@@ -9,4 +9,6 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(swat)
+add_subdirectory(slide_window_adaptive_template)
+add_subdirectory(full_load)
+add_subdirectory(l1_bank_conflict)

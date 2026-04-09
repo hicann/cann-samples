@@ -19,7 +19,6 @@ set(CMAKE_LINKER ${BISHENG})
 
 # unit_flag
 add_executable(unit_flag main.cpp)
-target_include_directories(unit_flag PRIVATE ${ASCEND_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/tensor_api)
 target_link_directories(unit_flag PRIVATE ${ASCEND_DIR}/lib64)
 target_compile_options(unit_flag PRIVATE
     "-xasc"
@@ -28,15 +27,26 @@ target_compile_options(unit_flag PRIVATE
     "-O3"
 )
 target_link_libraries(unit_flag
-    PRIVATE
-    m
-    dl
-    platform
-    tiling_api
-    ascendcl
-    runtime
-    stdc++
+    cann_samples::ascend_base
+    cann_samples::tensor_api
 )
+
+add_custom_command(
+    TARGET unit_flag POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+        ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+set(DIST_PATH
+    1_Features/instruction_optimization/unit_flag
+)
+
 install(TARGETS unit_flag
-    RUNTIME DESTINATION 1_Features/instruction_optimization/unit_flag
+    RUNTIME DESTINATION ${DIST_PATH}
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+    DESTINATION ${DIST_PATH}
+    FILES_MATCHING PATTERN "*"
 )

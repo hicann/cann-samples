@@ -19,7 +19,6 @@ set(CMAKE_LINKER ${BISHENG})
 
 # n_buffer
 add_executable(n_buffer main.cpp)
-target_include_directories(n_buffer PRIVATE ${ASCEND_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/tensor_api)
 target_link_directories(n_buffer PRIVATE ${ASCEND_DIR}/lib64)
 target_compile_options(n_buffer PRIVATE
     "-xasc"
@@ -27,16 +26,21 @@ target_compile_options(n_buffer PRIVATE
     "-w"
     "-O3"
 )
+
 target_link_libraries(n_buffer
-    PRIVATE
-    m
-    dl
-    platform
-    tiling_api
-    ascendcl
-    runtime
-    stdc++
+    cann_samples::ascend_base
+    cann_samples::tensor_api
 )
+
+set(DIST_PATH
+    1_Features/instruction_optimization/n_buffer
+)
+
 install(TARGETS n_buffer
-    RUNTIME DESTINATION 1_Features/instruction_optimization/n_buffer
+    RUNTIME DESTINATION ${DIST_PATH}
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+    DESTINATION ${DIST_PATH}
+    FILES_MATCHING PATTERN "*"
 )

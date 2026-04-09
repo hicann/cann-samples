@@ -19,6 +19,9 @@
 #include <memory>
 #include <random>
 #include <iomanip>
+#include <algorithm>
+#include <cstring>
+#include <cstdint>
 
 #include "acl/acl.h"
 #include "kernel_basic_intf.h"
@@ -32,6 +35,8 @@ __aicore__ inline void CalcTailBasicBlock(
     uint64_t mTileNum, uint64_t nTileNum, uint64_t aicNum, uint64_t& tailMCnt, uint64_t& tailNCnt);
 template <typename T>
 void FillRandomData(std::vector<T>& data, T min, T max);
+float Bf16ToFloat(uint16_t h);
+uint16_t FloatToBf16(float f);
 template <typename T>
 void ComputeGolden(
     int m, int k, int n, std::vector<T>& hostInput, std::vector<T>& hostWeight, std::vector<T>& goldenOutput);
@@ -48,13 +53,6 @@ using MakeLayoutAL1 =
 template <typename T>
 using MakeLayoutBL1 =
     AscendC::Std::conditional_t<transB, AscendC::Te::ZnLayoutFormat<T>, AscendC::Te::NzLayoutFormat<T>>;
-
-constexpr LoadDataTrait LOAD_DATA_B_TRAIT{true};
-struct LoadData2BTrait {
-    using TraitType = LoadDataTrait;
-    static constexpr const TraitType value = LOAD_DATA_B_TRAIT;
-};
-
 } // namespace AscendC::Te
 
 namespace matmul {
@@ -354,32 +352,41 @@ int main(int argc, char* argv[])
     FillRandomData<float>(hostInput, -2.0f, 2.0f);
     FillRandomData<float>(hostWeight, -2.0f, 2.0f);
 
+    auto toBf16 = [](const std::vector<float>& src, std::vector<uint16_t>& dst) {
+        std::transform(src.begin(), src.end(), dst.begin(), FloatToBf16);
+    };
+    std::vector<uint16_t> hostInputBf16(m * k, 0);
+    std::vector<uint16_t> hostWeightBf16(k * n, 0);
+    std::vector<uint16_t> hostOutputBf16(m * n, 0);
+    std::vector<uint16_t> goldenOutputBf16(m * n, 0);
+    toBf16(hostInput, hostInputBf16);
+    toBf16(hostWeight, hostWeightBf16);
+    toBf16(hostOutput, hostOutputBf16);
+    toBf16(goldenOutput, goldenOutputBf16);
+
     // Allocate device memory
     GM_ADDR deviceInput = nullptr;  // Device pointer for matrix A
     GM_ADDR deviceWeight = nullptr; // Device pointer for matrix B
     GM_ADDR deviceOutput = nullptr; // Device pointer for matrix C
-    auto sizeInput = hostInput.size() * sizeof(float);
-    auto sizeWeight = hostWeight.size() * sizeof(float);
-    auto sizeOutput = hostOutput.size() * sizeof(float);
-    std::unique_ptr<void, aclError (*)(void*)> deviceInputPtr(nullptr, aclrtFree);
+    auto sizeInput = hostInputBf16.size() * sizeof(uint16_t);
+    auto sizeWeight = hostWeightBf16.size() * sizeof(uint16_t);
+    auto sizeOutput = hostOutputBf16.size() * sizeof(uint16_t);
+    std::unique_ptr<void, aclError (*)(void*)> deviceInputPtr(deviceInput, aclrtFree);
     ret = aclrtMalloc((void**)&deviceInput, sizeInput, ACL_MEM_MALLOC_HUGE_FIRST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMalloc deviceInput failed.", return 1);
-    deviceInputPtr.reset(deviceInput);
 
-    std::unique_ptr<void, aclError (*)(void*)> deviceWeightPtr(nullptr, aclrtFree);
+    std::unique_ptr<void, aclError (*)(void*)> deviceWeightPtr(deviceWeight, aclrtFree);
     ret = aclrtMalloc((void**)&deviceWeight, sizeWeight, ACL_MEM_MALLOC_HUGE_FIRST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMalloc deviceWeight failed.", return 1);
-    deviceWeightPtr.reset(deviceWeight);
 
-    std::unique_ptr<void, aclError (*)(void*)> deviceOutputPtr(nullptr, aclrtFree);
+    std::unique_ptr<void, aclError (*)(void*)> deviceOutputPtr(deviceOutput, aclrtFree);
     ret = aclrtMalloc((void**)&deviceOutput, sizeOutput, ACL_MEM_MALLOC_HUGE_FIRST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMalloc deviceOutput failed.", return 1);
-    deviceOutputPtr.reset(deviceOutput);
 
     // Copy data from host to device
-    ret = aclrtMemcpy(deviceInput, sizeInput, hostInput.data(), sizeInput, ACL_MEMCPY_HOST_TO_DEVICE);
+    ret = aclrtMemcpy(deviceInput, sizeInput, hostInputBf16.data(), sizeInput, ACL_MEMCPY_HOST_TO_DEVICE);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceInput failed.", return 1);
-    ret = aclrtMemcpy(deviceWeight, sizeWeight, hostWeight.data(), sizeWeight, ACL_MEMCPY_HOST_TO_DEVICE);
+    ret = aclrtMemcpy(deviceWeight, sizeWeight, hostWeightBf16.data(), sizeWeight, ACL_MEMCPY_HOST_TO_DEVICE);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceWeight failed.", return 1);
 
     // Get platform instance to access AI core information and setup kernel timing events
@@ -388,31 +395,43 @@ int main(int argc, char* argv[])
     uint32_t numBlocks = ascendcPlatform->GetCoreNumAic(); // Get number of AI cores
 
     // Launch kernel on device
-    matmul::MatmulKernel<float><<<numBlocks, nullptr, stream>>>(deviceInput, deviceWeight, deviceOutput, m, k, n);
+    matmul::MatmulKernel<bfloat16_t><<<numBlocks, nullptr, stream>>>(deviceInput, deviceWeight, deviceOutput, m, k, n);
 
     // Wait for kernel completion
     ret = aclrtSynchronizeStream(stream);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtSynchronizeStream failed.", return 1);
 
     // Copy result from device back to host
-    ret = aclrtMemcpy(hostOutput.data(), sizeOutput, deviceOutput, sizeOutput, ACL_MEMCPY_DEVICE_TO_HOST);
+    ret = aclrtMemcpy(hostOutputBf16.data(), sizeOutput, deviceOutput, sizeOutput, ACL_MEMCPY_DEVICE_TO_HOST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceOutput failed.", return 1);
 
     // Verify results against CPU reference
-    ComputeGolden<float>(m, k, n, hostInput, hostWeight, goldenOutput);
-    std::vector<uint64_t> errorIndices = Compare<float>(hostOutput, goldenOutput);
+    auto toFloat = [](const std::vector<uint16_t>& src, std::vector<float>& dst) {
+        std::transform(src.begin(), src.end(), dst.begin(), Bf16ToFloat);
+    };
+
+    std::vector<float> hostInputFloat(m * k, 0);
+    std::vector<float> hostWeightFloat(k * n, 0);
+    std::vector<float> hostOutputFloat(m * n, 0);
+    std::vector<float> goldenOutputFloat(m * n, 0);
+    toFloat(hostInputBf16, hostInputFloat);
+    toFloat(hostWeightBf16, hostWeightFloat);
+    toFloat(hostOutputBf16, hostOutputFloat);
+    toFloat(goldenOutputBf16, goldenOutputFloat);
+
+    ComputeGolden<float>(m, k, n, hostInputFloat, hostWeightFloat, goldenOutputFloat);
+    std::vector<uint64_t> errorIndices = Compare<float>(hostOutputFloat, goldenOutputFloat);
     if (errorIndices.size() == 0) {
         std::cout << "matmul run successfully!" << std::endl;
     } else {
         for (uint64_t i : errorIndices) {
-            std::cout << "error index: " << i << ", output: " << hostOutput[i] << ", golden: " << goldenOutput[i]
-                      << std::endl;
+            std::cout << "error index: " << i << ", output: " << hostOutputFloat[i]
+                      << ", golden: " << goldenOutputFloat[i] << std::endl;
         }
         std::cout << "matmul run failed!" << std::endl;
     }
 
     // Cleanup resources
-    std::unique_ptr<void, aclError (*)(void*)> DeviceOutputAddr(deviceOutput, aclrtFree);
     aclrtDestroyStream(stream);
     aclrtResetDevice(deviceId);
     aclFinalize();
@@ -535,6 +554,34 @@ __aicore__ inline void CalcTailBasicBlock(
             }
         }
     }
+}
+
+/**
+ * @brief Convert a 16-bit brain floating-point (bfloat16) value to a 32-bit float
+ * @param h 16-bit bfloat16 value stored in uint16_t format
+ * @return The converted 32-bit floating-point value
+ */
+float Bf16ToFloat(uint16_t h)
+{
+    uint32_t sign = (h & 0x8000U) ? 0x80000000U : 0x00000000U;
+    uint32_t exponent = (h >> 7) & 0x00FFU;
+    uint32_t mantissa = h & 0x007FU;
+    uint32_t f_bits = sign | (exponent << 23) | (mantissa << (23 - 7));
+    return *reinterpret_cast<float*>(&f_bits);
+}
+
+/**
+ * @brief Convert a 32-bit float to a 16-bit brain floating-point (bfloat16) value
+ * @param f 32-bit floating-point value to convert
+ * @return The converted 16-bit bfloat16 value stored in uint16_t format (truncated rounding)
+ */
+uint16_t FloatToBf16(float f)
+{
+    uint32_t f_bits;
+    std::memcpy(&f_bits, &f, sizeof(f_bits));
+
+    // Extract the high 16 bits (simple truncation)
+    return static_cast<uint16_t>(f_bits >> 16);
 }
 
 } // namespace tool

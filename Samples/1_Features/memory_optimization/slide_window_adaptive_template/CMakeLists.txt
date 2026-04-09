@@ -11,7 +11,6 @@
 
 add_executable(swat main.cpp)
 
-target_include_directories(swat PRIVATE ${ASCEND_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/tensor_api)
 target_compile_options(swat PRIVATE
     "-xasc"
     "--npu-arch=dav-3510"
@@ -20,10 +19,19 @@ target_compile_options(swat PRIVATE
 )
 
 target_link_libraries(swat
-    PRIVATE
     cann_samples::ascend_base
+    cann_samples::tensor_api
+)
+
+set(DIST_PATH
+    1_Features/memory_optimization/swat
 )
 
 install(TARGETS swat
-    RUNTIME DESTINATION 1_Features/memory_optimization/swat
+    RUNTIME DESTINATION ${DIST_PATH}
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+    DESTINATION ${DIST_PATH}
+    FILES_MATCHING PATTERN "*"
 )

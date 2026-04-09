@@ -20,6 +20,9 @@
 #include <memory>
 #include <random>
 #include <iomanip>
+#include <algorithm>
+#include <cstring>
+#include <cstdint>
 
 #include "acl/acl.h"
 #include "kernel_basic_intf.h"
@@ -27,13 +30,6 @@
 #include "include/tensor.h"
 
 namespace AscendC::Te {
-constexpr LoadDataTrait LOAD_DATA_B_TRAIT{true};
-
-struct LoadData2BTrait {
-    using TraitType = LoadDataTrait;
-    static constexpr const TraitType value = LOAD_DATA_B_TRAIT;
-};
-
 // Layout definitions for matrices A and B (NZ format by default, can be transposed to ZN)
 static constexpr bool transA = false;
 static constexpr bool transB = false;
@@ -47,40 +43,40 @@ using MakeLayoutBL1 =
 
 namespace tool {
 // Memory and buffer configuration constants
-constexpr static uint64_t DOUBLE_BUFFER_COUNT = 2;  // Double buffering for ping-pong operation
-constexpr static int64_t L0A_SIZE = 64 * 1024;      // L0A buffer size (64KB)
+constexpr static uint64_t DOUBLE_BUFFER_COUNT = 2;    // Double buffering for ping-pong operation
+constexpr static int64_t L0A_SIZE = 64 * 1024;        // L0A buffer size (64KB)
 constexpr static int64_t TOTAL_L0C_SIZE = 256 * 1024; // Total L0C buffer size (256KB)
-constexpr static uint16_t CUBE_BLOCK_SIZE = 16;      // Cube unit block size
-constexpr static uint64_t HALF_L0C_SIZE = TOTAL_L0C_SIZE / DOUBLE_BUFFER_COUNT; // Half L0C for ping-pong
 constexpr static uint64_t HALF_L0_SIZE = L0A_SIZE / DOUBLE_BUFFER_COUNT;        // Half L0A for ping-pong
 
 // Synchronization flag values
-constexpr static uint16_t ZERO_FLAG = 0;    // First flag value
-constexpr static uint16_t FIRST_FLAG = 1;   // Second flag value
+constexpr static uint16_t ZERO_FLAG = 0;  // First flag value
+constexpr static uint16_t FIRST_FLAG = 1; // Second flag value
 
 // Helper function declarations for host-side operations
 template <typename T>
-void FillRandomData(std::vector<T>& data, T min, T max);  // Fill vector with random data
+void FillRandomData(std::vector<T>& data, T min, T max); // Fill vector with random data
+float Bf16ToFloat(uint16_t h);
+uint16_t FloatToBf16(float f);
 template <typename T>
 void ComputeGolden(    // Compute reference result on CPU
     int m, int k, int n, std::vector<T>& hostInput, std::vector<T>& hostWeight, std::vector<T>& goldenOutput);
 template <typename T>
-std::vector<uint64_t> Compare(std::vector<T>& hostOutput, std::vector<T>& goldenOutput);  // Compare results
-__aicore__ inline uint64_t CeilDiv(uint64_t a, uint64_t b);   // Ceiling division
+std::vector<uint64_t> Compare(std::vector<T>& hostOutput, std::vector<T>& goldenOutput); // Compare results
+__aicore__ inline uint64_t CeilDiv(uint64_t a, uint64_t b);                              // Ceiling division
 } // namespace tool
 
 namespace matmul {
 /**
  * @brief Matrix multiplication kernel for Ascend AI processor
- * 
+ *
  * This kernel implements C = A * B using optimized memory hierarchy:
  * - Double buffering between GM -> L1 and L1 -> L0
  * - Tiled computation to fit in on-chip memory
  * - Multi-core parallelization
- * 
+ *
  * @tparam T Data type (float in this implementation)
  * @param aGm Global memory pointer to matrix A (size m*k)
- * @param bGm Global memory pointer to matrix B (size k*n) 
+ * @param bGm Global memory pointer to matrix B (size k*n)
  * @param cGm Global memory pointer to output matrix C (size m*n)
  * @param m Rows of A and C
  * @param k Columns of A, rows of B
@@ -89,7 +85,7 @@ namespace matmul {
 template <typename T>
 __global__ __aicore__ void MatmulKernel(GM_ADDR aGm, GM_ADDR bGm, GM_ADDR cGm, uint32_t m, uint32_t k, uint32_t n)
 {
-    KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIC_ONLY);  // Specify AI Core only task type
+    KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIC_ONLY); // Specify AI Core only task type
 
     // Initialize tiling parameters for memory hierarchy
     uint64_t baseM = 256;
@@ -103,16 +99,16 @@ __global__ __aicore__ void MatmulKernel(GM_ADDR aGm, GM_ADDR bGm, GM_ADDR cGm, u
     uint64_t tailKL1 = k - (kL1TileNum - 1) * kL1;
     uint64_t tailBaseM = m - (mTileNum - 1) * baseM;
     uint64_t tailBaseN = n - (nTileNum - 1) * baseN;
-    uint64_t l0cOffset = 0;  // L0C buffer offset
+    uint64_t l0cOffset = 0; // L0C buffer offset
 
     uint64_t curBlockIdx = AscendC::GetBlockIdx();
     uint64_t blockNum = AscendC::GetBlockNum();
 
     // Double buffering indices
-    uint64_t l0PingPong_ = 0;    // L0 buffer ping-pong index
-    uint64_t l1PingPong = 0;     // L1 buffer ping-pong index
-    uint64_t l1BufferAOffset[2] = {0UL};  // L1 buffer offsets for matrix A (ping/pong)
-    uint64_t l1BufferBOffset[2] = {0UL};  // L1 buffer offsets for matrix B (ping/pong)
+    uint64_t l0PingPong_ = 0;            // L0 buffer ping-pong index
+    uint64_t l1PingPong = 0;             // L1 buffer ping-pong index
+    uint64_t l1BufferAOffset[2] = {0UL}; // L1 buffer offsets for matrix A (ping/pong)
+    uint64_t l1BufferBOffset[2] = {0UL}; // L1 buffer offsets for matrix B (ping/pong)
 
     // Construct GM tensors with appropriate layouts
     auto layoutA = AscendC::Te::MakeNDLayout<T>(m, k);
@@ -150,29 +146,32 @@ __global__ __aicore__ void MatmulKernel(GM_ADDR aGm, GM_ADDR bGm, GM_ADDR cGm, u
         AscendC::WaitFlag<AscendC::HardEvent::FIX_M>(tool::ZERO_FLAG);
         // Loop over K dimension tiles for L1 buffer
         for (uint64_t iter0 = 0; iter0 < kL1TileNum; ++iter0) {
-            uint64_t l1BufId = l1PingPong & 1;  // Current L1 buffer ID
-            AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(l1BufId);  // Wait for previous transfer
+            uint64_t l1BufId = l1PingPong & 1;                         // Current L1 buffer ID
+            AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(l1BufId); // Wait for previous transfer
 
             // Determine current K tile sizes
             auto curGmBKL1 = (iter0 + 1 == kL1TileNum) ? (k - iter0 * kL1) : kL1;
             auto curGmAKL1 = curGmBKL1;
 
             // Copy GM to L1 buffers with double buffering
-            uint64_t l1Offset = (AscendC::TOTAL_L1_SIZE >> 1) * l1BufId;  // Half L1 for each buffer
-            l1BufferAOffset[l1BufId] = l1Offset;
-            l1BufferBOffset[l1BufId] = l1Offset + baseM * kL1 * sizeof(T);
+            uint64_t AOffsetL1 = baseM * kL1 * sizeof(T);
+            uint64_t BOffsetL1 = baseN * kL1 * sizeof(T);
+            l1BufferAOffset[l1BufId] = l1BufId * AOffsetL1;
+            l1BufferBOffset[l1BufId] = tool::DOUBLE_BUFFER_COUNT * AOffsetL1 + l1BufId * BOffsetL1;
 
             auto copyGM2L1 = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2L1{});
             auto layoutAL1 = AscendC::Te::MakeLayoutAL1<T>{}(curM, curGmAKL1);
             auto tensorAL1 = AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<T>(l1BufferAOffset[l1BufId]), layoutAL1);
             // Copy A tile from GM to L1
-            auto tensorAGmTile = tensorAGmBlock(AscendC::Te::MakeCoord(0, iter0 * kL1), AscendC::Te::MakeShape(curM, curGmAKL1));
+            auto tensorAGmTile =
+                tensorAGmBlock(AscendC::Te::MakeCoord(0, iter0 * kL1), AscendC::Te::MakeShape(curM, curGmAKL1));
             AscendC::Te::Copy(copyGM2L1, tensorAL1, tensorAGmTile);
 
             auto layoutBL1 = AscendC::Te::MakeLayoutBL1<T>{}(curGmBKL1, curN);
             auto tensorBL1 = AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<T>(l1BufferBOffset[l1BufId]), layoutBL1);
             // Copy B tile from GM to L1
-            auto tensorBGmTile = tensorBGmBlock(AscendC::Te::MakeCoord(iter0 * kL1, 0), AscendC::Te::MakeShape(curGmBKL1, curN));
+            auto tensorBGmTile =
+                tensorBGmBlock(AscendC::Te::MakeCoord(iter0 * kL1, 0), AscendC::Te::MakeShape(curGmBKL1, curN));
             AscendC::Te::Copy(copyGM2L1, tensorBL1, tensorBGmTile);
 
             AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>(l1BufId);
@@ -181,12 +180,12 @@ __global__ __aicore__ void MatmulKernel(GM_ADDR aGm, GM_ADDR bGm, GM_ADDR cGm, u
             // Further tile K dimension for L0 buffer
             uint64_t kL0IterNum = tool::CeilDiv(curGmBKL1, baseK);
             uint64_t tailKL0 = curGmBKL1 - (kL0IterNum - 1) * baseK;
-            
+
             for (uint16_t iter1 = 0; iter1 < kL0IterNum; ++iter1) {
-                uint64_t l0BufId = l0PingPong_ & 1;  // Current L0 buffer ID
-                uint64_t l0Offset = tool::HALF_L0_SIZE * l0BufId;  // Offset in L0
+                uint64_t l0BufId = l0PingPong_ & 1;               // Current L0 buffer ID
+                uint64_t l0Offset = tool::HALF_L0_SIZE * l0BufId; // Offset in L0
                 uint64_t curKL0 = (iter1 + 1 == kL0IterNum) ? tailKL0 : baseK;
-                
+
                 AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(l0BufId);
 
                 // Copy L1 to L0 buffers
@@ -220,12 +219,12 @@ __global__ __aicore__ void MatmulKernel(GM_ADDR aGm, GM_ADDR bGm, GM_ADDR cGm, u
                 AscendC::Te::Mad(MadOp, tensorL0C, tensorAL0, tensorBL0, para);
 
                 AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(l0BufId);
-                l0PingPong_++;  // Toggle L0 buffer
+                l0PingPong_++; // Toggle L0 buffer
             }
             AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(l1BufId);
-            l1PingPong++;  // Toggle L1 buffer
+            l1PingPong++; // Toggle L1 buffer
         }
-        
+
         // Wait for computation to complete
         AscendC::SetFlag<AscendC::HardEvent::M_FIX>(tool::ZERO_FLAG);
         AscendC::WaitFlag<AscendC::HardEvent::M_FIX>(tool::ZERO_FLAG);
@@ -236,7 +235,7 @@ __global__ __aicore__ void MatmulKernel(GM_ADDR aGm, GM_ADDR bGm, GM_ADDR cGm, u
 
         AscendC::SetFlag<AscendC::HardEvent::FIX_M>(tool::ZERO_FLAG);
     }
-    
+
     // Final synchronization waits
     AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(tool::ZERO_FLAG);
     AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(tool::ZERO_FLAG);
@@ -292,7 +291,7 @@ void parseArguments(int argc, char* argv[], int& m, int& k, int& n)
 
 /**
  * @brief Main function - host-side setup and execution
- * 
+ *
  * This function:
  * 1. Parses command line arguments
  * 2. Initializes Ascend Computing Language (ACL) resources
@@ -331,64 +330,85 @@ int main(int argc, char* argv[])
     FillRandomData<float>(hostInput, -2.0f, 2.0f);
     FillRandomData<float>(hostWeight, -2.0f, 2.0f);
 
+    auto toBf16 = [](const std::vector<float>& src, std::vector<uint16_t>& dst) {
+        std::transform(src.begin(), src.end(), dst.begin(), FloatToBf16);
+    };
+    std::vector<uint16_t> hostInputBf16(m * k, 0);
+    std::vector<uint16_t> hostWeightBf16(k * n, 0);
+    std::vector<uint16_t> hostOutputBf16(m * n, 0);
+    std::vector<uint16_t> goldenOutputBf16(m * n, 0);
+    toBf16(hostInput, hostInputBf16);
+    toBf16(hostWeight, hostWeightBf16);
+    toBf16(hostOutput, hostOutputBf16);
+    toBf16(goldenOutput, goldenOutputBf16);
+
     // Allocate device memory
     GM_ADDR deviceInput = nullptr;
     GM_ADDR deviceWeight = nullptr;
     GM_ADDR deviceOutput = nullptr;
-    auto sizeInput = hostInput.size() * sizeof(float);
-    auto sizeWeight = hostWeight.size() * sizeof(float);
-    auto sizeOutput = hostOutput.size() * sizeof(float);
-    std::unique_ptr<void, aclError (*)(void*)> deviceInputPtr(nullptr, aclrtFree);
+    auto sizeInput = hostInputBf16.size() * sizeof(uint16_t);
+    auto sizeWeight = hostWeightBf16.size() * sizeof(uint16_t);
+    auto sizeOutput = hostOutputBf16.size() * sizeof(uint16_t);
+    std::unique_ptr<void, aclError (*)(void*)> deviceInputPtr(deviceInput, aclrtFree);
     ret = aclrtMalloc((void**)&deviceInput, sizeInput, ACL_MEM_MALLOC_HUGE_FIRST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMalloc deviceInput failed.", return 1);
-    deviceInputPtr.reset(deviceInput);
 
-    std::unique_ptr<void, aclError (*)(void*)> deviceWeightPtr(nullptr, aclrtFree);
+    std::unique_ptr<void, aclError (*)(void*)> deviceWeightPtr(deviceWeight, aclrtFree);
     ret = aclrtMalloc((void**)&deviceWeight, sizeWeight, ACL_MEM_MALLOC_HUGE_FIRST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMalloc deviceWeight failed.", return 1);
-    deviceWeightPtr.reset(deviceWeight);
 
-    std::unique_ptr<void, aclError (*)(void*)> deviceOutputPtr(nullptr, aclrtFree);
+    std::unique_ptr<void, aclError (*)(void*)> deviceOutputPtr(deviceOutput, aclrtFree);
     ret = aclrtMalloc((void**)&deviceOutput, sizeOutput, ACL_MEM_MALLOC_HUGE_FIRST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMalloc deviceOutput failed.", return 1);
-    deviceOutputPtr.reset(deviceOutput);
 
     // Copy data from host to device
-    ret = aclrtMemcpy(deviceInput, sizeInput, hostInput.data(), sizeInput, ACL_MEMCPY_HOST_TO_DEVICE);
+    ret = aclrtMemcpy(deviceInput, sizeInput, hostInputBf16.data(), sizeInput, ACL_MEMCPY_HOST_TO_DEVICE);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceInput failed.", return 1);
-    ret = aclrtMemcpy(deviceWeight, sizeWeight, hostWeight.data(), sizeWeight, ACL_MEMCPY_HOST_TO_DEVICE);
+    ret = aclrtMemcpy(deviceWeight, sizeWeight, hostWeightBf16.data(), sizeWeight, ACL_MEMCPY_HOST_TO_DEVICE);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceWeight failed.", return 1);
 
     // Get platform instance to access AI core information and setup kernel timing events
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     CHECK_COND(ascendcPlatform != nullptr, "get ascendcPlatform failed.", return 1);
-    uint32_t numBlocks = ascendcPlatform->GetCoreNumAic();  // Number of AI cores
+    uint32_t numBlocks = ascendcPlatform->GetCoreNumAic(); // Number of AI cores
 
     // Launch kernel on all available AI cores
-    matmul::MatmulKernel<float><<<numBlocks, nullptr, stream>>>(deviceInput, deviceWeight, deviceOutput, m, k, n);
+    matmul::MatmulKernel<bfloat16_t><<<numBlocks, nullptr, stream>>>(deviceInput, deviceWeight, deviceOutput, m, k, n);
 
     // Wait for kernel completion
     ret = aclrtSynchronizeStream(stream);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtSynchronizeStream failed.", return 1);
 
     // Copy result back from device to host
-    ret = aclrtMemcpy(hostOutput.data(), sizeOutput, deviceOutput, sizeOutput, ACL_MEMCPY_DEVICE_TO_HOST);
+    ret = aclrtMemcpy(hostOutputBf16.data(), sizeOutput, deviceOutput, sizeOutput, ACL_MEMCPY_DEVICE_TO_HOST);
     CHECK_COND(ret == ACL_SUCCESS, "aclrtMemcpy deviceOutput failed.", return 1);
 
     // Verify results against CPU golden reference
-    ComputeGolden<float>(m, k, n, hostInput, hostWeight, goldenOutput);
-    std::vector<uint64_t> errorIndices = Compare<float>(hostOutput, goldenOutput);
+    auto toFloat = [](const std::vector<uint16_t>& src, std::vector<float>& dst) {
+        std::transform(src.begin(), src.end(), dst.begin(), Bf16ToFloat);
+    };
+
+    std::vector<float> hostInputFloat(m * k, 0);
+    std::vector<float> hostWeightFloat(k * n, 0);
+    std::vector<float> hostOutputFloat(m * n, 0);
+    std::vector<float> goldenOutputFloat(m * n, 0);
+    toFloat(hostInputBf16, hostInputFloat);
+    toFloat(hostWeightBf16, hostWeightFloat);
+    toFloat(hostOutputBf16, hostOutputFloat);
+    toFloat(goldenOutputBf16, goldenOutputFloat);
+
+    ComputeGolden<float>(m, k, n, hostInputFloat, hostWeightFloat, goldenOutputFloat);
+    std::vector<uint64_t> errorIndices = Compare<float>(hostOutputFloat, goldenOutputFloat);
     if (errorIndices.size() == 0) {
         std::cout << "matmul run successfully!" << std::endl;
     } else {
         for (uint64_t i : errorIndices) {
-            std::cout << "error index: " << i << ", output: " << hostOutput[i]
-                      << ", golden: " << goldenOutput[i] << std::endl;
+            std::cout << "error index: " << i << ", output: " << hostOutputFloat[i]
+                      << ", golden: " << goldenOutputFloat[i] << std::endl;
         }
         std::cout << "matmul run failed!" << std::endl;
     }
     // Cleanup resources (using RAII with unique_ptr)
-    std::unique_ptr<void, aclError (*)(void*)> DeviceOutputAddr(deviceOutput, aclrtFree);
     aclrtDestroyStream(stream);
     aclrtResetDevice(deviceId);
     aclFinalize();
@@ -398,7 +418,7 @@ int main(int argc, char* argv[])
 namespace tool {
 /**
  * @brief Fill a vector with random data
- * 
+ *
  * @tparam T Data type (integral or floating point)
  * @param data Vector to fill
  * @param min Minimum value
@@ -422,7 +442,7 @@ void FillRandomData(std::vector<T>& data, T min, T max)
 
 /**
  * @brief Compute matrix multiplication on CPU as golden reference
- * 
+ *
  * @tparam T Data type
  * @param m Rows of A
  * @param k Columns of A / Rows of B
@@ -451,7 +471,7 @@ void ComputeGolden(
 
 /**
  * @brief Compare kernel output with golden reference
- * 
+ *
  * @tparam T Data type
  * @param hostOutput Kernel output
  * @param goldenOutput CPU reference
@@ -461,7 +481,7 @@ template <typename T>
 std::vector<uint64_t> Compare(std::vector<T>& hostOutput, std::vector<T>& goldenOutput)
 {
     std::vector<uint64_t> errorIndices;
-    const float rtol = 1.0f / 256;  // Relative tolerance for float comparison
+    const float rtol = 1.0f / 256; // Relative tolerance for float comparison
     for (uint64_t i = 0; i < hostOutput.size(); ++i) {
         T actualValue = hostOutput[i];
         T expectValue = goldenOutput[i];
@@ -482,6 +502,34 @@ __aicore__ inline uint64_t CeilDiv(uint64_t a, uint64_t b)
         return a;
     }
     return (a + b - 1) / b;
+}
+
+/**
+ * @brief Convert a 16-bit brain floating-point (bfloat16) value to a 32-bit float
+ * @param h 16-bit bfloat16 value stored in uint16_t format
+ * @return The converted 32-bit floating-point value
+ */
+float Bf16ToFloat(uint16_t h)
+{
+    uint32_t sign = (h & 0x8000U) ? 0x80000000U : 0x00000000U;
+    uint32_t exponent = (h >> 7) & 0x00FFU;
+    uint32_t mantissa = h & 0x007FU;
+    uint32_t f_bits = sign | (exponent << 23) | (mantissa << (23 - 7));
+    return *reinterpret_cast<float*>(&f_bits);
+}
+
+/**
+ * @brief Convert a 32-bit float to a 16-bit brain floating-point (bfloat16) value
+ * @param f 32-bit floating-point value to convert
+ * @return The converted 16-bit bfloat16 value stored in uint16_t format (truncated rounding)
+ */
+uint16_t FloatToBf16(float f)
+{
+    uint32_t f_bits;
+    std::memcpy(&f_bits, &f, sizeof(f_bits));
+
+    // Extract the high 16 bits (simple truncation)
+    return static_cast<uint16_t>(f_bits >> 16);
 }
 
 } // namespace tool

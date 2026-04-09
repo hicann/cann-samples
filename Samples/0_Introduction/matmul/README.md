@@ -33,16 +33,25 @@ NPU ARCH 3510
 
 从项目根目录启动构建，参考项目[README.md](../../../README.md)
 
-指定matmul的编译命令：
+在仓库根目录下完成编译和安装后，进入当前样例目录：
+```shell
+cmake -S . -B build
+cmake --build build --parallel
+cmake --install build --prefix ./build_out
+cd ./build_out/0_Introduction/matmul
+```
+
+如需单独编译当前样例，可使用以下指令：
 ```shell
 cmake --build build --target matmul
+cp ./Samples/0_Introduction/matmul/scripts/profile_matmul.py ./build/Samples/0_Introduction/matmul/
+cd ./build/Samples/0_Introduction/matmul
 ```
 
 2. 运行样例
 
-切换到可执行目录文件的所在目录`build/Samples/0_Introduction/matmul/`, 使用可执行文件直接执行算子用例，需要指定矩阵乘维度，并随机生成输入数据。
+使用可执行文件直接执行算子用例，需要指定矩阵乘维度，并随机生成输入数据。
 ```shell
-cd ./build/Samples/0_Introduction/matmul/
 ./matmul 1024 2048 4096
 ```
 打印如下执行结果，证明样例执行成功。
@@ -55,8 +64,16 @@ matmul run failed!
 ```
 
 3. 测试性能
-切换到可执行目录文件的所在目录`build/Samples/0_Introduction/matmul/`,使用msprof工具执行算子用例，指定矩阵乘维度后执行。
+运行性能测试脚本，指定矩阵乘法的维度后执行。
 ```shell
-msprof ./matmul 1024 2048 4096
+python3 profile_matmul.py 1024 2048 4096
 ```
-运行完成后，在 `PROF_*/mindstudio_profiler_output/` 目录下获取 `op_summary_{时间戳}.csv` 文件，查看统计耗时以评估性能。
+打印如下执行结果，证明样例性能测试成功。
+```shell
+[Profile Breakdowm]
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+| candidate | kernel(us) | mac(us) | scalar(us) | mte1(us) | mte2(us) | fixpipe(us) | icache_miss(%) |
++===========+============+=========+============+==========+==========+=============+================+
+| matmul    |     86.870 |  43.804 |      1.850 |   12.997 |   51.857 |       2.970 |          2.200 |
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+```

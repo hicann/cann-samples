@@ -217,7 +217,7 @@ AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(FIRST_FLAG);
 
 ```
 
-关键改动点：
+**关键改动点**：
 * **引入双缓冲区**：定义两个缓冲区
 * **异步搬运**：在计算当前块的同时，发起下一次搬运
 * **乒乓切换**：通过buffId交替使用缓冲区
@@ -258,16 +258,25 @@ AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(FIRST_FLAG);
 
 从项目根目录启动构建，参考项目[README.md](../../../README.md)
 
-指定matmul的编译命令：
+在仓库根目录下完成编译和安装后，进入当前样例目录：
+```shell
+cmake -S . -B build
+cmake --build build --parallel
+cmake --install build --prefix ./build_out
+cd ./build_out/1_Features/instruction_optimization/n_buffer/
+```
+
+如需单独编译当前样例，可使用以下指令：
 ```shell
 cmake --build build --target n_buffer
+cp ./Samples/1_Features/instruction_optimization/n_buffer/scripts/profile_matmul.py ./build/Samples/1_Features/instruction_optimization/n_buffer/
+cd ./build/Samples/1_Features/instruction_optimization/n_buffer/
 ```
 
 2. 运行样例
 
-切换到可执行目录文件的所在目录`build/Samples/1_Features/instruction_optimization/n_buffer/`, 使用可执行文件直接执行算子用例，需要指定矩阵乘维度，并随机生成输入数据。
+使用可执行文件直接执行算子用例，需要指定矩阵乘维度，并随机生成输入数据。
 ```shell
-cd ./build/Samples/1_Features/instruction_optimization/n_buffer/
 ./n_buffer 1024 2048 4096
 ```
 打印如下执行结果，证明样例执行成功。
@@ -280,11 +289,29 @@ matmul run failed!
 ```
 
 3. 测试性能
-切换到可执行目录文件的所在目录`build/Samples/1_Features/instruction_optimization/n_buffer/`,使用msprof工具执行算子用例，指定矩阵乘维度后执行。
+运行性能测试脚本，指定矩阵乘法的维度后执行。
 ```shell
-msprof ./n_buffer 1024 2048 4096
+python3 profile_matmul.py 1024 2048 4096
 ```
-运行完成后，在 `PROF_*/mindstudio_profiler_output/` 目录下获取 `op_summary_{时间戳}.csv` 文件，查看统计耗时以评估性能。
+打印如下执行结果，证明样例性能测试成功。
+```shell
+[Profile Breakdowm]
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+| candidate | kernel(us) | mac(us) | scalar(us) | mte1(us) | mte2(us) | fixpipe(us) | icache_miss(%) |
++===========+============+=========+============+==========+==========+=============+================+
+| n_buffer  |     66.000 |  40.810 |      2.558 |   10.659 |   37.595 |       1.980 |          1.200 |
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+```
+与相同输入规模下的基础 matmul 算子相比：
+```shell
+[Profile Breakdowm]
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+| candidate | kernel(us) | mac(us) | scalar(us) | mte1(us) | mte2(us) | fixpipe(us) | icache_miss(%) |
++===========+============+=========+============+==========+==========+=============+================+
+| matmul    |     86.870 |  43.804 |      1.850 |   12.997 |   51.857 |       2.970 |          2.200 |
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+```
+可以看到，整体计算时间显著缩短，性能有所提升。
 
 ## 6. 支持架构
 

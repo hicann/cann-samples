@@ -9,25 +9,34 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(matmul main.cpp)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_C_COMPILER ${BISHENG})
+set(CMAKE_CXX_COMPILER ${BISHENG})
+set(CMAKE_LINKER ${BISHENG})
 
-target_compile_options(matmul PRIVATE
+# n_buffer
+add_executable(full_load main.cpp)
+target_link_directories(full_load PRIVATE ${ASCEND_DIR}/lib64)
+target_compile_options(full_load PRIVATE
     "-xasc"
     "--npu-arch=dav-3510"
     "-w"
     "-O3"
 )
 
-target_link_libraries(matmul PRIVATE
+target_link_libraries(full_load
     cann_samples::ascend_base
     cann_samples::tensor_api
 )
 
 set(DIST_PATH
-    0_Introduction/matmul
+    1_Features/memory_optimization/full_load
 )
 
-install(TARGETS matmul
+install(TARGETS full_load
     RUNTIME DESTINATION ${DIST_PATH}
 )
 

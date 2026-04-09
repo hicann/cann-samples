@@ -9,21 +9,38 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(tail_balancer main.cpp)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_C_COMPILER ${BISHENG})
+set(CMAKE_CXX_COMPILER ${BISHENG})
+set(CMAKE_LINKER ${BISHENG})
 
-target_include_directories(tail_balancer PRIVATE ${ASCEND_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/tensor_api)
-target_compile_options(tail_balancer PRIVATE
+# l1_bank_conflict
+add_executable(l1_bank_conflict main.cpp)
+target_link_directories(l1_bank_conflict PRIVATE ${ASCEND_DIR}/lib64)
+target_compile_options(l1_bank_conflict PRIVATE
     "-xasc"
     "--npu-arch=dav-3510"
     "-w"
     "-O3"
 )
 
-target_link_libraries(tail_balancer
-    PRIVATE
+target_link_libraries(l1_bank_conflict
     cann_samples::ascend_base
+    cann_samples::tensor_api
 )
 
-install(TARGETS tail_balancer
-    RUNTIME DESTINATION 1_Features/system_optimization/tail_balancer
+set(DIST_PATH
+    1_Features/memory_optimization/l1_bank_conflict
+)
+
+install(TARGETS matmul
+    RUNTIME DESTINATION ${DIST_PATH}
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+    DESTINATION ${DIST_PATH}
+    FILES_MATCHING PATTERN "*"
 )

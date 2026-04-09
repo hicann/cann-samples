@@ -6,7 +6,7 @@
 
 &ensp;&ensp;将末轮未完全分配的基本块进行重切分，重新计算所需的总核数，并重新分配计算核心，使其均匀分布至各核，从而充分发挥计算核算力。
 
-**计算流水图如下**：
+**原理图如下**：
 
 <div align="center">
   <img src="./images/image-1.png" alt="原理图" style="width: 80%; height: auto;">
@@ -99,7 +99,7 @@ if (tileIdx / blockNum == (perCoreBlockNum - 1) && tailCnt > 1)
 }
 
 ```
-关键改动点：
+**关键改动点**:
 
 * **尾块拆分维度计算**：采用贪心策略，在确保拆分后子块总数不超过可用核心数的前提下，尽可能扩大M、N维度的拆分数量，充分利用闲置核心。
 * **多核任务重分配**：重构多核任务分配循环，通过动态更新总块数并增加尾块场景的特殊映射，将末轮任务均匀分发至所有可用核心。
@@ -135,17 +135,26 @@ if (tileIdx / blockNum == (perCoreBlockNum - 1) && tailCnt > 1)
 
 从项目根目录启动构建，参考项目[README.md](../../../README.md)
 
-指定matmul的编译命令：
+在仓库根目录下完成编译和安装后，进入当前样例目录：
 ```shell
-cmake --build build --target tail_balancer
+cmake -S . -B build
+cmake --build build --parallel
+cmake --install build --prefix ./build_out
+cd ./build_out/1_Features/system_optimization/tail_rebalance/
+```
+
+如需单独编译当前样例，可使用以下指令：
+```shell
+cmake --build build --target tail_rebalance
+cp ./Samples/1_Features/system_optimization/tail_rebalance/scripts/profile_matmul.py ./build/Samples/1_Features/system_optimization/tail_rebalance/
+cd ./build/Samples/1_Features/system_optimization/tail_rebalance/
 ```
 
 2. 运行样例
 
-切换到可执行目录文件的所在目录`build/Samples/1_Features/system_optimization/tail_balancer/`, 使用可执行文件直接执行算子用例，需要指定矩阵乘维度，并随机生成输入数据。
+使用可执行文件直接执行算子用例，需要指定矩阵乘维度，并随机生成输入数据。
 ```shell
-cd ./build/Samples/1_Features/system_optimization/tail_balancer/
-./tail_balancer 1024 2048 4096
+./tail_rebalance 1024 2048 4096
 ```
 打印如下执行结果，证明样例执行成功。
 ```shell
@@ -157,11 +166,28 @@ matmul run failed!
 ```
 
 3. 测试性能
-切换到可执行目录文件的所在目录`build/Samples/1_Features/system_optimization/tail_balancer/`,使用msprof工具执行算子用例，指定矩阵乘维度后执行。
+运行性能测试脚本，指定矩阵乘法的维度后执行。
 ```shell
-msprof ./tail_balancer 1024 2048 4096
+python3 profile_matmul.py 1024 2048 4096
 ```
-运行完成后，在 `PROF_*/mindstudio_profiler_output/` 目录下获取 `op_summary_{时间戳}.csv` 文件，查看统计耗时以评估性能。
+打印如下执行结果，证明样例性能测试成功。
+```shell
+[Profile Breakdowm]
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+| candidate | kernel(us) | mac(us) | scalar(us) | mte1(us) | mte2(us) | fixpipe(us) | icache_miss(%) |
++===========+============+=========+============+==========+==========+=============+================+
+| matmul    |     82.135 |  41.781 |      1.863 |   10.539 |   33.148 |       2.132 |          2.500 |
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+```
+与相同输入规模下的基础 matmul 算子相比：
+```shell
+[Profile Breakdowm]
++-----------+------------+---------+------------+----------+----------+-------------+----------------+
+| candidate | kernel(us) | mac(us) | scalar(us) | mte1(us) | mte2(us) | fixpipe(us) | icache_miss(%) |
++===========+============+=========+============+==========+==========+=============+================+
+| matmul    |     86.870 |  43.804 |      1.850 |   12.997 |   51.857 |       2.970 |          2.200 |
++----
+可以看到，由于尾轮的计算效率提升，整体计算时间缩短，性能有所提升。
 
 ## 6. 支持架构
 
