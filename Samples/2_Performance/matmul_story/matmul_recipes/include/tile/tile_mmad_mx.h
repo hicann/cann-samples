@@ -10,7 +10,7 @@
 
 /*!
  * \file tile_mmad_mx.h
- * \brief Tile-level MMAD traits used by the SWAT MXFP4 kernels.
+ * \brief Tile-level MMAD traits used by the SWAT MX kernels.
  */
 
 #ifndef MATMUL_COMMON_CMCT_TILE_COMPUTE_H
@@ -25,7 +25,7 @@ struct MmadMx {
         bool btBuffCtrl, bool initCMatrixCtrl)
     {
         // Forward the generic TE MMAD request to the MX-specific hardware
-        // intrinsic used by quantized MXFP4 matmul.
+        // intrinsic used by quantized MX matmul.
         mad_mx(
             dst.Data().Get(), fm.Data().Get(), filter.Data().Get(), m, k, n, unitFlagCtrl, true, btBuffCtrl,
             initCMatrixCtrl);

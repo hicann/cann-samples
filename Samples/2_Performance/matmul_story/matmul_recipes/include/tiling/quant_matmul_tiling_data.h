@@ -20,8 +20,6 @@
 #include <cstdint>
 #endif
 
-#include "kernel_tiling/kernel_tiling.h"
-
 // Serialized tiling result passed from host code to the kernel entry.
 //
 // The field order is part of the host-device contract, so layout stability is

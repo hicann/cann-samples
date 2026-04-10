@@ -39,7 +39,7 @@ struct CopyScaleGM2L1 {
                 CopyScaleADn2nz<Tp, traits, T, U>(dst, src);
             } else {
                 // The ND variant is only used by layouts that already expose
-                // the expanded 64-element MXFP scale width on the GM side.
+                // the expanded 64-element MX scale width on the GM side.
                 CopyScaleANd2nz<Tp, traits, T, U>(dst, src);
             }
         } else {

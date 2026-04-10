@@ -10,7 +10,7 @@
 
 /*!
  * \file quant_matmul_constant.h
- * \brief Shared constants and helper types for MXFP4 quantized matmul.
+ * \brief Shared constants and helper types for MX quantized matmul.
  */
 #ifndef UTILS_QUANT_MATMUL_CONSTANT_H
 #define UTILS_QUANT_MATMUL_CONSTANT_H
@@ -50,13 +50,11 @@ constexpr uint16_t SCALE_BUFFER_FLAG_0 = 4;
 constexpr uint16_t SCALE_BUFFER_FLAG_1 = 5;
 constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM = 6;
 
-// Shared MXFP constants for the device-side kernel, block, tile, and utility
+// Shared MX constants for the device-side kernel, block, tile, and utility
 // helpers. Host tiling keeps its own prefixed names to avoid collisions when
 // both header groups are included in the same translation unit.
 constexpr int32_t MXFP_DIVISOR_SIZE = 64;
 constexpr int32_t MXFP_MULTI_BASE_SIZE = 2;
 constexpr int64_t DOUBLE_BUFFER_COUNT = 2LL;
-constexpr uint64_t DISABLE_A_FULL_LOAD = 0UL;
-constexpr uint64_t ENABLE_A_FULL_LOAD = 1UL;
 
 #endif

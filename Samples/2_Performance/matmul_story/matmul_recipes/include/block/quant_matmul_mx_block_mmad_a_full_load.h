@@ -20,6 +20,7 @@
 #include "kernel_utils/layout_utils.h"
 #include "kernel_utils/tuple_utils.h"
 #include "include/tensor.h"
+#include "block_mmad.h"
 #include "../policy/dispatch_policy.h"
 #include "../utils/quant_matmul_constant.h"
 #include "../tile/tile_mmad_mx.h"
@@ -32,35 +33,14 @@ namespace Block {
 using namespace AscendC;
 
 template <
-    class DispatchPolicy_, 
-    class AType_, 
-    class LayoutA_, 
-    class BType_, 
-    class LayoutB_, 
-    class CType_, 
-    class LayoutC_,
-    class Enable = void>
-class BlockMmad {
-    static_assert(AscendC::Std::always_false_v<DispatchPolicy_>, "Should not be here!");
-};
-
-template <
-    class DispatchPolicy_, 
-    class AType_, 
-    class LayoutA_, 
-    class BType_, 
-    class LayoutB_, 
-    class CType_, 
-    class LayoutC_>
+    class DispatchPolicy_, class AType_, class LayoutA_, class BType_,
+    class LayoutB_, class CType_, class LayoutC_>
 class BlockMmad<
-    DispatchPolicy_, 
-    AType_, 
-    LayoutA_, 
-    BType_, 
-    LayoutB_, 
-    CType_, 
-    LayoutC_,
-    AscendC::Std::enable_if_t<DispatchPolicy_::fullLoadMode == SWAT_A_FULL_LOAD_MODE>> {
+    DispatchPolicy_, AType_, LayoutA_, BType_, LayoutB_, CType_, LayoutC_,
+    AscendC::Std::enable_if_t<
+        AscendC::Std::is_base_of_v<
+            QuantMatmulMxMultiBlockWithSwat<A_FULL_LOAD_MODE, DispatchPolicy_::stages>,
+            DispatchPolicy_>>> {
 public:
     using AType = AType_;
     using BType = BType_;
@@ -68,35 +48,37 @@ public:
     using LayoutA = LayoutA_;
     using LayoutB = LayoutB_;
     using LayoutC = LayoutC_;
-    using MxL0AType = typename GetL0DataType<AType, true>::Type;
-    using MxL0BType = typename GetL0DataType<BType, true>::Type;
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
-    uint64_t m_;
-    uint64_t n_;
-    uint64_t k_;
-    uint64_t l1BufNum_;
-    uint64_t kL1Iter_;
-    uint64_t kL1_;
-    uint64_t scaleKL1_;
-    uint64_t baseM_;
-    uint64_t baseN_;
-    uint64_t baseK_;
     static constexpr bool transA = TagToTrans<LayoutA>::value;
     static constexpr bool transB = TagToTrans<LayoutB>::value;
-    constexpr static uint64_t HALF_L0_SIZE = L0A_SIZE / DOUBLE_BUFFER_COUNT;
-    constexpr static uint64_t HALF_L0C_SIZE = L0C_SIZE / DOUBLE_BUFFER_COUNT / sizeof(float);
-    constexpr static int32_t C0_SIZE = AscendC::AuxGetC0Size<AType>();
-    constexpr static uint64_t BLOCK_CUBE = 16UL;
-    constexpr static uint64_t MXFP_GROUP_SIZE = 32UL;
-    constexpr static uint64_t MXFP_DIVISOR_SIZE = 64UL;
-    constexpr static uint64_t MXFP_MULTI_BASE_SIZE = 2UL;
-    constexpr static uint64_t SCALE_BUFFER_NUM = 2;
-    uint64_t abL1LoopCnt_{0};
-    uint64_t scaleLoopCnt_{0};
-    uint64_t l0PingPong_{0};
-    uint64_t l0cPingPong_{0};
+    static constexpr bool isDTypeFp4 = AscendC::IsSameType<AType, fp4x2_e1m2_t>::value ||
+        AscendC::IsSameType<AType, fp4x2_e2m1_t>::value;
+    static constexpr uint64_t L1_BUFFER_NUM = DispatchPolicy::stages;
+    static constexpr uint64_t L1_BUFFER_MASK = L1_BUFFER_NUM - 1;
+    static constexpr uint64_t L1_BUFFER_GROUP_NUM = L1_BUFFER_NUM >> 1;
+    static constexpr uint64_t HALF_L0_SIZE = L0A_SIZE / DOUBLE_BUFFER_COUNT;
+    static constexpr uint64_t HALF_L0C_SIZE = L0C_SIZE / DOUBLE_BUFFER_COUNT / sizeof(float);
+    static constexpr int32_t C0_SIZE = AscendC::AuxGetC0Size<AType>();
+    static constexpr uint64_t BLOCK_CUBE = 16UL;
+    static constexpr uint64_t MXFP_GROUP_SIZE = 32UL;
+    static constexpr uint64_t MXFP_DIVISOR_SIZE = 64UL;
+    static constexpr uint64_t MXFP_MULTI_BASE_SIZE = 2UL;
+    static constexpr uint64_t SCALE_BUFFER_NUM = 2;
+    uint64_t m_{0UL};
+    uint64_t n_{0UL};
+    uint64_t k_{0UL};
+    uint64_t kL1Iter_{0UL};
+    uint64_t kL1_{0UL};
+    uint64_t scaleKL1_{0UL};
+    uint64_t baseM_{0UL};
+    uint64_t baseN_{0UL};
+    uint64_t baseK_{0UL};
+    uint64_t abL1LoopCnt_{0UL};
+    uint64_t scaleLoopCnt_{0UL};
+    uint64_t l0PingPong_{0UL};
+    uint64_t l0cPingPong_{0UL};
     bool enableL0cPingPong_{false};
 
     using MakeLayoutAL1 = AscendC::Te::NzLayoutFormat<AType>;
@@ -113,7 +95,6 @@ public:
     struct L1Params {
         uint64_t kL1;
         uint64_t scaleKL1;
-        uint64_t l1BufNum;
     };
 
     __aicore__ inline BlockMmad()
@@ -144,7 +125,7 @@ public:
 
 public:
     __aicore__ inline void Init(
-        const TupleShape& problemShape, const BlockShape& l0TileShape, const L1Params& l1Params, bool dbL0c)
+        const TupleShape& problemShape, const BlockShape& l0TileShape, const L1Params& l1Params, bool enableL0cPingPong)
     {
         // In the A-full-load path, the A tile and its scale stay resident in
         // L1. The offset plan therefore reserves a dedicated resident region
@@ -157,29 +138,36 @@ public:
         baseM_ = Get<IDX_M_IDX>(l0TileShape);
         baseN_ = Get<IDX_N_IDX>(l0TileShape);
         baseK_ = Get<IDX_K_IDX>(l0TileShape);
-        l1BufNum_ = l1Params.l1BufNum;
-        enableL0cPingPong_ = dbL0c;
+        enableL0cPingPong_ = enableL0cPingPong;
 
-        constexpr bool isFp4Type = AscendC::IsSameType<AType, fp4x2_e2m1_t>::value;
-        constexpr uint64_t sizeShift = isFp4Type ? 1UL : 0UL;
+        constexpr uint64_t sizeShift = isDTypeFp4 ? 1UL : 0UL;
         bL1OneBuffer_ = (baseN_ * kL1_) >> sizeShift;
         scaleBL1OneBuffer_ = baseN_ * CeilDiv(scaleKL1_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
         uint64_t mAlign = Align(baseM_, BLOCK_CUBE);
         uint64_t kAlign = Align(k_, MXFP_DIVISOR_SIZE);
         aL1OneBuffer_ = (mAlign * kAlign) >> sizeShift;
-        scaleAL1OneBuffer_ = baseM_ * CeilDiv(k_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
+        kScaleSize_ = CeilDiv(k_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
+        scaleAL1OneBuffer_ = baseM_ * kScaleSize_;
+        scaleL1Window_ = scaleKL1_ / kL1_;
+        kL1ScaleSize_ = CeilDiv(kL1_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
+        scaleKL1Group_ = CeilDiv(scaleKL1_, MXFP_GROUP_SIZE);
+        scaleKL1ScaleSize_ = CeilDiv(scaleKL1_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
         // 2 buffer: L1 space is : B0|BScale0|A|AScale|...|B1|BScale1|
         // 4 buffer: L1 space is : B0B2|BScale0|A|AScale|...|B1B3|BScale1|...
-        l1BufferAOffset_[0] = bL1OneBuffer_ * (l1BufNum_ >> 1) + scaleBL1OneBuffer_;
+        l1BufferAOffset_[0] = bL1OneBuffer_ * L1_BUFFER_GROUP_NUM + scaleBL1OneBuffer_;
         l1BufferScaleAOffset_[0] = l1BufferAOffset_[0] + aL1OneBuffer_;
         uint64_t b1Offset = l1BufferScaleAOffset_[0] + scaleAL1OneBuffer_ >= (L1_SIZE >> 1)
             ? l1BufferScaleAOffset_[0] + scaleAL1OneBuffer_
             : (L1_SIZE >> 1);
-        for (int32_t bufferId = 0; bufferId < l1BufNum_; bufferId++) {
-            l1BufferBOffset_[bufferId] = b1Offset * (bufferId & 1) + bL1OneBuffer_ * (bufferId >> 1);
+        #pragma unroll
+        for (uint64_t bufferId = 0; bufferId < L1_BUFFER_NUM; ++bufferId) {
+            uint64_t l1BufferGroup = bufferId >> 1;
+            uint64_t bHalfOffset = (bufferId & 1UL) == 0 ? 0UL : b1Offset;
+            l1BufferBOffset_[bufferId] = bHalfOffset + l1BufferGroup * bL1OneBuffer_;
         }
+        #pragma unroll
         for (int32_t bufferId = 0; bufferId < SCALE_BUFFER_NUM; bufferId++) {
-            l1BufferScaleBOffset_[bufferId] = l1BufferBOffset_[bufferId] + bL1OneBuffer_ * (l1BufNum_ >> 1);
+            l1BufferScaleBOffset_[bufferId] = l1BufferBOffset_[bufferId] + bL1OneBuffer_ * L1_BUFFER_GROUP_NUM;
         }
         kL1Iter_ = CeilDiv(k_, kL1_);
     }
@@ -201,19 +189,20 @@ public:
         auto tensorAL1 =
             AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<AType>(l1BufferAOffset_[0]), layoutAL1);
         auto layoutScaleAL1 = AscendC::Te::MakeZzLayout<fp8_e8m0_t>(
-            curM, CeilDiv(k_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE);
+            curM, kScaleSize_);
         auto tensorScaleAL1 = AscendC::Te::MakeTensor(
             AscendC::Te::MakeL1memPtr<fp8_e8m0_t>(l1BufferScaleAOffset_[0]), layoutScaleAL1);
 
+        uint64_t scaleWindowIter = 0;
         for (uint64_t iter0 = 0; iter0 < kL1Iter_; ++iter0) {
-            uint64_t l1BufId = abL1LoopCnt_ & (l1BufNum_ - 1);
+            uint64_t l1BufId = abL1LoopCnt_ & L1_BUFFER_MASK;
             uint64_t scaleL1BufId = scaleLoopCnt_ & 1;
             uint64_t kL1Offset = iter0 * kL1_;
             uint64_t curGmBKL1 = (iter0 + 1 == kL1Iter_) ? (k_ - kL1Offset) : kL1_;
             uint64_t curPadKL1 = CeilAlign(curGmBKL1, MXFP_DIVISOR_SIZE);
             auto curGmAKL1 = curGmBKL1;
 
-            if (iter0 % (scaleKL1_ / kL1_) == 0) {
+            if (scaleWindowIter == 0) {
                 // scaleB follows the reuse window of `scaleKL1_`, so it is
                 // refreshed only when the current K chunk enters a new window.
                 AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(SCALE_BUFFER_FLAG_0 + scaleL1BufId);
@@ -223,7 +212,7 @@ public:
                 }
                 auto CopyScaleGM2L1 = AscendC::Te::MakeCopy(::Tile::CopyScaleGM2L1{});
                 auto layoutScaleBL1 = AscendC::Te::MakeNnLayout<fp8_e8m0_t>(
-                    CeilDiv(scaleKL1_, MXFP_GROUP_SIZE), curN);
+                    scaleKL1Group_, curN);
                 auto tensorScaleBL1 = AscendC::Te::MakeTensor(
                     AscendC::Te::MakeL1memPtr<fp8_e8m0_t>(l1BufferScaleBOffset_[scaleL1BufId]), layoutScaleBL1);
                 auto gmBlockScaleB = gmScaleB(
@@ -238,7 +227,7 @@ public:
                 auto CopyScaleGM2L1 = AscendC::Te::MakeCopy(::Tile::CopyScaleGM2L1{});
                 auto gmBlockScaleA = gmScaleA(
                     AscendC::Te::MakeCoord(0, 0),
-                    AscendC::Te::MakeShape(curM, CeilDiv(k_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE));
+                    AscendC::Te::MakeShape(curM, kScaleSize_));
                 AscendC::Te::Copy(CopyScaleGM2L1, tensorScaleAL1, gmBlockScaleA);
             }
 
@@ -248,17 +237,15 @@ public:
                 tensorAL1(AscendC::Te::MakeCoord(0, kL1Offset), 
                           AscendC::Te::MakeShape(curM, curPadKL1));
 
-            // slice 
             if (abL1LoopCnt_ < kL1Iter_) {
+                // The resident A buffer covers the full K range; copy the
+                // current K slice into its fixed L1 window before B streaming.
                 auto gmBlockA = gmA(
                     AscendC::Te::MakeCoord(0, kL1Offset), 
                     AscendC::Te::MakeShape(curM, curGmAKL1));
-                // auto tensorTotalAL1 =
-                //     AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<AType>(l1BufferAOffset_[0]), layoutAL1);
-                // tensorAL1 = tensorTotalAL1(
-                //     AscendC::Te::MakeCoord(0, kL1Offset),
-                //     AscendC::Te::MakeShape(curM, curPadKL1));
-                ::Tile::PadMxKAL1::PadZero(tensorBlockAL1, gmBlockA);
+                if constexpr (!isDTypeFp4) {
+                    ::Tile::PadMxKAL1::PadZero(tensorBlockAL1, gmBlockA);
+                }
                 AscendC::Te::Copy(copyGM2L1, tensorBlockAL1, gmBlockA);
             }
 
@@ -267,7 +254,9 @@ public:
                 AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<BType>(l1BufferBOffset_[l1BufId]), layoutBL1);
             auto gmBlockB = gmB(AscendC::Te::MakeCoord(kL1Offset, 0), 
                                 AscendC::Te::MakeShape(curGmBKL1, curN));
-            ::Tile::PadMxKBL1::PadZero(tensorBL1, gmBlockB);
+            if constexpr (!isDTypeFp4) {
+                ::Tile::PadMxKBL1::PadZero(tensorBL1, gmBlockB);
+            }
             AscendC::Te::Copy(copyGM2L1, tensorBL1, gmBlockB);
 
             // Both A/B copies for the current L1 slot must complete before the
@@ -276,17 +265,16 @@ public:
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE1>(l1BufId);
 
             auto tensorBlockScaleAL1 = tensorScaleAL1(
-                AscendC::Te::MakeCoord(0, iter0 * CeilDiv(kL1_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE),
-                AscendC::Te::MakeShape(curM, CeilDiv(kL1_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE));
+                AscendC::Te::MakeCoord(0, iter0 * kL1ScaleSize_),
+                AscendC::Te::MakeShape(curM, kL1ScaleSize_));
             auto layoutScaleBL1 = AscendC::Te::MakeNnLayout<fp8_e8m0_t>(
-                CeilDiv(scaleKL1_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, curN);
+                scaleKL1ScaleSize_, curN);
             auto tensorScaleBL1 = AscendC::Te::MakeTensor(
                 AscendC::Te::MakeL1memPtr<fp8_e8m0_t>(l1BufferScaleBOffset_[scaleL1BufId]), layoutScaleBL1);
-            auto coordScaleKL1 =
-                (iter0 % (scaleKL1_ / kL1_)) * CeilDiv(kL1_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
+            auto coordScaleKL1 = scaleWindowIter * kL1ScaleSize_;
             auto tensorBlockScaleBL1 = tensorScaleBL1(
                 AscendC::Te::MakeCoord(coordScaleKL1, 0),
-                AscendC::Te::MakeShape(CeilDiv(kL1_, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, curN));
+                AscendC::Te::MakeShape(kL1ScaleSize_, curN));
 
             uint64_t kL0Iter = CeilDiv(curGmBKL1, baseK_);
             for (uint16_t iter1 = 0; iter1 < kL0Iter; ++iter1) {
@@ -295,8 +283,9 @@ public:
                 auto kL0Offset = iter1 * baseK_;
                 auto curKL0 = (kL0Offset + baseK_ > curPadKL1) ? (curPadKL1 - kL0Offset) : baseK_;
                 auto curScaleKL0 = CeilDiv(curKL0, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
-                uint64_t l0Offset = HALF_L0_SIZE * (l0PingPong_ & 0x1);
-                AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(l0PingPong_ & 0x1);
+                uint64_t l0BufId = l0PingPong_ & 0x1;
+                uint64_t l0Offset = HALF_L0_SIZE * l0BufId;
+                AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(l0BufId);
 
                 auto CopyL12L0 = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0{});
                 auto layoutAL0 = AscendC::Te::MakeNzLayout<AType>(curM, curKL0);
@@ -329,8 +318,8 @@ public:
                     CopyL12L0MxScaleB3510, tensorScaleBL0, tensorBlockScaleBL1,
                     AscendC::Te::MakeCoord(kL0Offset, 0));
 
-                AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(l0PingPong_ & 0x1);
-                AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(l0PingPong_ & 0x1);
+                AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(l0BufId);
+                AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(l0BufId);
 
                 uint8_t mmadUnitFlag =
                     (iter0 + 1 == kL1Iter_ && iter1 + 1 == kL0Iter) ? FINAL_ACCUMULATION : NON_FINAL_ACCUMULATION;
@@ -341,14 +330,17 @@ public:
                         static_cast<uint16_t>(curN),
                         mmadUnitFlag, false, mmadCmatrixInitVal),
                     tensorL0C, tensorAL0, tensorBL0);
-                AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(l0PingPong_ & 0x1);
+                AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(l0BufId);
                 l0PingPong_++;
             }
 
             AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(l1BufId);
-            if ((iter0 + 1) % (scaleKL1_ / kL1_) == 0 || iter0 == kL1Iter_ - 1) {
+            if (scaleWindowIter + 1 == scaleL1Window_ || iter0 == kL1Iter_ - 1) {
                 AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(SCALE_BUFFER_FLAG_0 + scaleL1BufId);
                 scaleLoopCnt_++;
+                scaleWindowIter = 0;
+            } else {
+                ++scaleWindowIter;
             }
             abL1LoopCnt_++;
         }
@@ -367,10 +359,15 @@ private:
     uint64_t bL1OneBuffer_ = 0UL;
     uint64_t scaleAL1OneBuffer_ = 0UL;
     uint64_t scaleBL1OneBuffer_ = 0UL;
-    uint64_t l1BufferAOffset_[4] = {0UL};
-    uint64_t l1BufferBOffset_[4] = {0UL};
-    uint64_t l1BufferScaleAOffset_[2] = {0UL};
-    uint64_t l1BufferScaleBOffset_[2] = {0UL};
+    uint64_t kScaleSize_ = 0UL;
+    uint64_t scaleL1Window_ = 0UL;
+    uint64_t kL1ScaleSize_ = 0UL;
+    uint64_t scaleKL1Group_ = 0UL;
+    uint64_t scaleKL1ScaleSize_ = 0UL;
+    uint64_t l1BufferAOffset_[L1_BUFFER_NUM] = {0UL};
+    uint64_t l1BufferBOffset_[L1_BUFFER_NUM] = {0UL};
+    uint64_t l1BufferScaleAOffset_[SCALE_BUFFER_NUM] = {0UL};
+    uint64_t l1BufferScaleBOffset_[SCALE_BUFFER_NUM] = {0UL};
 };
 } // namespace Block
 

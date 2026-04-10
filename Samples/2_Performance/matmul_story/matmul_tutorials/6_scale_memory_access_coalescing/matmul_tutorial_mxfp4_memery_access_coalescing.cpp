@@ -8,12 +8,10 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
- #include <cmath>
  #include <iostream>
- #include <iomanip>
- #include <unistd.h>
  #include <memory>
- #include <random>
+ #include <cstdlib>
+ #include <stdexcept>
  #include <string>
  #include <vector>
 

@@ -10,13 +10,12 @@
 
 /*!
  * \file quant_matmul_tiling_base.h
- * \brief Base class that drives the common MXFP4 tiling workflow.
+ * \brief Base class that drives the common MX tiling workflow.
  */
 
 #ifndef QUANT_MATMUL_TILING_BASE_H
 #define QUANT_MATMUL_TILING_BASE_H
 
-#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 

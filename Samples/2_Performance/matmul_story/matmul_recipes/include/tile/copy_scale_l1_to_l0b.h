@@ -10,21 +10,20 @@
 
 /*!
  * \file copy_scale_l1_to_l0b.h
- * \brief Tile helper that copies MXFP4 scaleB data from L1 to L0B.
+ * \brief Tile helper that copies MX scaleB data from L1 to L0B.
  */
 
 #ifndef MATMUL_TILE_DATAMOVE_COPY_L1_TO_L0B_H
 #define MATMUL_TILE_DATAMOVE_COPY_L1_TO_L0B_H
 #include "impl/atom/cube_datamove/copy_l12l0.h"
 #include "kernel_utils/common_utils.h"
+#include "../utils/quant_matmul_constant.h"
 
 namespace Tile {
 struct CopyL12L0MxScaleB3510 {
     template <typename Tp, const Tp& traits, typename T, typename U, class Coord>
     __aicore__ inline static void Copy(const T& dst, const U& src, const Coord& coord)
     {
-        using srcType = typename U::elementType;
-        using dstType = typename T::elementType;
         // `coord` is expressed in the original K/N element space; the helper
         // converts it to the packed MX scale coordinates expected by the L0B
         // scale layout and issues one hardware MX load.

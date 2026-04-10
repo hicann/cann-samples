@@ -36,7 +36,7 @@ def _print_large_tensor_summary(golden_tensor: torch.Tensor, npu_output_tensor: 
     numel = m * n
     over_tol = (abs_err > ERROR_TOL).sum().item()
 
-    print(f"\n[verify] shape=({m}, {n}), elements={numel} — summary (large matrix, full tensors omitted)")
+    print(f"\n[verify] shape=({m}, {n}), elements={numel} - summary (large matrix, full tensors omitted)")
     print(
         f"  abs_err: max={abs_err.max().item():.6e}, mean={abs_err.mean().item():.6e}, "
         f"rmse={(diff.pow(2).mean().sqrt()).item():.6e}"

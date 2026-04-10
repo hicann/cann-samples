@@ -10,7 +10,7 @@
 
 /*!
  * \file tuple_utils.h
- * \brief
+ * \brief Tuple access helpers for nested Ascend C tuple-like values.
  */
 
 #ifndef UTILS_TUPLE_UTILS_H
@@ -19,14 +19,14 @@
 #include "lib/std/tuple.h"
 #include "./integral_constant.h"
 
-// Base template: handles single-index case
+// Base case: return the element addressed by one tuple index.
 template <size_t I, typename T>
 __aicore__ constexpr inline decltype(auto) Get(T&& t)
 {
     return AscendC::Std::get<I>(AscendC::Std::forward<T>(t));
 }
 
-// Recursive template: handles multiple index cases
+// Recursive case: walk nested tuples by consuming one index at a time.
 template <size_t First, size_t Second, size_t... Rest, typename T>
 __aicore__ constexpr inline decltype(auto) Get(T&& t)
 {

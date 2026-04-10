@@ -10,7 +10,7 @@
 
 /*!
  * \file quant_matmul_tiling_common.h
- * \brief Shared constants and runtime state for MXFP4 tiling generation.
+ * \brief Shared constants and runtime state for MX tiling generation.
  */
 #ifndef QUANT_MATMUL_TILING_COMMON_H
 #define QUANT_MATMUL_TILING_COMMON_H

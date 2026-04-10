@@ -24,7 +24,6 @@
 #endif
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/layout_utils.h"
 #include "kernel_utils/tuple_utils.h"
 #include "include/tensor.h"
 
@@ -35,8 +34,7 @@
 namespace Kernel {
 // Keep the class template parameter list in one place so the declaration and
 // out-of-line member definitions stay perfectly aligned.
-#define QBMM_MX_KERNEL_A_FULL_LOAD_CLASS_TEM_PARAMS \
-    template <class ProblemShape, class BlockMmad, class BlockScheduler>
+#define QBMM_MX_KERNEL_A_FULL_LOAD_CLASS_TEM_PARAMS template <class ProblemShape, class BlockMmad, class BlockScheduler>
 #define QBMM_MX_KERNEL_A_FULL_LOAD_FUN_TEM_PARAMS ProblemShape, BlockMmad, BlockScheduler
 
 using namespace AscendC;
@@ -63,12 +61,9 @@ public:
     using BType = typename BlockMmad::BType;
     using CType = typename BlockMmad::CType;
 
-    // The kernel normalizes the problem shape to a plain (m, n, k) tuple
-    // before passing it to the scheduler and block MMAD operator.
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
-    using BlockOffset = AscendC::Shape<int64_t, int64_t, int64_t, int64_t, int64_t, int64_t>;
     using BlockSchedulerParams = typename BlockSchedulerOp::Params;
 
     using MakeLayoutA = AscendC::Te::NDLayoutFormat<AType>;
@@ -85,8 +80,9 @@ public:
     };
 
     struct Params {
-        // `problemShape` and `qbmmParams` describe the global launch shape,
-        // while the other fields carry the GM pointers and per-path tile data.
+        // Translate the serialized tiling payload once at the launcher
+        // boundary, then keep the kernel, scheduler, and block MMAD layers on
+        // their own typed parameter bundles.
         ProblemShape problemShape;
         BlockMmadParams mmadParams;
         L1Params l1Params;
@@ -106,8 +102,8 @@ private:
     // according to the scheduler output.
     __aicore__ inline void Process(const Params& params, BlockSchedulerOp& bs);
 
-    // `ProblemShape` is kept generic at the template boundary, but the kernel
-    // implementation works with a fixed 3D tuple internally.
+    // `ProblemShape` stays generic at the template boundary, but the block
+    // MMAD operator consumes a fixed 3D tuple internally.
     __aicore__ inline TupleShape ToShapeTuple(const ProblemShape& problemShape)
     {
         return {problemShape.m, problemShape.n, problemShape.k};
@@ -115,9 +111,6 @@ private:
 
 private:
     BlockMmad mmadOp_;
-    TupleShape problemShape_{};
-    // Reserve a compact offset bundle for future GM sub-view bookkeeping.
-    BlockOffset blockOffset_{0, 0, 0, 0, 0, 0};
     __gm__ AType* aGmAddr_;
     __gm__ BType* bGmAddr_;
     __gm__ CType* cGmAddr_;
@@ -137,12 +130,12 @@ __aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_F
 
     ResetGmAddr(params);
     BlockSchedulerOp bs(params.problemShape, params.schParams);
-    problemShape_ = ToShapeTuple(params.problemShape);
+    TupleShape problemShape_ = ToShapeTuple(params.problemShape);
     // The kernel layer only builds the scheduling and tensor wrappers; the
     // heavy data movement and MMAD sequence lives in `BlockMmad`.
     BlockShape l0TileShape{params.qbmmParams.baseM, params.qbmmParams.baseN, params.qbmmParams.baseK, 0};
-    bool enableL0CPingPong = (params.qbmmParams.dbL0C > 1);
-    mmadOp_.Init(problemShape_, l0TileShape, params.l1Params, enableL0CPingPong);
+    bool enableL0cPingPong = (params.qbmmParams.dbL0C > 1);
+    mmadOp_.Init(problemShape_, l0TileShape, params.l1Params, enableL0cPingPong);
     Process(params, bs);
 }
 
@@ -164,14 +157,15 @@ __aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_F
     const Params& params, BlockSchedulerOp& bs)
 {
     // Build full-GM tensor views once, then slice them per scheduled block.
+    int64_t kScaleSize =
+        ::CeilDiv(static_cast<int64_t>(params.problemShape.k), static_cast<int64_t>(MXFP_DIVISOR_SIZE)) *
+        MXFP_MULTI_BASE_SIZE;
     auto layoutA = MakeLayoutA{}(params.problemShape.m, params.problemShape.k);
-    auto layoutScaleA = MakeLayoutScaleA{}(
-        params.problemShape.m, CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE);
+    auto layoutScaleA = MakeLayoutScaleA{}(params.problemShape.m, kScaleSize);
     auto layoutB = MakeLayoutB{}(params.problemShape.k, params.problemShape.n);
-    auto layoutScaleB = MakeLayoutScaleB{}(
-        CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, params.problemShape.n);
+    auto layoutScaleB = MakeLayoutScaleB{}(kScaleSize, params.problemShape.n);
     auto layoutC = AscendC::Te::MakeNDLayout<CType>(params.problemShape.m, params.problemShape.n);
-    
+
     auto gmA = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(aGmAddr_), layoutA);
     auto gmScaleA = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(scaleAGmAddr_), layoutScaleA);
     auto gmB = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(bGmAddr_), layoutB);
@@ -193,21 +187,17 @@ __aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_F
         }
 
         // `blockIdx` now carries both GM origin and logical tile metadata.
-        auto gmBlockA = gmA(
-            AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), params.problemShape.k));
-        auto gmBlockScaleA = gmScaleA(
-            AscendC::Te::MakeCoord(mPos, kPos),
-            AscendC::Te::MakeShape(
-                Get<MNK_M>(singleShape), CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE));
-        auto gmBlockB = gmB(
-            AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, Get<MNK_N>(singleShape)));
-        auto gmBlockScaleB = gmScaleB(
-            AscendC::Te::MakeCoord(kPos, nPos),
-            AscendC::Te::MakeShape(
-                CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, Get<MNK_N>(singleShape)));
-        auto gmBlockC = gmC(
-            AscendC::Te::MakeCoord(mPos, nPos),
-            AscendC::Te::MakeShape(Get<MNK_M>(singleShape), Get<MNK_N>(singleShape)));
+        auto gmBlockA =
+            gmA(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), params.problemShape.k));
+        auto gmBlockScaleA =
+            gmScaleA(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), kScaleSize));
+        auto gmBlockB =
+            gmB(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, Get<MNK_N>(singleShape)));
+        auto gmBlockScaleB =
+            gmScaleB(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(kScaleSize, Get<MNK_N>(singleShape)));
+        auto gmBlockC =
+            gmC(AscendC::Te::MakeCoord(mPos, nPos),
+                AscendC::Te::MakeShape(Get<MNK_M>(singleShape), Get<MNK_N>(singleShape)));
 
         // The block MMAD layer owns all data movement below GM granularity and
         // performs the actual accumulation for this scheduled tile.

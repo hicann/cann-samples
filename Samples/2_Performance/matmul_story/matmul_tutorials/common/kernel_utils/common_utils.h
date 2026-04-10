@@ -27,11 +27,11 @@
 #include "integral_constant.h"
 
 // On-chip buffer capacities used by the kernel helper code.
-constexpr static int64_t L0A_SIZE = 64 * 1024;
-constexpr static int64_t L0B_SIZE = 64 * 1024;
-constexpr static int64_t L0C_SIZE = 256 * 1024;
-constexpr static int64_t L1_SIZE = 512 * 1024;
-constexpr static int32_t BT_SIZE = 4096;
+static constexpr int64_t L0A_SIZE = 64 * 1024;
+static constexpr int64_t L0B_SIZE = 64 * 1024;
+static constexpr int64_t L0C_SIZE = 256 * 1024;
+static constexpr int64_t L1_SIZE = 512 * 1024;
+static constexpr int32_t BT_SIZE = 4096;
 
 constexpr int MNK_M = 0;
 constexpr int MNK_N = 1;

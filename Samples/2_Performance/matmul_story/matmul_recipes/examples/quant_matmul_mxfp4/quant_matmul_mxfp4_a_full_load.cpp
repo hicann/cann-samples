@@ -17,28 +17,27 @@
 #include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <limits.h>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <unistd.h>
 
 #include "acl/acl.h"
 #include "kernel_operator.h"
 
 #include "block/block_scheduler_policy.h"
+#include "host_utils/acl_utils.h"
 #include "host_utils/common_utils.h"
 #include "host_utils/io_utils.h"
+#include "kernel_utils/layout_utils.h"
 #include "kernel/quant_matmul_mx_kernel_a_full_load.h"
 #include "tiling/quant_matmul_mx_tiling_a_full_load.h"
 #include "tiling/quant_matmul_tiling_data.h"
 
-__global__ __aicore__ void QuantMatmulMxfp4AFullLoadKernel(
+template <uint64_t Stages>
+__global__ __aicore__ __cube__ void QuantMatmulMxfp4AFullLoadKernel(
     GM_ADDR dA, GM_ADDR dB, GM_ADDR dScaleA, GM_ADDR dScaleB, GM_ADDR dC,
     const QuantMatmulTilingData quantMatmulTilingData)
 {
-    KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIC_ONLY);
-
     // Keep the sample explicit about the datatype/layout combination that this
     // executable demonstrates so host tiling and kernel traits stay in sync.
     using AType = fp4x2_e2m1_t;
@@ -48,81 +47,43 @@ __global__ __aicore__ void QuantMatmulMxfp4AFullLoadKernel(
     using layoutA = layout::RowMajor;
     using layoutB = layout::ColumnMajor;
     using layoutC = layout::RowMajor;
-    using BlockScheduler = QuantMatmulMxSwatScheduler<SWAT_A_FULL_LOAD_MODE>;
-    using DispatchPolicy =
-        QuantMatmulMxMultiBlockWithSwat<SWAT_A_FULL_LOAD_MODE>;
-    using BlockMmad = Block::BlockMmad<
-        DispatchPolicy, AType, layoutA, BType, layoutB, CType, layoutC>;
+    using BlockScheduler = QuantMatmulMxSwatScheduler<A_FULL_LOAD_MODE>;
+    using DispatchPolicy = QuantMatmulMxMultiBlockWithSwat<A_FULL_LOAD_MODE, Stages>;
     using ProblemShape = MatmulShape;
-    using QuantMatmulKernelImpl =
-        Kernel::QuantMatmulMxKernelAFullLoad<ProblemShape, BlockMmad, BlockScheduler>;
 
+    using BlockMmad = Block::BlockMmad<DispatchPolicy, AType, layoutA, BType, layoutB, CType, layoutC>;
+    using QuantMatmulKernelImpl = Kernel::QuantMatmulMxKernelAFullLoad<ProblemShape, BlockMmad, BlockScheduler>;
     using Params = typename QuantMatmulKernelImpl::Params;
+    using BlockMmadParams = typename BlockMmad::Params;
+    using L1Params = typename QuantMatmulKernelImpl::L1Params;
+    using BlockSchedulerParams = typename QuantMatmulKernelImpl::BlockSchedulerParams;
     using QBMMTiling = typename QuantMatmulKernelImpl::QBMMTiling;
-    // Translate the serialized host tiling data into the strongly typed kernel
-    // parameter bundle expected by the device-side implementation.
-    QBMMTiling qbmmParams{quantMatmulTilingData.baseM, quantMatmulTilingData.baseN, quantMatmulTilingData.baseK,
-                          quantMatmulTilingData.dbL0c};
-    Params params = {
-        {quantMatmulTilingData.m, quantMatmulTilingData.n, quantMatmulTilingData.k, 1UL},
-        {dA, dB, dC, dScaleA, dScaleB},
-        {quantMatmulTilingData.stepK * quantMatmulTilingData.baseK, quantMatmulTilingData.scaleKL1,
-         quantMatmulTilingData.nBufferNum},
-        {quantMatmulTilingData.baseM, quantMatmulTilingData.baseN, quantMatmulTilingData.mTailTile,
-         quantMatmulTilingData.nTailTile, quantMatmulTilingData.mBaseTailSplitCnt,
-         quantMatmulTilingData.nBaseTailSplitCnt, quantMatmulTilingData.mTailMain, quantMatmulTilingData.nTailMain},
-        qbmmParams};
+
+    // Translate the serialized host tiling packet once at the launch
+    // boundary, then pass only the typed parameter bundles each lower layer
+    // actually consumes.
+    ProblemShape problemShape{quantMatmulTilingData.m, quantMatmulTilingData.n, quantMatmulTilingData.k, 1UL};
+    BlockMmadParams mmadParams{dA, dB, dC, dScaleA, dScaleB};
+    L1Params l1Params{
+        static_cast<uint64_t>(quantMatmulTilingData.stepK) * quantMatmulTilingData.baseK,
+        quantMatmulTilingData.scaleKL1};
+    BlockSchedulerParams schedulerParams{
+        quantMatmulTilingData.baseM,
+        quantMatmulTilingData.baseN,
+        quantMatmulTilingData.mTailTile,
+        quantMatmulTilingData.nTailTile,
+        quantMatmulTilingData.mBaseTailSplitCnt,
+        quantMatmulTilingData.nBaseTailSplitCnt,
+        quantMatmulTilingData.mTailMain,
+        quantMatmulTilingData.nTailMain};
+    QBMMTiling qbmmParams{
+        quantMatmulTilingData.baseM,
+        quantMatmulTilingData.baseN,
+        quantMatmulTilingData.baseK,
+        quantMatmulTilingData.dbL0c};
+    Params params{problemShape, mmadParams, l1Params, schedulerParams, qbmmParams};
     QuantMatmulKernelImpl quantMatmulKernelImpl;
     quantMatmulKernelImpl(params);
-}
-
-namespace {
-uint64_t ParsePositiveUint64(const char* arg, const char* name)
-{
-    std::string value(arg);
-    if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos) {
-        throw std::invalid_argument(std::string("ERROR: ") + name + " must be a positive integer");
-    }
-
-    try {
-        uint64_t parsed = std::stoull(value);
-        if (parsed == 0UL) {
-            throw std::invalid_argument(std::string("ERROR: ") + name + " must be greater than 0");
-        }
-        return parsed;
-    } catch (const std::out_of_range&) {
-        throw std::invalid_argument(std::string("ERROR: ") + name + " is out of range for uint64_t");
-    }
-}
-
-void PrintUsage(const std::string& programName)
-{
-    std::cerr << "Usage: " << programName << " m k n" << std::endl;
-    std::cerr << "Args: " << std::endl;
-    std::cerr << "  m: row of matrix A" << std::endl;
-    std::cerr << "  k: col of matrix A" << std::endl;
-    std::cerr << "  n: col of matrix B" << std::endl;
-    std::cerr << "Example: " << programName << " 100 50 200" << std::endl;
-}
-
-void ParseArguments(int argc, char* argv[], uint64_t& m, uint64_t& k, uint64_t& n)
-{
-    if (argc >= 2 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
-        PrintUsage(argv[0]);
-        exit(1);
-    }
-    if (argc != 4) {
-        throw std::invalid_argument("ERROR: Invalid number of arguments, expected exactly 3 arguments: m k n");
-    }
-    m = ParsePositiveUint64(argv[1], "m");
-    k = ParsePositiveUint64(argv[2], "k");
-    n = ParsePositiveUint64(argv[3], "n");
-
-    if (k % 2 != 0) {
-        throw std::invalid_argument("ERROR: k must be an even number");
-    }
-}
-
 }
 
 int main(int argc, char* argv[])
@@ -132,6 +93,9 @@ int main(int argc, char* argv[])
     uint64_t n = 0;
     try {
         ParseArguments(argc, argv, m, k, n);
+        if (k % 2 != 0) {
+            throw std::invalid_argument("ERROR: k must be an even number");
+        }
     } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
         PrintUsage(argv[0]);
@@ -139,23 +103,6 @@ int main(int argc, char* argv[])
     }
 
     constexpr int32_t deviceId = 0;
-    aclrtStream stream = nullptr;
-    bool aclInitialized = false;
-    bool deviceSet = false;
-    auto cleanupAcl = [&]() {
-        if (stream != nullptr) {
-            aclrtDestroyStream(stream);
-            stream = nullptr;
-        }
-        if (deviceSet) {
-            aclrtResetDevice(deviceId);
-            deviceSet = false;
-        }
-        if (aclInitialized) {
-            aclFinalize();
-            aclInitialized = false;
-        }
-    };
 
     try {
         QuantMatmulTilingData tilingData;
@@ -164,36 +111,19 @@ int main(int argc, char* argv[])
         QuantMatmulTilingAFullLoad<DataType::FP4, DataType::FP4> tilingEngine;
         tilingEngine.GetTilingData(m, n, k, tilingData);
 
-        uint32_t deviceCount = 0;
-        CHECK_COND(aclrtGetDeviceCount(&deviceCount) == ACL_SUCCESS, "Failed to query ACL device count.");
-        CHECK_COND(deviceCount > 0U, "No ACL devices are available.");
-        CHECK_COND(aclInit(nullptr) == ACL_SUCCESS, "Failed to initialize ACL runtime.");
-        aclInitialized = true;
-        CHECK_COND(aclrtSetDevice(deviceId) == ACL_SUCCESS, "Failed to set the ACL device.");
-        deviceSet = true;
-        CHECK_COND(aclrtCreateStream(&stream) == ACL_SUCCESS, "Failed to create the ACL stream.");
+        AclRtSession aclSession(deviceId);
+        aclSession.Init();
+        aclrtStream stream = aclSession.GetStream();
 
         uint64_t sizeA = ((m * k) >> 1) * sizeof(uint8_t);
         uint64_t sizeB = ((k * n) >> 1) * sizeof(uint8_t);
-        uint64_t sizeScaleA = (m * CeilDiv(k, TILING_MXFP_DIVISOR_SIZE) * TILING_MXFP_MULTI_BASE_SIZE) * sizeof(uint8_t);
-        uint64_t sizeScaleB = (n * CeilDiv(k, TILING_MXFP_DIVISOR_SIZE) * TILING_MXFP_MULTI_BASE_SIZE) * sizeof(uint8_t);
+        uint64_t sizeScaleA =
+            (m * CeilDiv(k, TILING_MXFP_DIVISOR_SIZE) * TILING_MXFP_MULTI_BASE_SIZE) * sizeof(uint8_t);
+        uint64_t sizeScaleB =
+            (n * CeilDiv(k, TILING_MXFP_DIVISOR_SIZE) * TILING_MXFP_MULTI_BASE_SIZE) * sizeof(uint8_t);
         uint64_t sizeC = m * n * sizeof(half);
 
-        char exePath[PATH_MAX];
-        ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-        std::string baseDir = ".";
-        if (len > 0) {
-            // Keep all example assets next to the installed executable so the
-            // launcher, generator, and verifier agree on one local layout.
-            exePath[len] = '\0';
-            baseDir = exePath;
-            size_t lastSlash = baseDir.find_last_of('/');
-            if (lastSlash != std::string::npos) {
-                baseDir.resize(lastSlash);
-            }
-        }
-        std::string inputDir = baseDir + "/input";
-        std::string outputDir = baseDir + "/output";
+        ExampleIoPaths paths = GetExampleIoPaths();
 
         uint8_t* hA = nullptr;
         uint8_t* hB = nullptr;
@@ -207,9 +137,11 @@ int main(int argc, char* argv[])
         GM_ADDR dScaleB = nullptr;
         GM_ADDR dC = nullptr;
 
-        CHECK_COND(aclrtMallocHost((void**)&hA, sizeA) == ACL_SUCCESS, "Failed to allocate the host buffer for input A.");
+        CHECK_COND(
+            aclrtMallocHost((void**)&hA, sizeA) == ACL_SUCCESS, "Failed to allocate the host buffer for input A.");
         std::unique_ptr<void, aclError (*)(void*)> hostA(hA, aclrtFreeHost);
-        CHECK_COND(aclrtMallocHost((void**)&hB, sizeB) == ACL_SUCCESS, "Failed to allocate the host buffer for input B.");
+        CHECK_COND(
+            aclrtMallocHost((void**)&hB, sizeB) == ACL_SUCCESS, "Failed to allocate the host buffer for input B.");
         std::unique_ptr<void, aclError (*)(void*)> hostB(hB, aclrtFreeHost);
         CHECK_COND(
             aclrtMallocHost((void**)&hScaleA, sizeScaleA) == ACL_SUCCESS,
@@ -219,13 +151,18 @@ int main(int argc, char* argv[])
             aclrtMallocHost((void**)&hScaleB, sizeScaleB) == ACL_SUCCESS,
             "Failed to allocate the host buffer for scaleB.");
         std::unique_ptr<void, aclError (*)(void*)> hostScaleB(hScaleB, aclrtFreeHost);
-        CHECK_COND(aclrtMallocHost((void**)&hC, sizeC) == ACL_SUCCESS, "Failed to allocate the host buffer for output C.");
+        CHECK_COND(
+            aclrtMallocHost((void**)&hC, sizeC) == ACL_SUCCESS, "Failed to allocate the host buffer for output C.");
         std::unique_ptr<void, aclError (*)(void*)> hostC(hC, aclrtFreeHost);
 
-        ReadFile(inputDir + "/input_a.bin", sizeA, hA, sizeA);
-        ReadFile(inputDir + "/input_b.bin", sizeB, hB, sizeB);
-        ReadFile(inputDir + "/input_scaleA.bin", sizeScaleA, hScaleA, sizeScaleA);
-        ReadFile(inputDir + "/input_scaleB.bin", sizeScaleB, hScaleB, sizeScaleB);
+        CHECK_COND(ReadExactFile(paths.inputDir + "/input_a.bin", hA, sizeA), "Failed to read input_a.bin.");
+        CHECK_COND(ReadExactFile(paths.inputDir + "/input_b.bin", hB, sizeB), "Failed to read input_b.bin.");
+        CHECK_COND(
+            ReadExactFile(paths.inputDir + "/input_scaleA.bin", hScaleA, sizeScaleA),
+            "Failed to read input_scaleA.bin.");
+        CHECK_COND(
+            ReadExactFile(paths.inputDir + "/input_scaleB.bin", hScaleB, sizeScaleB),
+            "Failed to read input_scaleB.bin.");
 
         CHECK_COND(
             aclrtMalloc((void**)&dA, sizeA, ACL_MEM_MALLOC_HUGE_ONLY) == ACL_SUCCESS,
@@ -255,16 +192,23 @@ int main(int argc, char* argv[])
             aclrtMemcpyAsync(dB, sizeB, hB, sizeB, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
             "Failed to copy input B from host to device.");
         CHECK_COND(
-            aclrtMemcpyAsync(dScaleA, sizeScaleA, hScaleA, sizeScaleA, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
+            aclrtMemcpyAsync(dScaleA, sizeScaleA, hScaleA, sizeScaleA, ACL_MEMCPY_HOST_TO_DEVICE, stream) ==
+                ACL_SUCCESS,
             "Failed to copy scaleA from host to device.");
         CHECK_COND(
-            aclrtMemcpyAsync(dScaleB, sizeScaleB, hScaleB, sizeScaleB, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
+            aclrtMemcpyAsync(dScaleB, sizeScaleB, hScaleB, sizeScaleB, ACL_MEMCPY_HOST_TO_DEVICE, stream) ==
+                ACL_SUCCESS,
             "Failed to copy scaleB from host to device.");
 
-        // Launch exactly the number of AICs requested by the tiling result so
-        // scheduler-side load balancing and runtime launch geometry match.
-        QuantMatmulMxfp4AFullLoadKernel<<<tilingData.usedCoreNum, nullptr, stream>>>(
-            dA, dB, dScaleA, dScaleB, dC, tilingData);
+        // `nBufferNum` selects the compile-time pipeline depth: instantiate
+        // the 4-stage kernel for four L1 buffers, otherwise use the 2-stage variant.
+        if (tilingData.nBufferNum == 4U) {
+            QuantMatmulMxfp4AFullLoadKernel<4>
+                <<<tilingData.usedCoreNum, nullptr, stream>>>(dA, dB, dScaleA, dScaleB, dC, tilingData);
+        } else {
+            QuantMatmulMxfp4AFullLoadKernel<2>
+                <<<tilingData.usedCoreNum, nullptr, stream>>>(dA, dB, dScaleA, dScaleB, dC, tilingData);
+        }
 
         CHECK_COND(
             aclrtMemcpyAsync(hC, sizeC, dC, sizeC, ACL_MEMCPY_DEVICE_TO_HOST, stream) == ACL_SUCCESS,
@@ -273,17 +217,14 @@ int main(int argc, char* argv[])
             aclrtSynchronizeStream(stream) == ACL_SUCCESS,
             "Failed to synchronize the ACL stream after kernel execution.");
 
-        WriteFile(outputDir + "/npu_out.bin", hC, sizeC);
-        std::string cmd = "cd \"" + baseDir + "\" && python3 verify_result.py " + std::to_string(m) + " " +
-                          std::to_string(n);
+        CHECK_COND(WriteFile(paths.outputDir + "/npu_out.bin", hC, sizeC), "Failed to write npu_out.bin.");
+        std::string cmd =
+            "cd \"" + paths.baseDir + "\" && python3 verify_result.py " + std::to_string(m) + " " + std::to_string(n);
         if (std::system(cmd.c_str()) != 0) {
-            cleanupAcl();
             return 1;
         }
-        cleanupAcl();
         return 0;
     } catch (const std::exception& e) {
-        cleanupAcl();
         std::cerr << e.what() << std::endl;
         return 1;
     }

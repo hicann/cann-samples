@@ -17,7 +17,6 @@
 #include "kernel_operator_intf.h"
 #endif
 #include "../../../common/kernel_utils/common_utils.h"
-#include "../../../common/kernel_utils/layout_utils.h"
 #include "../../../common/kernel_utils/tuple_utils.h"
 #include "include/tensor.h"
 #include "../block/block_scheduler_mx_swat.h"
@@ -209,4 +208,3 @@ __global__ __aicore__ __cube__ void QuantMatmulMxfp4SwatKernel(uint64_t m, uint6
 } // namespace Kernel
 
 #endif
-

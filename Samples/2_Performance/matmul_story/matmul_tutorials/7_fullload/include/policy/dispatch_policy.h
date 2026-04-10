@@ -16,7 +16,6 @@
 #define DISPATCH_POLICY_H
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/integral_constant.h"
 
 /* block schedule policies */
 struct KernelMultiBlockOnKAxisWithScale {};
@@ -28,7 +27,7 @@ struct KernelMultiBlockOnKAxisWithScale {};
  */
 template <uint64_t FULL_LOAD_MODE_ = 0>
 struct QuantMatmulMxMultiBlockWithSwat {
-    constexpr static uint64_t fullLoadMode = FULL_LOAD_MODE_;
+    static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
 
 #endif

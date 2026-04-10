@@ -73,8 +73,8 @@ public:
         m_ = shape.m;
         n_ = shape.n;
         k_ = shape.k;
-        baseM_ = static_cast<int64_t>(params.baseM);
-        baseN_ = static_cast<int64_t>(params.baseN);
+        baseM_ = params.baseM;
+        baseN_ = params.baseN;
         mCnt_ = CeilDiv(m_, baseM_);
         nCnt_ = CeilDiv(n_, baseN_);
         totalCnt_ = mCnt_ * nCnt_;
@@ -203,7 +203,7 @@ public:
 };
 
 template <class ProblemShape_, bool TransA_, bool TransB_>
-struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<SWAT_A_FULL_LOAD_MODE>, TransA_, TransB_> {
+struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<A_FULL_LOAD_MODE>, TransA_, TransB_> {
     using SchedulerOp = BlockSchedulerQuantMatmulMxAFullLoad<ProblemShape_, TransA_, TransB_>;
 };
 

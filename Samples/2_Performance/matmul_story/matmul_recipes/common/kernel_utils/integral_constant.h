@@ -10,7 +10,7 @@
 
 /*!
  * \file integral_constant.h
- * \brief
+ * \brief Minimal integral-constant aliases used by device-side template code.
  */
 #ifndef UTILS_INTEGRAL_CONSTANT_H
 #define UTILS_INTEGRAL_CONSTANT_H

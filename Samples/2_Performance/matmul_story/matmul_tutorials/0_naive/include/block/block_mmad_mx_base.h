@@ -16,7 +16,6 @@
 #else
 #include "kernel_operator.h"
 #endif
-#include "../../../common/kernel_utils/layout_utils.h"
 #include "../../../common/kernel_utils/common_utils.h"
 #include "../../../common/kernel_utils/tuple_utils.h"
 #include "include/tensor.h"

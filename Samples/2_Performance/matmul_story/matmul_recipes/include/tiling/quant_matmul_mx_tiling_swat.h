@@ -16,6 +16,8 @@
 #ifndef QUANT_MATMUL_MX_TILING_SWAT_H
 #define QUANT_MATMUL_MX_TILING_SWAT_H
 
+#include <algorithm>
+
 #include "quant_matmul_tiling_base.h"
 
 template <DataType aDataType, DataType bDataType>
@@ -40,10 +42,9 @@ protected:
     {
         // The streaming path can reuse the common base block search directly,
         // then specializes only the tail split and L1-depth decisions.
-        InitCommonTilingState();
-        PrepareRunInfo();
+        CalcBasicBlock();
+        OptimizeEdgeBasicBlock();
         CalcTailBasicBlock();
-        InitL0cBufferMode();
         CalcPathSpecificL1();
 
         uint32_t scaleKL1 = CalcScaleKL1();
@@ -52,22 +53,6 @@ protected:
     }
 
 private:
-    void InitCommonTilingState()
-    {
-        // Run the shared base-tile search first, then record whether the shape
-        // would even qualify for the A-resident fast path.
-        CalcBasicBlock();
-        OptimizeEdgeBasicBlock();
-        runInfo_.isAFullLoad = CanUseAFullLoad();
-    }
-
-    void InitL0cBufferMode()
-    {
-        // Use double-buffered accumulation only when two L0C tiles fit.
-        runInfo_.dbL0c =
-            runInfo_.baseM * runInfo_.baseN * DATA_SIZE_L0C * DB_SIZE <= platformInfo_.l0cSize ? DB_SIZE : 1U;
-    }
-
     uint32_t CalcScaleKL1() const
     {
         // Scale reuse is bounded by the smaller reusable K window on the A and
@@ -115,13 +100,6 @@ private:
         tilingData.scaleKL1 = scaleKL1;
         tilingData.stepK = static_cast<uint8_t>(std::min(runInfo_.stepKa, runInfo_.stepKb));
         tilingData.nBufferNum = nBufferNum;
-    }
-
-    void PrepareRunInfo()
-    {
-        // This specialization always uses the streaming path, so clear the
-        // A-resident flag before path-specific tuning begins.
-        runInfo_.isAFullLoad = false;
     }
 
     void CalcTailBasicBlock()
@@ -264,6 +242,8 @@ private:
         runInfo_.tailBlockCnt = runInfo_.totalBlockCnt % platformInfo_.aicNum;
         runInfo_.mTailSize = args_.m - (runInfo_.mBlockCnt - 1UL) * runInfo_.baseM;
         runInfo_.nTailSize = args_.n - (runInfo_.nBlockCnt - 1UL) * runInfo_.baseN;
+        runInfo_.dbL0c =
+            runInfo_.baseM * runInfo_.baseN * DATA_SIZE_L0C * DB_SIZE <= platformInfo_.l0cSize ? DB_SIZE : 1U;
     }
 
     void OptimizeEdgeBasicBlock()
@@ -296,17 +276,6 @@ private:
                 }
             }
         }
-    }
-
-    bool CanUseAFullLoad() const
-    {
-        // This is still computed in the shared search stage so the streaming
-        // path can report whether the shape would have supported A residency.
-        uint64_t maxBaseMSize = runInfo_.mBaseTailSplitCnt == 1UL ? runInfo_.baseM : runInfo_.mTailMain;
-        return runInfo_.mBlockCnt <= WINDOW_LEN && platformInfo_.aicNum % runInfo_.mBlockCnt == 0 &&
-               GetSizeWithDataType<aDataType>(maxBaseMSize * Align(args_.k, aDataType == DataType::FP4 ? FP4_C0_SIZE : FP8_C0_SIZE)) <=
-                   platformInfo_.l1Size / NUM_TWO &&
-               runInfo_.totalBlockCnt > platformInfo_.aicNum;
     }
 
     uint64_t CalUsedCoreNum(const QuantMatmulRunInfo& runInfo, uint64_t mTile, uint64_t nTile)

@@ -15,8 +15,9 @@
 
 #ifndef COMMON_UTILS_H
 #define COMMON_UTILS_H
-#include <fstream>
-#include <iostream>
+#include <cstdio>
+#include <stdexcept>
+#include <string>
 
 #define ERROR_LOG(fmt, args...) fprintf(stdout, "[ERROR]  " fmt "\n", ##args)
 #define CHECK_COND(cond, msg)                                                                                  \

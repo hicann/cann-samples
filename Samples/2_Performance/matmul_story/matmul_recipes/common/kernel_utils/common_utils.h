@@ -10,7 +10,7 @@
 
 /*!
  * \file common_utils.h
- * \brief
+ * \brief Device-side constants and integer helpers for matmul recipe kernels.
  */
 
 #ifndef UTILS_COMMON_UTILS_H
@@ -27,11 +27,17 @@
 #include "integral_constant.h"
 
 // On-chip buffer capacities used by the kernel helper code.
-constexpr static int64_t L0A_SIZE = 64 * 1024;
-constexpr static int64_t L0B_SIZE = 64 * 1024;
-constexpr static int64_t L0C_SIZE = 256 * 1024;
-constexpr static int64_t L1_SIZE = 512 * 1024;
-constexpr static int32_t BT_SIZE = 4096;
+static constexpr int64_t L0A_SIZE = 64 * 1024;
+static constexpr int64_t L0B_SIZE = 64 * 1024;
+static constexpr int64_t L0C_SIZE = 256 * 1024;
+static constexpr int64_t L1_SIZE = 512 * 1024;
+static constexpr int32_t BT_SIZE = 4096;
+
+// Execution modes shared by SWAT schedulers, dispatch tags, and sample
+// launchers. `NO_FULL_LOAD_MODE` streams both A and B, while
+// `A_FULL_LOAD_MODE` keeps the A tile resident and streams B.
+constexpr uint64_t NO_FULL_LOAD_MODE = 0UL;
+constexpr uint64_t A_FULL_LOAD_MODE = 1UL;
 
 constexpr int MNK_M = 0;
 constexpr int MNK_N = 1;
@@ -67,20 +73,20 @@ __aicore__ inline uint64_t CeilDiv(uint64_t a, uint64_t b)
     return (a + b - 1) / b;
 }
 
-__host_aicore__ inline int64_t CeilDiv(int64_t a, int64_t b) 
-{ 
-    if (b == 0) { 
-        return a; 
-    } 
-    return (a + b - 1) / b; 
+__host_aicore__ inline int64_t CeilDiv(int64_t a, int64_t b)
+{
+    if (b == 0) {
+        return a;
+    }
+    return (a + b - 1) / b;
 }
 
-__host_aicore__ inline int64_t CeilAlign(int64_t a, int64_t b) 
-{ 
-    if (b == 0) { 
-        return a; 
-    } 
-    return (a + b - 1) / b * b; 
+__host_aicore__ inline int64_t CeilAlign(int64_t a, int64_t b)
+{
+    if (b == 0) {
+        return a;
+    }
+    return (a + b - 1) / b * b;
 }
 
 __aicore__ inline uint64_t Align(uint64_t a, uint64_t b)

@@ -17,7 +17,6 @@
 #include "kernel_operator_intf.h"
 #endif
 #include "../../../common/kernel_utils/common_utils.h"
-#include "../../../common/kernel_utils/layout_utils.h"
 #include "../../../common/kernel_utils/tuple_utils.h"
 #include "include/tensor.h"
 #include "../block/block_scheduler_mx_base.h"

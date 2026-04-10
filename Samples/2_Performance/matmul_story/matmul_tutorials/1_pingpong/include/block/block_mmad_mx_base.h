@@ -18,7 +18,6 @@
 #endif
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/layout_utils.h"
 #include "kernel_utils/tuple_utils.h"
 #include "include/tensor.h"
 #include "../utils/quant_matmul_constant.h"
@@ -41,13 +40,13 @@ public:
     static constexpr bool transA = false;
     static constexpr bool transB = true;
 
-    constexpr static uint64_t HALF_L0_SIZE = L0A_SIZE / DOUBLE_BUFFER_COUNT;
-    constexpr static uint64_t HALF_L0C_SIZE = L0C_SIZE / DOUBLE_BUFFER_COUNT / sizeof(float);
-    constexpr static uint64_t BLOCK_CUBE = 16UL;
-    constexpr static uint64_t MXFP_GROUP_SIZE_LOCAL = 32UL;
-    constexpr static uint64_t MXFP_DIVISOR_SIZE_LOCAL = 64UL;
-    constexpr static uint64_t MXFP_MULTI_BASE_SIZE_LOCAL = 2UL;
-    constexpr static uint64_t SCALE_BUFFER_NUM = 2;
+    static constexpr uint64_t HALF_L0_SIZE = L0A_SIZE / DOUBLE_BUFFER_COUNT;
+    static constexpr uint64_t HALF_L0C_SIZE = L0C_SIZE / DOUBLE_BUFFER_COUNT / sizeof(float);
+    static constexpr uint64_t BLOCK_CUBE = 16UL;
+    static constexpr uint64_t MXFP_GROUP_SIZE_LOCAL = 32UL;
+    static constexpr uint64_t MXFP_DIVISOR_SIZE_LOCAL = 64UL;
+    static constexpr uint64_t MXFP_MULTI_BASE_SIZE_LOCAL = 2UL;
+    static constexpr uint64_t SCALE_BUFFER_NUM = 2;
 
     using MakeLayoutAL1 = AscendC::Te::NzLayoutFormat<AType>;
     using MakeLayoutBL1 = AscendC::Te::ZnLayoutFormat<BType>;

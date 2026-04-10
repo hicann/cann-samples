@@ -10,7 +10,7 @@
 
 /*!
  * \file copy_scale_gm_to_l1.h
- * \brief Scale-copy helpers that move MXFP4 scale tensors from GM to L1.
+ * \brief Scale-copy helpers that move MX scale tensors from GM to L1.
  */
 #ifndef TILE_COPY_SCALE_GM_TO_L1_H
 #define TILE_COPY_SCALE_GM_TO_L1_H
@@ -29,7 +29,7 @@ using AscendC::Te::MX_SCALE_K0;
 
 namespace Tile {
 // This helper normalizes all supported GM scale layouts into the L1 layouts
-// expected by the MXFP4 block pipeline.
+// expected by the shared MX block pipeline.
 struct CopyScaleGM2L1 {
     template <typename Tp, const Tp& traits, typename T, typename U>
     __aicore__ inline static void Copy(const T& dst, const U& src)
@@ -39,7 +39,7 @@ struct CopyScaleGM2L1 {
                 CopyScaleADn2nz<Tp, traits, T, U>(dst, src);
             } else {
                 // The ND variant is only used by layouts that already expose
-                // the expanded 64-element MXFP scale width on the GM side.
+                // the expanded 64-element MX scale width on the GM side.
                 CopyScaleANd2nz<Tp, traits, T, U>(dst, src);
             }
         } else {

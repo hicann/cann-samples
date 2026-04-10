@@ -9,25 +9,22 @@
  */
 
 /*!
- * \file dispatch_policy.h
- * \brief
+ * \file block_mmad.h
+ * \brief Common block-level MMAD template declaration.
  */
-#ifndef DISPATCH_POLICY_H
-#define DISPATCH_POLICY_H
 
-#include "kernel_utils/common_utils.h"
+#ifndef BLOCK_MMAD_H
+#define BLOCK_MMAD_H
 
-/* block schedule policies */
-struct KernelMultiBlockOnKAxisWithScale {};
+#include "kernel_utils/integral_constant.h"
 
-/**
- * @struct QuantMatmulMxMultiBlockWithSwat
- * @brief Matrix multiplication with scaleA and scaleB
- * @param [in] FULL_LOAD_MODE_: fulload mark, default is 0. 0 is non-fullload, and 1 is fullload.
- */
-template <uint64_t FULL_LOAD_MODE_ = 0>
-struct QuantMatmulMxMultiBlockWithSwat {
-    static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
+namespace Block {
+template <
+    class DispatchPolicy_, class AType_, class LayoutA_, class BType_,
+    class LayoutB_, class CType_, class LayoutC_, class Enable = void>
+class BlockMmad {
+    static_assert(AscendC::Std::always_false_v<DispatchPolicy_>, "Should not be here!");
 };
+} // namespace Block
 
 #endif

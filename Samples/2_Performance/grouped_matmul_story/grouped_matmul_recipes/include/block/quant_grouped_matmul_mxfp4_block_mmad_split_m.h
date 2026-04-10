@@ -190,7 +190,7 @@ private:
         return (kOffset / GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE;
     }
 
-    // Span of scale elements in L1 for a K extent, in MXFP packing units.
+    // Span of scale elements in L1 for a K extent, in MX packing units.
     __aicore__ inline uint64_t GetScaleSpan(uint64_t kSpan) const
     {
         return CeilDiv(kSpan, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE;

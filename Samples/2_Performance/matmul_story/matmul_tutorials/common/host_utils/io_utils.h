@@ -17,6 +17,7 @@
 #define IO_UTILS_H
 
 #include <fcntl.h>
+#include <fstream>
 #include <limits.h>
 #include <string>
 #include <sys/stat.h>

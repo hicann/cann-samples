@@ -17,21 +17,21 @@
 #include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <limits>
 #include <numeric>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "acl/acl.h"
 #include "kernel_operator.h"
 
+#include "host_utils/acl_utils.h"
 #include "host_utils/common_utils.h"
 #include "host_utils/io_utils.h"
 #include "kernel/quant_grouped_matmul_mxfp4_kernel_split_m.h"
 #include "policy/dispatch_policy.h"
 #include "tiling/quant_grouped_matmul_mxfp4_tiling_data.h"
 #include "tiling/quant_grouped_matmul_mxfp4_tiling_split_m.h"
+#include "utils/grouped_matmul_constant.h"
 
 // mxfp4: only for cube core
 __global__ __aicore__ __cube__ void QuantGroupedMatmulMxfp4SplitMKernel(
@@ -61,101 +61,13 @@ __global__ __aicore__ __cube__ void QuantGroupedMatmulMxfp4SplitMKernel(
     kernel(params);
 }
 
-namespace {
-struct AclRtSession {
-    explicit AclRtSession(int32_t deviceId) : deviceId_(deviceId) {}
-
-    void Init()
-    {
-        CHECK_COND(aclInit(nullptr) == ACL_SUCCESS, "Failed to initialize ACL runtime.");
-        aclInit_ = true;
-        CHECK_COND(aclrtSetDevice(deviceId_) == ACL_SUCCESS, "Failed to set ACL device.");
-        deviceSet_ = true;
-        CHECK_COND(aclrtCreateStream(&stream_) == ACL_SUCCESS, "Failed to create ACL stream.");
-    }
-
-    aclrtStream GetStream() const
-    {
-        return stream_;
-    }
-
-    ~AclRtSession()
-    {
-        if (stream_ != nullptr) {
-            (void)aclrtDestroyStream(stream_);
-            stream_ = nullptr;
-        }
-        if (deviceSet_) {
-            (void)aclrtResetDevice(deviceId_);
-            deviceSet_ = false;
-        }
-        if (aclInit_) {
-            (void)aclFinalize();
-            aclInit_ = false;
-        }
-    }
-
-    AclRtSession(const AclRtSession&) = delete;
-    AclRtSession& operator=(const AclRtSession&) = delete;
-
-private:
-    int32_t deviceId_;
-    aclrtStream stream_{nullptr};
-    bool deviceSet_{false};
-    bool aclInit_{false};
-};
-
-struct AclDeviceBuffers {
-    ~AclDeviceBuffers()
-    {
-        for (GM_ADDR gmAddr : gmAddrList) {
-            (void)aclrtFree(gmAddr);
-        }
-    }
-    void Push(GM_ADDR gmAddr)
-    {
-        if (gmAddr != nullptr) {
-            gmAddrList.push_back(gmAddr);
-        }
-    }
-
-private:
-    std::vector<GM_ADDR> gmAddrList{};
-};
-
-std::vector<uint32_t> ParseGroupList(const std::vector<int64_t>& groupListHost)
-{
-    CHECK_COND(!groupListHost.empty(), "group_list must not be empty.");
-    std::vector<uint32_t> groupMList;
-    groupMList.reserve(groupListHost.size());
-    for (int64_t groupM : groupListHost) {
-        CHECK_COND(groupM >= 0, "Each group M value must be greater than or equal to zero.");
-        CHECK_COND(groupM <= static_cast<int64_t>(std::numeric_limits<int32_t>::max()), "Each group M value must not exceed INT32_MAX.");
-        groupMList.push_back(static_cast<uint32_t>(groupM));
-    }
-    return groupMList;
-}
-
-uint64_t ParsePositiveUint64(const char* arg, const char* name)
-{
-    std::string value(arg);
-    CHECK_COND(!value.empty(), std::string(name) + " must not be empty.");
-    unsigned long long parsed = std::stoull(value);
-    CHECK_COND(parsed > 0ULL, std::string(name) + " must be greater than zero.");
-    return static_cast<uint64_t>(parsed);
-}
-
-void PrintUsage(const char* program)
-{
-    std::cerr << "Usage: " << program << " group_num m k n" << std::endl;
-    std::cerr << "Example: " << program << " 2 256 4096 1024" << std::endl;
-}
-
-} // namespace
-
 int main(int argc, char* argv[])
 {
-    if (argc != 5) {
+    GroupedMatmulMxfp4Args args{};
+    try {
+        args = ParseArguments(argc, argv);
+    } catch (const std::exception& ex) {
+        std::cerr << ex.what() << std::endl;
         PrintUsage(argv[0]);
         return 1;
     }
@@ -163,23 +75,13 @@ int main(int argc, char* argv[])
     constexpr int32_t deviceId = 0;
 
     try {
-        uint64_t groupNum = ParsePositiveUint64(argv[1], "group_num");
-        uint64_t m = ParsePositiveUint64(argv[2], "m");
-        uint64_t k = ParsePositiveUint64(argv[3], "k");
-        uint64_t n = ParsePositiveUint64(argv[4], "n");
-        constexpr uint64_t int32MaxU64 = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
-        CHECK_COND(m <= int32MaxU64, "m must not exceed INT32_MAX.");
-        CHECK_COND(k <= int32MaxU64, "k must not exceed INT32_MAX.");
-        CHECK_COND(n <= int32MaxU64, "n must not exceed INT32_MAX.");
-        CHECK_COND(k % 2UL == 0UL, "k must be even for fp4 packed storage.");
-        CHECK_COND(
-            groupNum <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()),
-            "group_num exceeds addressable size on this platform.");
-        uint64_t groupListBytesU64 = groupNum * sizeof(int64_t);
-        CHECK_COND(
-            groupListBytesU64 <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()),
-            "group list byte size exceeds addressable size on this platform.");
-        const size_t groupListBytes = static_cast<size_t>(groupListBytesU64);
+        std::string baseDir = GetExecutableDir();
+        CHECK_COND(chdir(baseDir.c_str()) == 0, "Failed to switch to the executable directory.");
+        uint64_t groupNum = args.groupNum;
+        uint64_t m = args.m;
+        uint64_t k = args.k;
+        uint64_t n = args.n;
+        const size_t groupListBytes = args.groupListBytes;
         std::string inputDir = "./input";
         std::string outputDir = "./output";
         std::vector<int64_t> groupListHost(static_cast<size_t>(groupNum), 0);
@@ -200,7 +102,8 @@ int main(int argc, char* argv[])
         tiler.GetTilingData(static_cast<uint32_t>(groupMList.size()), static_cast<uint32_t>(m),
                             static_cast<uint32_t>(n), static_cast<uint32_t>(k), tilingData);
 
-        uint64_t scaleK = CeilDiv<uint64_t>(k, 64UL) * 2UL;
+        uint64_t scaleK =
+            CeilDiv<uint64_t>(k, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE;
         // Tensor and GM sizes follow the declared M budget (m), not sum(group_m_list), so buffers stay valid when
         // some groups contribute zero rows.
         size_t xByteSize = (m * k / 2UL) * sizeof(uint8_t);
@@ -219,7 +122,9 @@ int main(int argc, char* argv[])
         size_t xScaleFileSize = xScaleByteSize;
         size_t weightScaleFileSize = weightScaleByteSize;
 
-        CHECK_COND(ReadFile(inputDir + "/input_a.bin", xFileSize, hostX.data(), xByteSize), "Failed to read input_a.bin.");
+        CHECK_COND(
+            ReadFile(inputDir + "/input_a.bin", xFileSize, hostX.data(), xByteSize),
+            "Failed to read input_a.bin.");
         CHECK_COND(xFileSize == xByteSize, "input_a.bin size does not match the expected tensor size.");
         CHECK_COND(
             ReadFile(inputDir + "/input_b.bin", weightFileSize, hostWeight.data(), weightByteSize),
@@ -302,9 +207,14 @@ int main(int argc, char* argv[])
                 "Failed to copy Y back to host.");
             CHECK_COND(WriteFile(outputDir + "/npu_out.bin", hostY.data(), yByteSize), "Failed to write npu_out.bin.");
         }
+        std::string cmd = "cd \"" + baseDir + "\" && python3 verify_result.py " + std::to_string(groupNum) + " " +
+                          std::to_string(m) + " " + std::to_string(k) + " " + std::to_string(n);
+        if (std::system(cmd.c_str()) != 0) {
+            return 1;
+        }
         return 0;
-    } catch (const std::exception& ex) {
-        std::cerr << ex.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
         return 1;
     }
 }

@@ -10,20 +10,55 @@
 
 /*!
  * \file io_utils.h
- * \brief
+ * \brief Host-side binary IO and example path helpers for matmul sample launchers.
  */
 
 #ifndef IO_UTILS_H
 #define IO_UTILS_H
 
+#include <cerrno>
+#include <cstddef>
 #include <fcntl.h>
+#include <fstream>
+#include <limits.h>
+#include <limits>
+#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "common_utils.h"
 
+struct ExampleIoPaths {
+    std::string baseDir;
+    std::string inputDir;
+    std::string outputDir;
+};
+
+inline ExampleIoPaths GetExampleIoPaths()
+{
+    char exePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    std::string baseDir = ".";
+    if (len > 0) {
+        // Keep all example assets next to the installed executable so the
+        // launcher, generator, and verifier agree on one local layout.
+        exePath[len] = '\0';
+        baseDir = exePath;
+        size_t lastSlash = baseDir.find_last_of('/');
+        if (lastSlash != std::string::npos) {
+            baseDir.resize(lastSlash);
+        }
+    }
+    return {baseDir, baseDir + "/input", baseDir + "/output"};
+}
+
 inline bool ReadFile(const std::string& filePath, size_t& fileSize, void* buffer, size_t bufferSize)
 {
+    if (buffer == nullptr) {
+        ERROR_LOG("Read file failed. buffer is nullptr");
+        return false;
+    }
+
     struct stat sBuf;
     int fileStatus = stat(filePath.data(), &sBuf);
     if (fileStatus == -1) {
@@ -43,7 +78,19 @@ inline bool ReadFile(const std::string& filePath, size_t& fileSize, void* buffer
     }
 
     std::filebuf* buf = file.rdbuf();
-    size_t size = buf->pubseekoff(0, std::ios::end, std::ios::in);
+    std::streampos fileEnd = buf->pubseekoff(0, std::ios::end, std::ios::in);
+    if (fileEnd == std::streampos(-1)) {
+        ERROR_LOG("Failed to query file size. path = %s", filePath.c_str());
+        file.close();
+        return false;
+    }
+    std::streamoff sizeOffset = fileEnd - std::streampos(0);
+    if (sizeOffset < 0) {
+        ERROR_LOG("File size is invalid. path = %s", filePath.c_str());
+        file.close();
+        return false;
+    }
+    size_t size = static_cast<size_t>(sizeOffset);
     if (size == 0) {
         ERROR_LOG("file size is 0");
         file.close();
@@ -54,10 +101,37 @@ inline bool ReadFile(const std::string& filePath, size_t& fileSize, void* buffer
         file.close();
         return false;
     }
-    buf->pubseekpos(0, std::ios::in);
-    buf->sgetn(static_cast<char*>(buffer), size);
+    if (size > static_cast<size_t>(std::numeric_limits<std::streamsize>::max())) {
+        ERROR_LOG("file size exceeds supported stream size");
+        file.close();
+        return false;
+    }
+    if (buf->pubseekpos(0, std::ios::in) == std::streampos(-1)) {
+        ERROR_LOG("Failed to reset file position. path = %s", filePath.c_str());
+        file.close();
+        return false;
+    }
+    std::streamsize readSize = buf->sgetn(static_cast<char*>(buffer), static_cast<std::streamsize>(size));
+    if (readSize != static_cast<std::streamsize>(size)) {
+        ERROR_LOG("Read file failed.");
+        file.close();
+        return false;
+    }
     fileSize = size;
     file.close();
+    return true;
+}
+
+inline bool ReadExactFile(const std::string& filePath, void* buffer, size_t expectedSize)
+{
+    size_t fileSize = expectedSize;
+    if (!ReadFile(filePath, fileSize, buffer, expectedSize)) {
+        return false;
+    }
+    if (fileSize != expectedSize) {
+        ERROR_LOG("%s size does not match the expected tensor size", filePath.c_str());
+        return false;
+    }
     return true;
 }
 
@@ -81,12 +155,21 @@ inline bool WriteFile(const std::string& filePath, const void* buffer, size_t si
         return false;
     }
 
-    size_t writeSize = write(fd, buffer, size);
-    (void)close(fd);
-    if (writeSize != size) {
-        ERROR_LOG("Write file Failed.");
-        return false;
+    const char* data = static_cast<const char*>(buffer);
+    size_t writeSize = 0;
+    while (writeSize < size) {
+        ssize_t currentWrite = write(fd, data + writeSize, size - writeSize);
+        if (currentWrite < 0 && errno == EINTR) {
+            continue;
+        }
+        if (currentWrite <= 0) {
+            (void)close(fd);
+            ERROR_LOG("Write file failed. path = %s", filePath.c_str());
+            return false;
+        }
+        writeSize += static_cast<size_t>(currentWrite);
     }
+    (void)close(fd);
 
     return true;
 }

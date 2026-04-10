@@ -115,10 +115,7 @@ python3 gen_data.py group_list 128,128,0 384 256 256
 # 生成数据方式二：按专家数和平均 M 随机生成 grouplist
 python3 gen_data.py expect_m_per_group 3 128 384 256 256
 
-# 运行可执行文件（以上面的 group_list 示例为例）
+# 运行可执行文件并校验结果（以上面的 group_list 示例为例）
 ./quant_grouped_matmul_mxfp4 3 384 256 256
-
-# 校验结果（以上面的 group_list 示例为例）
-python3 verify_result.py 3 384 256 256
 ```
 

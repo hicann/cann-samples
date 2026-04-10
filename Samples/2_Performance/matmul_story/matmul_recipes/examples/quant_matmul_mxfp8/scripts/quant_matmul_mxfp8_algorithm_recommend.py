@@ -274,10 +274,10 @@ def run_candidate_with_msprof(script_dir: Path, executable_path: Path, m: int, k
     msprof_output_dir = resolve_candidate_msprof_output_dir(script_dir, executable_path)
     cleanup_msprof_output_dir(msprof_output_dir)
     msprof_output_dir.parent.mkdir(parents=True, exist_ok=True)
-    application = f"./{executable_path.name} {m} {k} {n}"
+    application = f"./{executable_path.name}"
     with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as log_file:
         result = subprocess.run(
-            ["msprof", f"--output={msprof_output_dir}", f"--application={application}"],
+            ["msprof", f"--output={msprof_output_dir}", f"{application}", f"{m}", f"{k}", f"{n}"],
             cwd=script_dir,
             text=True,
             stdout=log_file,
@@ -384,7 +384,7 @@ def print_ranking(results: List[CandidateResult]) -> None:
         print(f"  {index}. {result.label}")
 
     print_profile_table(ranked_results)
-    print("Note: Only algorithms that support the current shape are listed.")
+    print("Note: Only algorithms that support the current shape are listed.\n")
 
 
 def main(argv: List[str]) -> int:

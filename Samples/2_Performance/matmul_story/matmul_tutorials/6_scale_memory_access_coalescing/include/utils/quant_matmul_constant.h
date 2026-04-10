@@ -42,8 +42,8 @@ constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM = 6;
 constexpr int32_t GROUP_SIZE = 32UL;
 constexpr int32_t MXFP_DIVISOR_SIZE = 64;
 constexpr int32_t MXFP_MULTI_BASE_SIZE = 2;
-constexpr static uint64_t NONE_FULL_LOAD_MODE = 0UL;
-constexpr static uint64_t A_FULL_LOAD_MODE = 1UL;
+static constexpr uint64_t NONE_FULL_LOAD_MODE = 0UL;
+static constexpr uint64_t A_FULL_LOAD_MODE = 1UL;
 constexpr int64_t DOUBLE_BUFFER_COUNT = 2LL;
 constexpr int64_t OFFSET_4_8 = 2LL;
 

@@ -17,10 +17,27 @@
 #define IO_UTILS_H
 
 #include <fcntl.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "common_utils.h"
+
+inline std::string GetExecutableDir()
+{
+    char exePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    std::string baseDir = ".";
+    if (len > 0) {
+        exePath[len] = '\0';
+        baseDir = exePath;
+        size_t lastSlash = baseDir.find_last_of('/');
+        if (lastSlash != std::string::npos) {
+            baseDir.resize(lastSlash);
+        }
+    }
+    return baseDir;
+}
 
 inline bool ReadFile(const std::string& filePath, size_t& fileSize, void* buffer, size_t bufferSize)
 {

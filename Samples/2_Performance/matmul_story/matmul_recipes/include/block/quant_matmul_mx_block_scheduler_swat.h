@@ -56,6 +56,8 @@ public:
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
     using ProblemShape = ProblemShape_;
 
+    static constexpr int64_t WINDOW_LEN = 4;
+
     struct Params {
         // Host tiling passes the steady-state tile shape plus the merged-tail
         // description that the runtime scheduler must reconstruct on device.
@@ -69,8 +71,6 @@ public:
         int64_t nTailMain;
     };
 
-    const int64_t WINDOW_LEN = 4;
-
 public:
     __aicore__ inline BlockSchedulerQuantMatmulMxSwat(const ProblemShape& shape, const Params& params)
     {
@@ -79,8 +79,8 @@ public:
         m_ = shape.m;
         n_ = shape.n;
         k_ = shape.k;
-        baseM_ = static_cast<int64_t>(params.baseM);
-        baseN_ = static_cast<int64_t>(params.baseN);
+        baseM_ = params.baseM;
+        baseN_ = params.baseN;
         mCnt_ = CeilDiv(m_, baseM_);
         nCnt_ = CeilDiv(n_, baseN_);
         totalCnt_ = mCnt_ * nCnt_;
@@ -236,7 +236,7 @@ public:
 };
 
 template <class ProblemShape_, bool TransA_, bool TransB_>
-struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<>, TransA_, TransB_> {
+struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<NO_FULL_LOAD_MODE>, TransA_, TransB_> {
     using SchedulerOp = BlockSchedulerQuantMatmulMxSwat<ProblemShape_, TransA_, TransB_>;
 };
 

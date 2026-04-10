@@ -16,6 +16,8 @@
 #ifndef QUANT_MATMUL_MX_TILING_A_FULL_LOAD_H
 #define QUANT_MATMUL_MX_TILING_A_FULL_LOAD_H
 
+#include <algorithm>
+
 #include "quant_matmul_tiling_base.h"
 
 template <DataType aDataType, DataType bDataType>
@@ -40,11 +42,10 @@ protected:
     {
         // The A-full-load path validates eligibility before computing its
         // L1 layout because later calculations assume A stays resident in L1.
-        InitCommonTilingState();
-        ValidateTiling();
-        PrepareRunInfo();
+        CalcBasicBlock();
+        OptimizeEdgeBasicBlock();
+        CanUseAFullLoad();
         CalcTailBasicBlock();
-        InitL0cBufferMode();
         CalcPathSpecificL1();
 
         uint32_t scaleKL1 = CalcScaleKL1();
@@ -53,22 +54,6 @@ protected:
     }
 
 private:
-    void InitCommonTilingState()
-    {
-        // Run the shared base-tile search first, then record whether the shape
-        // qualifies for the A-resident fast path.
-        CalcBasicBlock();
-        OptimizeEdgeBasicBlock();
-        runInfo_.isAFullLoad = CanUseAFullLoad();
-    }
-
-    void InitL0cBufferMode()
-    {
-        // Use double-buffered accumulation only when two L0C tiles fit.
-        runInfo_.dbL0c =
-            runInfo_.baseM * runInfo_.baseN * DATA_SIZE_L0C * DB_SIZE <= platformInfo_.l0cSize ? DB_SIZE : 1U;
-    }
-
     uint32_t CalcScaleKL1() const
     {
         // Even in A-full-load mode, scale reuse is still capped by the smaller
@@ -103,19 +88,6 @@ private:
         tilingData.scaleKL1 = scaleKL1;
         tilingData.stepK = static_cast<uint8_t>(std::min(runInfo_.stepKa, runInfo_.stepKb));
         tilingData.nBufferNum = nBufferNum;
-    }
-
-    void ValidateTiling() const
-    {
-        CHECK_COND(runInfo_.isAFullLoad, "The requested A-full-load tiling does not support the current shape");
-    }
-
-    void PrepareRunInfo()
-    {
-        runInfo_.isAFullLoad = true;
-        // The A-full-load path folds the split tail into the steady-state baseM
-        // so the A tile can stay resident in L1 across all K iterations.
-        runInfo_.baseM = runInfo_.mBaseTailSplitCnt == 1UL ? runInfo_.baseM : runInfo_.mTailMain;
     }
 
     void CalcTailBasicBlock()
@@ -278,15 +250,24 @@ private:
         }
     }
 
-    bool CanUseAFullLoad() const
+    void CanUseAFullLoad()
     {
         // A-full-load is worthwhile only when one resident A tile fits in half
         // of L1 and can be reused across multiple N blocks.
         uint64_t maxBaseMSize = runInfo_.mBaseTailSplitCnt == 1UL ? runInfo_.baseM : runInfo_.mTailMain;
-        return runInfo_.mBlockCnt <= WINDOW_LEN && platformInfo_.aicNum % runInfo_.mBlockCnt == 0 &&
-               GetSizeWithDataType<aDataType>(maxBaseMSize * Align(args_.k, aDataType == DataType::FP4 ? FP4_C0_SIZE : FP8_C0_SIZE)) <=
-                   platformInfo_.l1Size / NUM_TWO &&
-               runInfo_.totalBlockCnt > platformInfo_.aicNum;
+        runInfo_.isAFullLoad =
+            runInfo_.mBlockCnt <= WINDOW_LEN && platformInfo_.aicNum % runInfo_.mBlockCnt == 0 &&
+            GetSizeWithDataType<aDataType>(
+                maxBaseMSize * Align(args_.k, aDataType == DataType::FP4 ? FP4_C0_SIZE : FP8_C0_SIZE)) <=
+                platformInfo_.l1Size / NUM_TWO &&
+            runInfo_.totalBlockCnt > platformInfo_.aicNum;
+        CHECK_COND(runInfo_.isAFullLoad, "The requested A-full-load tiling does not support the current shape");
+
+        // Fold the split tail into the steady-state baseM so the A tile can
+        // stay resident in L1 across all K iterations.
+        runInfo_.baseM = runInfo_.mBaseTailSplitCnt == 1UL ? runInfo_.baseM : runInfo_.mTailMain;
+        runInfo_.dbL0c =
+            runInfo_.baseM * runInfo_.baseN * DATA_SIZE_L0C * DB_SIZE <= platformInfo_.l0cSize ? DB_SIZE : 1U;
     }
 
     uint64_t GetDepthB1AFullLoad(const QuantMatmulArgs& args, const QuantMatmulRunInfo& runInfo,

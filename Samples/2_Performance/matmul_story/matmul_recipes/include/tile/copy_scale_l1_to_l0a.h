@@ -10,7 +10,7 @@
 
 /*!
  * \file copy_scale_l1_to_l0a.h
- * \brief Tile helper that copies MXFP4 scaleA data from L1 to L0A.
+ * \brief Tile helper that copies MX scaleA data from L1 to L0A.
  */
 
 #ifndef MATMUL_TILE_DATAMOVE_COPY_L1_TO_L0A_H
@@ -18,6 +18,7 @@
 
 #include "impl/atom/cube_datamove/copy_l12l0.h"
 #include "kernel_utils/common_utils.h"
+#include "../utils/quant_matmul_constant.h"
 
 namespace Tile {
 struct CopyL12L0MxScaleA3510 {

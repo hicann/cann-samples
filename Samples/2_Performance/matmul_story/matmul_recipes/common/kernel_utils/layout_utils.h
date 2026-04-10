@@ -10,7 +10,7 @@
 
 /*!
  * \file layout_utils.h
- * \brief
+ * \brief Layout tags and mapping traits used by TE tensor wrappers.
  */
 
 #ifndef UTILS_LAYOUT_UTILS_H
@@ -18,11 +18,6 @@
 
 // Cube format definitions.
 #include "matmul/matmul_config.h"
-// Required by matmul_utils.h.
-#include "matmul/tiling.h"
-
-// Provides AscendC::CeilAlign.
-#include "../../impl/adv_api/detail/matmul/utils/matmul_utils.h"
 #include "./integral_constant.h"
 
 namespace layout {
