@@ -14,7 +14,7 @@ function(add_grouped_matmul_recipe target_name source variant)
     )
     target_include_directories(${target_name} PRIVATE
         ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/include
-        ${GROUPED_MATMUL_STORY_DIR}/common
+        ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/common
     )
     target_compile_options(${target_name} PRIVATE ${GMM_STORY_ASCENDC_COMPILE_OPTS})
     target_link_libraries(${target_name} PRIVATE
@@ -22,7 +22,7 @@ function(add_grouped_matmul_recipe target_name source variant)
         cann_samples::tensor_api
     )
     install(TARGETS ${target_name}
-        RUNTIME DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/examples/${variant}
+        RUNTIME DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/${variant}
     )
 endfunction()
 
@@ -32,9 +32,26 @@ add_grouped_matmul_recipe(
     quant_grouped_matmul_mxfp4
 )
 
+add_grouped_matmul_recipe(
+    quant_grouped_matmul_mxfp8
+    quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_m.cpp
+    quant_grouped_matmul_mxfp8
+)
+
 install(FILES
     ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/scripts/gen_data.py
     ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/scripts/verify_result.py
-    DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4
+    DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/quant_grouped_matmul_mxfp4
+)
+
+install(FILES
+    ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/scripts/gen_data.py
+    ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/scripts/verify_result.py
+    DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/quant_grouped_matmul_mxfp8
+)
+
+# Remove legacy install layout from old versions.
+install(CODE
+    "file(REMOVE_RECURSE \"\${CMAKE_INSTALL_PREFIX}/${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/examples\")"
 )
 

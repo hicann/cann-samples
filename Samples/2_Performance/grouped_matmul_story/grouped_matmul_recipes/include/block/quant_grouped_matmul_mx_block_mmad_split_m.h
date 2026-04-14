@@ -9,11 +9,11 @@
  */
 
 /*!
- * \file quant_grouped_matmul_mxfp4_block_mmad_split_m.h
- * \brief Block-level grouped MXFP4 MMAD wrapper for split-M recipes.
+ * \file quant_grouped_matmul_mx_block_mmad_split_m.h
+ * \brief Block-level grouped MX MMAD wrapper for split-M recipes.
  */
-#ifndef QUANT_GROUPED_MATMUL_MXFP4_BLOCK_MMAD_SPLIT_M_H
-#define QUANT_GROUPED_MATMUL_MXFP4_BLOCK_MMAD_SPLIT_M_H
+#ifndef QUANT_GROUPED_MATMUL_MX_BLOCK_MMAD_SPLIT_M_H
+#define QUANT_GROUPED_MATMUL_MX_BLOCK_MMAD_SPLIT_M_H
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/layout_utils.h"
@@ -24,6 +24,7 @@
 #include "../tile/copy_scale_gm_to_l1.h"
 #include "../tile/copy_scale_l1_to_l0a.h"
 #include "../tile/copy_scale_l1_to_l0b.h"
+#include "../tile/pad_mx_kl1.h"
 #include "../tile/tile_mmad_mx.h"
 
 namespace Block {
@@ -36,6 +37,7 @@ constexpr static uint64_t SCALE_BUFFER_NUM = 2UL;
 constexpr static uint16_t INPUT_BUFFER_MTE1_MTE2_BASE = 2;
 // Scale ping-pong uses ids 4 + scaleL1BufId (0 or 1).
 constexpr static uint16_t SCALE_BUFFER_MTE1_MTE2_BASE = 4;
+
 } // namespace
 
 template <
@@ -88,6 +90,9 @@ public:
     static_assert(!transA, "QuantGroupedMatmulMxBlockMmadSplitM only supports non-transposed A.");
     static_assert(transB, "QuantGroupedMatmulMxBlockMmadSplitM only supports transposed B.");
     static_assert(formatB == CubeFormat::ND, "QuantGroupedMatmulMxBlockMmadSplitM only supports ND-format B.");
+    // MXFP8: zero-pad L1 K tail to match NZ layout / ND2NZ path (see Tile::PadMxK*L1); MXFP4 keeps unpadded L1 views.
+    static constexpr bool kUseMxFp8L1KPad_ = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> &&
+        AscendC::Std::is_one_of_v<BType, fp8_e5m2_t, fp8_e4m3fn_t>;
     constexpr static uint64_t HALF_L0_SIZE = L0A_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(AType);
     using MakeLayoutAL1 = AscendC::Te::NzLayoutFormat<AType>;
     using MakeLayoutBL1 = AscendC::Te::ZnLayoutFormat<BType>;
@@ -150,10 +155,12 @@ public:
         // Prefer outer-K loops on the operand with the larger L1 K-tile to hide memory latency.
         orderAL1BL1_ = l1Params.kAL1 >= l1Params.kBL1;
         enableL0cPingPong_ = enableL0cPingPong;
-        bL1OneBuffer_ = baseN_ * Align(kBL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE) >> 1;
+        constexpr bool isFp4Type = AscendC::IsSameType<AType, fp4x2_e2m1_t>::value;
+        constexpr uint64_t sizeShift = isFp4Type ? 1UL : 0UL;
+        bL1OneBuffer_ = baseN_ * Align(kBL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE) >> sizeShift;
         auto mxScaleKL1B16 = CeilDiv(scaleKL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
         auto mxScaleKL1 = mxScaleKL1B16 * GroupedMatmulRecipe::MX_MULTI_SIZE;
-        aL1OneBuffer_ = baseM_ * Align(kAL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE) >> 1;
+        aL1OneBuffer_ = baseM_ * Align(kAL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE) >> sizeShift;
         scaleAL1OneBuffer_ = baseM_ * mxScaleKL1;
         // Lay out L1: ping-pong halves, then A/B tile slots, then scale A/B following each B buffer.
         for (int32_t bufferId = 0; bufferId < static_cast<int32_t>(l1BufNum); bufferId++) {
@@ -236,10 +243,17 @@ private:
         TensorA gmA, uint64_t curM, uint64_t curGmAKL1, uint64_t aL1BufId, uint64_t kL1Offset)
     {
         auto copyGM2L1 = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2L1{});
-        auto layoutAL1 = MakeLayoutAL1{}(curM, curGmAKL1);
+        uint64_t l1K = curGmAKL1;
+        if constexpr (kUseMxFp8L1KPad_) {
+            l1K = CeilAlign(curGmAKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
+        }
+        auto layoutAL1 = MakeLayoutAL1{}(curM, l1K);
         auto tensorAL1 =
             AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<AType>(l1BufferAOffset_[aL1BufId]), layoutAL1);
         auto gmBlockA = gmA(AscendC::Te::MakeCoord(0, kL1Offset), AscendC::Te::MakeShape(curM, curGmAKL1));
+        if constexpr (kUseMxFp8L1KPad_) {
+            ::Tile::PadMxKAL1::PadZero(tensorAL1, gmBlockA);
+        }
         AscendC::Te::Copy(copyGM2L1, tensorAL1, gmBlockA);
     }
 
@@ -248,10 +262,17 @@ private:
         TensorB gmB, uint64_t curN, uint64_t curGmBKL1, uint64_t bL1BufId, uint64_t kL1Offset)
     {
         auto copyGM2L1 = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2L1{});
-        auto layoutBL1 = MakeLayoutBL1{}(curGmBKL1, curN);
+        uint64_t l1K = curGmBKL1;
+        if constexpr (kUseMxFp8L1KPad_) {
+            l1K = CeilAlign(curGmBKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
+        }
+        auto layoutBL1 = MakeLayoutBL1{}(l1K, curN);
         auto tensorBL1 =
             AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<BType>(l1BufferBOffset_[bL1BufId]), layoutBL1);
         auto gmBlockB = gmB(AscendC::Te::MakeCoord(kL1Offset, 0), AscendC::Te::MakeShape(curGmBKL1, curN));
+        if constexpr (kUseMxFp8L1KPad_) {
+            ::Tile::PadMxKBL1::PadZero(tensorBL1, gmBlockB);
+        }
         AscendC::Te::Copy(copyGM2L1, tensorBL1, gmBlockB);
     }
 
@@ -262,10 +283,16 @@ private:
         uint64_t kbL1Offset)
     {
         // Inner K loop: slice A/B and matching scale windows from L1, stage to L0, then Mad into L0C.
+        uint64_t l1Ka = curGmAKL1;
+        uint64_t l1Kb = curGmBKL1;
+        if constexpr (kUseMxFp8L1KPad_) {
+            l1Ka = CeilAlign(curGmAKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
+            l1Kb = CeilAlign(curGmBKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
+        }
         auto tensorAL1 = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeL1memPtr<AType>(l1BufferAOffset_[aL1BufId]), MakeLayoutAL1{}(curM, curGmAKL1));
+            AscendC::Te::MakeL1memPtr<AType>(l1BufferAOffset_[aL1BufId]), MakeLayoutAL1{}(curM, l1Ka));
         auto tensorBL1 = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeL1memPtr<BType>(l1BufferBOffset_[bL1BufId]), MakeLayoutBL1{}(curGmBKL1, curN));
+            AscendC::Te::MakeL1memPtr<BType>(l1BufferBOffset_[bL1BufId]), MakeLayoutBL1{}(l1Kb, curN));
         auto layoutScaleAL1 =
             AscendC::Te::MakeZzLayout<fp8_e8m0_t>(curM, GetScaleSpan(scaleKL1_));
         auto tensorScaleAL1 = AscendC::Te::MakeTensor(
@@ -474,4 +501,4 @@ private:
 };
 } // namespace Block
 
-#endif // QUANT_GROUPED_MATMUL_MXFP4_BLOCK_MMAD_SPLIT_M_H
+#endif // QUANT_GROUPED_MATMUL_MX_BLOCK_MMAD_SPLIT_M_H

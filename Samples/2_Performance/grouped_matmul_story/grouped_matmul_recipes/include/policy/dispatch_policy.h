@@ -10,7 +10,7 @@
 
 /*!
  * \file dispatch_policy.h
- * \brief Dispatch policy tags used by grouped MXFP4 recipe kernels.
+ * \brief Dispatch policy tags used by grouped MX recipe kernels.
  */
 #ifndef GROUPED_MATMUL_RECIPE_DISPATCH_POLICY_H
 #define GROUPED_MATMUL_RECIPE_DISPATCH_POLICY_H

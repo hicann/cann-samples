@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
 
     try {
         QuantMatmulTilingData tilingData;
-        QuantMatmulTilingSwat<DataType::FP8, DataType::FP8> tilingEngine;
+        QuantMatmulTilingSwat<mm::DataType::DT_FLOAT8_E4M3FN, mm::DataType::DT_FLOAT8_E4M3FN> tilingEngine;
         tilingEngine.GetTilingData(m, n, k, tilingData);
 
         AclRtSession aclSession(deviceId);

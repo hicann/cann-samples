@@ -9,11 +9,11 @@
  */
 
 /*!
- * \file quant_grouped_matmul_mxfp4_tiling_split_m.h
- * \brief Host-side tiling helper for grouped MXFP4 split-M samples.
+ * \file quant_grouped_matmul_mx_tiling_split_m.h
+ * \brief Host-side tiling helper for grouped MX split-M samples.
  */
-#ifndef QUANT_GROUPED_MATMUL_MXFP4_TILING_SPLIT_M_H
-#define QUANT_GROUPED_MATMUL_MXFP4_TILING_SPLIT_M_H
+#ifndef QUANT_GROUPED_MATMUL_MX_TILING_SPLIT_M_H
+#define QUANT_GROUPED_MATMUL_MX_TILING_SPLIT_M_H
 
 #include <algorithm>
 #include <cstdint>
@@ -22,14 +22,15 @@
 #include "host_utils/common_utils.h"
 
 #include "../utils/grouped_matmul_constant.h"
-#include "quant_grouped_matmul_mxfp4_tiling_data.h"
+#include "quant_grouped_matmul_mx_tiling_data.h"
 #include "quant_grouped_matmul_tiling_common.h"
 
-class QuantGroupedMatmulMxfp4TilingSplitM
+template <gmm::DataType dataType>
+class QuantGroupedMatmulMxTilingSplitM
 {
 public:
     void GetTilingData(
-        uint32_t numOfGroups, uint32_t m, uint32_t n, uint32_t k, QuantGroupedMatmulMxfp4TilingData& tilingData)
+        uint32_t numOfGroups, uint32_t m, uint32_t n, uint32_t k, QuantGroupedMatmulMxTilingData& tilingData)
     {
         args_ = {};
         platformInfo_ = {};
@@ -72,17 +73,16 @@ private:
         args_.k = k;
     }
 
-    static uint64_t GetSizeFp4Bytes(uint64_t elemCount)
+    uint64_t GetTensorStorageBytes(uint64_t elemCount) const
     {
-        return (elemCount + 1UL) >> 1;
+        return GetSizeWithDataType<dataType>(elemCount);
     }
 
     void CalBasicBlock()
     {
         runInfo_.baseM = Align(std::min<uint64_t>(args_.m, 256UL), GroupedMatmulRecipe::CUBE_BLOCK);
         runInfo_.baseN = Align(std::min<uint64_t>(args_.n, 256UL), GroupedMatmulRecipe::CUBE_BLOCK);
-        runInfo_.baseK =
-            Align(std::min<uint64_t>(args_.k, 256UL), GroupedMatmulRecipe::MX_DIVISOR_SIZE);
+        runInfo_.baseK = Align(std::min<uint64_t>(args_.k, (dataType == gmm::DataType::DT_FLOAT4_E2M1) ? 256UL : 128UL), GroupedMatmulRecipe::MX_DIVISOR_SIZE);
         runInfo_.dbL0C =
             (runInfo_.baseM * runInfo_.baseN * QuantGroupedMatmulTilingConst::DATA_SIZE_L0C *
                     QuantGroupedMatmulTilingConst::DB_SIZE <=
@@ -100,9 +100,12 @@ private:
                     QuantGroupedMatmulTilingConst::MTE2_MIN_LOAD_SIZE_V120) {
             return depthInit;
         }
+        if (perDepthSize == 0UL) {
+            return depthInit;
+        }
         uint64_t depthScale = leftSize / perDepthSize;
         if (depthInit > 1UL) {
-            uint64_t baseKSize = GetSizeFp4Bytes(runInfo_.baseK);
+            uint64_t baseKSize = GetTensorStorageBytes(runInfo_.baseK);
             while ((depthScale * baseKSize) % QuantGroupedMatmulTilingConst::BASIC_BLOCK_SIZE_512 != 0 &&
                    (depthScale * baseKSize) > QuantGroupedMatmulTilingConst::BASIC_BLOCK_SIZE_512) {
                 depthScale -= 1UL;
@@ -127,7 +130,7 @@ private:
     uint64_t GetDepthWithHighBW(uint64_t mnL1) const
     {
         // `GroupedQmmBasicApiTiling::GetDepthWithHighBW`
-        uint64_t baseKSize = GetSizeFp4Bytes(runInfo_.baseK);
+        uint64_t baseKSize = GetTensorStorageBytes(runInfo_.baseK);
         uint64_t depth =
             Align(
                 CeilDiv<uint64_t>(
@@ -215,8 +218,8 @@ private:
 
     bool CalScaleFactors()
     {
-        uint64_t baseASize = GetSizeFp4Bytes(runInfo_.baseM * runInfo_.baseK);
-        uint64_t baseBSize = GetSizeFp4Bytes(runInfo_.baseN * runInfo_.baseK);
+        uint64_t baseASize = GetTensorStorageBytes(runInfo_.baseM * runInfo_.baseK);
+        uint64_t baseBSize = GetTensorStorageBytes(runInfo_.baseN * runInfo_.baseK);
         uint64_t baseScaleASize =
             CeilDiv<uint64_t>(runInfo_.baseK, GroupedMatmulRecipe::MX_GROUP_SIZE) * runInfo_.baseM;
         uint64_t baseScaleBSize =
@@ -266,8 +269,8 @@ private:
     bool CalL1Tiling()
     {
         uint64_t leftL1Size = platformInfo_.l1Size;
-        uint64_t baseASize = GetSizeFp4Bytes(runInfo_.baseM * runInfo_.baseK);
-        uint64_t baseBSize = GetSizeFp4Bytes(runInfo_.baseN * runInfo_.baseK);
+        uint64_t baseASize = GetTensorStorageBytes(runInfo_.baseM * runInfo_.baseK);
+        uint64_t baseBSize = GetTensorStorageBytes(runInfo_.baseN * runInfo_.baseK);
         uint64_t alignedGroups = Align(
             CeilDiv<uint64_t>(runInfo_.baseK, GroupedMatmulRecipe::MX_GROUP_SIZE),
             GroupedMatmulRecipe::MX_MULTI_SIZE);
@@ -290,7 +293,7 @@ private:
         return CalScaleFactors();
     }
 
-    void DoOpTiling(QuantGroupedMatmulMxfp4TilingData& tilingData)
+    void DoOpTiling(QuantGroupedMatmulMxTilingData& tilingData)
     {
         CalBasicBlock();
         CHECK_COND(CalL1Tiling(), "CalL1Tiling failed.");
@@ -326,7 +329,7 @@ private:
         tilingData.dbL0C = runInfo_.dbL0C;
     }
 
-    void PrintTilingData(const QuantGroupedMatmulMxfp4TilingData& tilingData) const
+    void PrintTilingData(const QuantGroupedMatmulMxTilingData& tilingData) const
     {
         printf("[GroupedMatmul Strategy]\n");
         printf("  strategy           : split_m\n");
@@ -347,4 +350,7 @@ private:
     }
 };
 
-#endif // QUANT_GROUPED_MATMUL_MXFP4_TILING_SPLIT_M_H
+using QuantGroupedMatmulMxfp4TilingSplitM = QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT4_E2M1>;
+using QuantGroupedMatmulMxfp8TilingSplitM = QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT8_E4M3FN>;
+
+#endif // QUANT_GROUPED_MATMUL_MX_TILING_SPLIT_M_H

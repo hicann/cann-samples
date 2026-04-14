@@ -25,6 +25,14 @@
 #include <string>
 #include <vector>
 
+namespace gmm {
+// Quantized MX element layouts for non-type template parameters.
+enum class DataType {
+    DT_FLOAT4_E2M1,
+    DT_FLOAT8_E4M3FN,
+};
+} // namespace gmm
+
 #define ERROR_LOG(fmt, args...) fprintf(stdout, "[ERROR]  " fmt "\n", ##args)
 #define CHECK_COND(cond, msg)                                                                                  \
     do {                                                                                                       \
@@ -58,16 +66,24 @@ inline T FloorAlign(T a, T b)
     return a / b * b;
 }
 
-template <typename T>
-T GetShapeWithDataTypeFP4(T size)
+template <gmm::DataType dataType, typename T>
+constexpr T GetShapeWithDataType(T size)
 {
-    return size << 1;
+    if constexpr (dataType == gmm::DataType::DT_FLOAT4_E2M1) {
+        return size << 1;
+    } else {
+        return size;
+    }
 }
 
-template <typename T>
-T GetSizeWithDataTypeFP4(T shape)
+template <gmm::DataType dataType, typename T>
+constexpr T GetSizeWithDataType(T shape)
 {
-    return (shape + 1) >> 1;
+    if constexpr (dataType == gmm::DataType::DT_FLOAT4_E2M1) {
+        return (shape + 1) >> 1;
+    } else {
+        return shape;
+    }
 }
 
 struct GroupedMatmulMxfp4Args {

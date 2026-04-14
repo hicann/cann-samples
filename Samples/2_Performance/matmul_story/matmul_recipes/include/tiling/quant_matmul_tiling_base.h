@@ -23,7 +23,7 @@
 #include "quant_matmul_tiling_common.h"
 #include "quant_matmul_tiling_data.h"
 
-template <DataType aDataType, DataType bDataType>
+template <mm::DataType aDataType, mm::DataType bDataType>
 class QuantMatmulTilingBase {
 public:
     QuantMatmulTilingBase() = default;

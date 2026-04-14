@@ -11,6 +11,6 @@
 
 set(GROUPED_MATMUL_STORY_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(GROUPED_MATMUL_INSTALL_PREFIX "2_Performance/grouped_matmul_story")
-set(GMM_STORY_ASCENDC_COMPILE_OPTS "-xasc" "--npu-arch=dav-3510" "-O3")
+set(GMM_STORY_ASCENDC_COMPILE_OPTS "-xasc" "--npu-arch=dav-3510" "-w" "-O3")
 
 add_subdirectory(grouped_matmul_recipes)

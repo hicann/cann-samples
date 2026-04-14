@@ -10,13 +10,13 @@
 
 /*!
  * \file copy_scale_gm_to_l1.h
- * \brief Scale-copy helpers that move grouped MXFP4 scale tensors from GM to L1.
+ * \brief Scale-copy helpers that move grouped MX scale tensors from GM to L1.
  */
 #ifndef GROUPED_MATMUL_RECIPE_COPY_SCALE_GM_TO_L1_H
 #define GROUPED_MATMUL_RECIPE_COPY_SCALE_GM_TO_L1_H
 
 #include "include/utils/utils.h"
-#include "impl/atom/copy_traits_impl.h"
+#include "include/tensor.h"
 
 using AscendC::Te::AttrInfo;
 using AscendC::Te::C0_SIZE;

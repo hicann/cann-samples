@@ -10,7 +10,7 @@
 
 /*!
  * \file quant_grouped_matmul_tiling_common.h
- * \brief Shared runtime state for grouped MXFP4 tiling generation.
+ * \brief Shared runtime state for grouped MX tiling generation.
  */
 #ifndef QUANT_GROUPED_MATMUL_TILING_COMMON_H
 #define QUANT_GROUPED_MATMUL_TILING_COMMON_H

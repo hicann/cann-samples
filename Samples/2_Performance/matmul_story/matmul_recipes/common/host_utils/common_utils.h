@@ -23,6 +23,14 @@
 #include <stdexcept>
 #include <string>
 
+namespace mm {
+// Quantized MX element layouts for non-type template parameters.
+enum class DataType {
+    DT_FLOAT4_E2M1,
+    DT_FLOAT8_E4M3FN,
+};
+} // namespace mm
+
 #define ERROR_LOG(fmt, args...) fprintf(stdout, "[ERROR]  " fmt "\n", ##args)
 #define CHECK_COND(cond, msg)                                                                                  \
     do {                                                                                                       \
@@ -116,20 +124,20 @@ inline void ParseArguments(int argc, char* argv[], uint64_t& m, uint64_t& k, uin
 }
 
 
-template <DataType dataType, typename T>
+template <mm::DataType dataType, typename T>
 constexpr T GetShapeWithDataType(T size)
 {
-    if constexpr (dataType == DataType::FP4) {
+    if constexpr (dataType == mm::DataType::DT_FLOAT4_E2M1) {
         return size << 1;
     } else {
         return size;
     }
 }
 
-template <DataType dataType, typename T>
+template <mm::DataType dataType, typename T>
 constexpr T GetSizeWithDataType(T shape)
 {
-    if constexpr (dataType == DataType::FP4) {
+    if constexpr (dataType == mm::DataType::DT_FLOAT4_E2M1) {
         return (shape + 1) >> 1;
     } else {
         return shape;

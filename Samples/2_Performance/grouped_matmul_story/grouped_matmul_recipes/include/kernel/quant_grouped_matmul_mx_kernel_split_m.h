@@ -9,19 +9,19 @@
  */
 
 /*!
- * \file quant_grouped_matmul_mxfp4_kernel_split_m.h
- * \brief Sample-side grouped MXFP4 split-M kernel wrapper.
+ * \file quant_grouped_matmul_mx_kernel_split_m.h
+ * \brief Sample-side grouped MX split-M kernel wrapper.
  */
-#ifndef QUANT_GROUPED_MATMUL_MXFP4_KERNEL_SPLIT_M_H
-#define QUANT_GROUPED_MATMUL_MXFP4_KERNEL_SPLIT_M_H
+#ifndef QUANT_GROUPED_MATMUL_MX_KERNEL_SPLIT_M_H
+#define QUANT_GROUPED_MATMUL_MX_KERNEL_SPLIT_M_H
 
 #include "kernel_basic_intf.h"
 #include "include/tensor.h"
-#include "../block/quant_grouped_matmul_mxfp4_block_mmad_split_m.h"
-#include "../block/quant_grouped_matmul_mxfp4_block_scheduler_split_m.h"
+#include "../block/quant_grouped_matmul_mx_block_mmad_split_m.h"
+#include "../block/quant_grouped_matmul_mx_block_scheduler_split_m.h"
 #include "../block/block_scheduler_utils.h"
 #include "../policy/dispatch_policy.h"
-#include "../tiling/quant_grouped_matmul_mxfp4_tiling_data.h"
+#include "../tiling/quant_grouped_matmul_mx_tiling_data.h"
 #include "../utils/grouped_matmul_constant.h"
 
 namespace Kernel {
@@ -31,8 +31,8 @@ class KernelQGmmMx {
 public:
     static constexpr bool transA = BlockMmad::transA;
     static constexpr bool transB = BlockMmad::transB;
-    static_assert(!transA, "QuantGroupedMatmulMxfp4KernelSplitM only supports non-transposed A.");
-    static_assert(transB, "QuantGroupedMatmulMxfp4KernelSplitM only supports transposed B.");
+    static_assert(!transA, "QuantGroupedMatmulMxKernelSplitM only supports non-transposed A.");
+    static_assert(transB, "QuantGroupedMatmulMxKernelSplitM only supports transposed B.");
     using AType = typename BlockMmad::AType;
     using BType = typename BlockMmad::BType;
     using CType = typename BlockMmad::CType;
@@ -52,7 +52,7 @@ public:
     struct Params {
         ProblemShape problemShape;
         typename BlockMmad::Params mmadParams;
-        const QuantGroupedMatmulMxfp4TilingData* gmmParams{nullptr};
+        const QuantGroupedMatmulMxTilingData* gmmParams{nullptr};
         Params() = default;
     };
 
@@ -157,9 +157,10 @@ private:
         int64_t m = AscendC::Std::get<MNK_M>(problemShape_);
         int64_t n = AscendC::Std::get<MNK_N>(problemShape_);
         int64_t k = AscendC::Std::get<MNK_K>(problemShape_);
-        // m * k is the total number of elements of a in the group, divide by 2 to get the bytes
-        AscendC::Std::get<0>(baseOffset_) += m * k >> 1;
-        AscendC::Std::get<1>(baseOffset_) += n * k >> 1;
+        constexpr bool isFp4Type = AscendC::IsSameType<AType, fp4x2_e2m1_t>::value;
+        constexpr uint64_t sizeShift = isFp4Type ? 1UL : 0UL;
+        AscendC::Std::get<0>(baseOffset_) += (m * k) >> sizeShift;
+        AscendC::Std::get<1>(baseOffset_) += (n * k) >> sizeShift;
         int64_t scaleK =
             CeilDiv(k, static_cast<int64_t>(GroupedMatmulRecipe::MX_DIVISOR_SIZE)) *
             GroupedMatmulRecipe::MX_MULTI_SIZE;
@@ -240,8 +241,14 @@ private:
 };
 
 template <class ProblemShape, class BlockMmad, class BlockScheduler>
-using QuantGroupedMatmulMxfp4KernelSplitM = KernelQGmmMx<ProblemShape, BlockMmad, BlockScheduler>;
+using QuantGroupedMatmulMxKernelSplitM = KernelQGmmMx<ProblemShape, BlockMmad, BlockScheduler>;
+
+template <class ProblemShape, class BlockMmad, class BlockScheduler>
+using QuantGroupedMatmulMxfp4KernelSplitM = QuantGroupedMatmulMxKernelSplitM<ProblemShape, BlockMmad, BlockScheduler>;
+
+template <class ProblemShape, class BlockMmad, class BlockScheduler>
+using QuantGroupedMatmulMxfp8KernelSplitM = QuantGroupedMatmulMxKernelSplitM<ProblemShape, BlockMmad, BlockScheduler>;
 
 } // namespace Kernel
 
-#endif // QUANT_GROUPED_MATMUL_MXFP4_KERNEL_SPLIT_M_H
+#endif // QUANT_GROUPED_MATMUL_MX_KERNEL_SPLIT_M_H

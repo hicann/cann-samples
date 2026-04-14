@@ -2,6 +2,9 @@
 
 最佳实践, 从Baseline到极致性能的调优实践。
 
+### [grouped_matmul_story](./grouped_matmul_story)
+分组矩阵乘性能优化专题，覆盖 grouped matmul 的 tiling、数据搬运与 kernel 实现，并提供 MXFP4/MXFP8 可运行示例及数据校验流程。
+
 ### [matmul_story](./matmul_story)
 矩阵乘性能优化专题，覆盖 MatMul 与量化 MatMul（如 MXFP4）两类实践，包含性能分析文档、分步教程（baseline→SWAT→尾轮负载均衡→UnitFlag）以及可运行的 recipe 示例（A16W16、quant_matmul_mxfp4）。
 

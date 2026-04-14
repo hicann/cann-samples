@@ -10,7 +10,7 @@
 
 /*!
  * \file grouped_matmul_constant.h
- * \brief Shared constants for the grouped MXFP4 recipe wrappers.
+ * \brief Shared constants for grouped MX recipe wrappers.
  */
 #ifndef GROUPED_MATMUL_CONSTANT_H
 #define GROUPED_MATMUL_CONSTANT_H

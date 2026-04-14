@@ -20,7 +20,7 @@
 
 #include "quant_matmul_tiling_base.h"
 
-template <DataType aDataType, DataType bDataType>
+template <mm::DataType aDataType, mm::DataType bDataType>
 class QuantMatmulTilingAFullLoad : public QuantMatmulTilingBase<aDataType, bDataType> {
 public:
     QuantMatmulTilingAFullLoad() = default;
@@ -112,7 +112,7 @@ private:
         runInfo_.stepKa = CeilDiv(args_.k, runInfo_.baseK);
 
         uint64_t aL1Size =
-            GetSizeWithDataType<aDataType>(runInfo_.baseM * Align(args_.k, aDataType == DataType::FP4 ? FP4_C0_SIZE : FP8_C0_SIZE));
+            GetSizeWithDataType<aDataType>(runInfo_.baseM * Align(args_.k, aDataType == mm::DataType::DT_FLOAT4_E2M1 ? FP4_C0_SIZE : FP8_C0_SIZE));
         runInfo_.scaleFactorA = 1U;
         uint64_t leftL1Size = platformInfo_.l1Size - aL1Size;
         uint64_t bL0Size = GetSizeWithDataType<bDataType>(runInfo_.baseN * runInfo_.baseK);
@@ -200,7 +200,7 @@ private:
         // the tail statistics used by later scheduling decisions.
         runInfo_.baseM = Align(std::min(args_.m, BASIC_BLOCK_SIZE_256), CUBE_BLOCK);
         runInfo_.baseN = Align(std::min(args_.n, BASIC_BLOCK_SIZE_256), CUBE_BLOCK);
-        runInfo_.baseK = Align(std::min(args_.k, aDataType == DataType::FP4 ? BASIC_BLOCK_SIZE_256 : BASIC_BLOCK_SIZE_128), TILING_MXFP_DIVISOR_SIZE);
+        runInfo_.baseK = Align(std::min(args_.k, aDataType == mm::DataType::DT_FLOAT4_E2M1 ? BASIC_BLOCK_SIZE_256 : BASIC_BLOCK_SIZE_128), TILING_MXFP_DIVISOR_SIZE);
 
         uint64_t blockNum = CeilDiv(args_.m, runInfo_.baseM) * CeilDiv(args_.n, runInfo_.baseN);
         if (blockNum < platformInfo_.aicNum) {
@@ -258,7 +258,7 @@ private:
         runInfo_.isAFullLoad =
             runInfo_.mBlockCnt <= WINDOW_LEN && platformInfo_.aicNum % runInfo_.mBlockCnt == 0 &&
             GetSizeWithDataType<aDataType>(
-                maxBaseMSize * Align(args_.k, aDataType == DataType::FP4 ? FP4_C0_SIZE : FP8_C0_SIZE)) <=
+                maxBaseMSize * Align(args_.k, aDataType == mm::DataType::DT_FLOAT4_E2M1 ? FP4_C0_SIZE : FP8_C0_SIZE)) <=
                 platformInfo_.l1Size / NUM_TWO &&
             runInfo_.totalBlockCnt > platformInfo_.aicNum;
         CHECK_COND(runInfo_.isAFullLoad, "The requested A-full-load tiling does not support the current shape");

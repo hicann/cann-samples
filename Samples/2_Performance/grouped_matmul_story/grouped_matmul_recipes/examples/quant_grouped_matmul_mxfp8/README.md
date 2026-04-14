@@ -1,12 +1,12 @@
-# Grouped Matmul MXFP4量化矩阵乘算子
+# Grouped Matmul MXFP8量化矩阵乘算子
 
 ## 概述
 
-本示例展示了Grouped Matmul MXFP4量化矩阵乘算子在昇腾AI处理器上的完整实现。算子以专家数进行分组，执行分组矩阵乘计算，输入矩阵 `A` 在 `M` 维按组拼接，权重矩阵 `B` 按组独立存储，适用于MoE等包含多专家分组计算的推理场景。
+本示例展示了Grouped Matmul MXFP8量化矩阵乘算子在昇腾AI处理器上的完整实现。算子以专家数进行分组，执行分组矩阵乘计算，输入矩阵 `A` 在 `M` 维按组拼接，权重矩阵 `B` 按组独立存储，适用于MoE等包含多专家分组计算的推理场景。
 
 当前目录提供以下能力：
 
-- `grouped_matmul_mxfp4_split_m`：基于m轴分组的分组量化矩阵乘运算方法。
+- `grouped_matmul_mxfp8_split_m`：基于m轴分组的分组量化矩阵乘运算方法。
 - `gen_data.py`：生成输入数据和 CPU golden 结果。
 - `verify_result.py`：校验 NPU 输出与 CPU golden 是否一致。
 
@@ -17,7 +17,6 @@
 - 当前仅支持A不转置，B转置的场景。
 - A 的形状为 `[M, K]`，B 的形状为 `[E, N, K]`。
 - 当前仅支持m轴分组。
-- 当前样例仅要求输入的 `k` 为偶数，以满足两个 `B4` 打包成一个 `B8` 的存储约束。
 
 ## 支持架构
 
@@ -103,7 +102,7 @@ python3 gen_data.py expect_m_per_group 3 128 384 256 256
 cmake -S . -B build
 cmake --build build --parallel
 cmake --install build --prefix ./build_out
-cd build_out/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4
+cd build_out/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8
 ```
 
 之后可按需执行以下命令：
@@ -115,7 +114,6 @@ python3 gen_data.py group_list 128,128,0 384 256 256
 # 生成数据方式二：按专家数和平均 M 随机生成 grouplist
 python3 gen_data.py expect_m_per_group 3 128 384 256 256
 
-# 运行可执行文件并校验结果（以上面的 group_list 示例为例）
-./quant_grouped_matmul_mxfp4 3 384 256 256
+# 运行可执行文件（以上面的 group_list 示例为例）
+./quant_grouped_matmul_mxfp8 3 384 256 256
 ```
-

@@ -10,7 +10,7 @@
 
 /*!
  * \file copy_scale_l1_to_l0b.h
- * \brief Tile helper that copies grouped MXFP4 scaleB data from L1 to L0B.
+ * \brief Tile helper that copies grouped MX scaleB data from L1 to L0B.
  */
 #ifndef GROUPED_MATMUL_RECIPE_COPY_SCALE_L1_TO_L0B_H
 #define GROUPED_MATMUL_RECIPE_COPY_SCALE_L1_TO_L0B_H

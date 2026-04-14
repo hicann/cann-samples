@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
         QuantMatmulTilingData tilingData;
         // Host tiling picks the block shape, tail strategy, and buffering plan
         // that will later be consumed by the device kernel.
-        QuantMatmulTilingSwat<DataType::FP4, DataType::FP4> tilingEngine;
+        QuantMatmulTilingSwat<mm::DataType::DT_FLOAT4_E2M1, mm::DataType::DT_FLOAT4_E2M1> tilingEngine;
         tilingEngine.GetTilingData(m, n, k, tilingData);
 
         AclRtSession aclSession(deviceId);

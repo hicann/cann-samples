@@ -9,14 +9,15 @@
  */
 
 /*!
- * \file quant_grouped_matmul_mxfp4_split_m.cpp
- * \brief Minimal launcher for the grouped MXFP4 split-M recipe.
+ * \file quant_grouped_matmul_mxfp8_split_m.cpp
+ * \brief Minimal launcher for the grouped MXFP8 split-M recipe.
  */
 
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -31,15 +32,13 @@
 #include "policy/dispatch_policy.h"
 #include "tiling/quant_grouped_matmul_mx_tiling_data.h"
 #include "tiling/quant_grouped_matmul_mx_tiling_split_m.h"
-#include "utils/grouped_matmul_constant.h"
 
-// mxfp4: only for cube core
-__global__ __aicore__ __cube__ void QuantGroupedMatmulMxfp4SplitMKernel(
+__global__ __aicore__ __cube__ void QuantGroupedMatmulMxfp8SplitMKernel(
     GM_ADDR x, GM_ADDR weight, GM_ADDR xScale, GM_ADDR weightScale, GM_ADDR groupList, GM_ADDR y,
-    const QuantGroupedMatmulMxfp4TilingData tilingData)
+    const QuantGroupedMatmulMxfp8TilingData tilingData)
 {
-    using AType = fp4x2_e2m1_t;
-    using BType = fp4x2_e2m1_t;
+    using AType = fp8_e4m3fn_t;
+    using BType = fp8_e4m3fn_t;
     using CType = bfloat16_t;
     using LayoutA = layout::RowMajor;
     using LayoutB = layout::ColumnMajor;
@@ -49,7 +48,7 @@ __global__ __aicore__ __cube__ void QuantGroupedMatmulMxfp4SplitMKernel(
     using DispatchPolicy = QuantMatmulMxMultiBlockMmad;
     using BlockMmad = Block::BlockMmad<DispatchPolicy, AType, LayoutA, BType, LayoutB, CType, LayoutC>;
     using BlockScheduler = Block::BlockSchedulerGmmAswtWithTailSplit<ProblemShape, false, true>;
-    using GroupedKernel = Kernel::QuantGroupedMatmulMxfp4KernelSplitM<ProblemShape, BlockMmad, BlockScheduler>;
+    using GroupedKernel = Kernel::QuantGroupedMatmulMxfp8KernelSplitM<ProblemShape, BlockMmad, BlockScheduler>;
     using Params = typename GroupedKernel::Params;
 
     Params params = {
@@ -63,11 +62,7 @@ __global__ __aicore__ __cube__ void QuantGroupedMatmulMxfp4SplitMKernel(
 
 int main(int argc, char* argv[])
 {
-    GroupedMatmulMxfp4Args args{};
-    try {
-        args = ParseArguments(argc, argv);
-    } catch (const std::exception& ex) {
-        std::cerr << ex.what() << std::endl;
+    if (argc != 5) {
         PrintUsage(argv[0]);
         return 1;
     }
@@ -77,11 +72,22 @@ int main(int argc, char* argv[])
     try {
         std::string baseDir = GetExecutableDir();
         CHECK_COND(chdir(baseDir.c_str()) == 0, "Failed to switch to the executable directory.");
-        uint64_t groupNum = args.groupNum;
-        uint64_t m = args.m;
-        uint64_t k = args.k;
-        uint64_t n = args.n;
-        const size_t groupListBytes = args.groupListBytes;
+        uint64_t groupNum = ParsePositiveUint64(argv[1], "group_num");
+        uint64_t m = ParsePositiveUint64(argv[2], "m");
+        uint64_t k = ParsePositiveUint64(argv[3], "k");
+        uint64_t n = ParsePositiveUint64(argv[4], "n");
+        constexpr uint64_t int32MaxU64 = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
+        CHECK_COND(m <= int32MaxU64, "m must not exceed INT32_MAX.");
+        CHECK_COND(k <= int32MaxU64, "k must not exceed INT32_MAX.");
+        CHECK_COND(n <= int32MaxU64, "n must not exceed INT32_MAX.");
+        CHECK_COND(
+            groupNum <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()),
+            "group_num exceeds addressable size on this platform.");
+        uint64_t groupListBytesU64 = groupNum * sizeof(int64_t);
+        CHECK_COND(
+            groupListBytesU64 <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()),
+            "group list byte size exceeds addressable size on this platform.");
+        const size_t groupListBytes = static_cast<size_t>(groupListBytesU64);
         std::string inputDir = "./input";
         std::string outputDir = "./output";
         std::vector<int64_t> groupListHost(static_cast<size_t>(groupNum), 0);
@@ -97,8 +103,8 @@ int main(int argc, char* argv[])
         uint64_t sumGroupM = std::accumulate(groupMList.begin(), groupMList.end(), 0ULL);
         CHECK_COND(sumGroupM <= m, "m must be greater than or equal to sum(group_m_list).");
 
-        QuantGroupedMatmulMxfp4TilingData tilingData;
-        QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT4_E2M1> tiler;
+        QuantGroupedMatmulMxfp8TilingData tilingData;
+        QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT8_E4M3FN> tiler;
         tiler.GetTilingData(static_cast<uint32_t>(groupMList.size()), static_cast<uint32_t>(m),
                             static_cast<uint32_t>(n), static_cast<uint32_t>(k), tilingData);
 
@@ -106,8 +112,8 @@ int main(int argc, char* argv[])
             CeilDiv<uint64_t>(k, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE;
         // Tensor and GM sizes follow the declared M budget (m), not sum(group_m_list), so buffers stay valid when
         // some groups contribute zero rows.
-        size_t xByteSize = (m * k / 2UL) * sizeof(uint8_t);
-        size_t weightByteSize = (static_cast<uint64_t>(groupMList.size()) * n * k / 2UL) * sizeof(uint8_t);
+        size_t xByteSize = (m * k) * sizeof(uint8_t);
+        size_t weightByteSize = (static_cast<uint64_t>(groupMList.size()) * n * k) * sizeof(uint8_t);
         size_t xScaleByteSize = m * scaleK * sizeof(uint8_t);
         size_t weightScaleByteSize = static_cast<uint64_t>(groupMList.size()) * n * scaleK * sizeof(uint8_t);
         size_t yByteSize = m * n * sizeof(uint16_t);
@@ -122,9 +128,7 @@ int main(int argc, char* argv[])
         size_t xScaleFileSize = xScaleByteSize;
         size_t weightScaleFileSize = weightScaleByteSize;
 
-        CHECK_COND(
-            ReadFile(inputDir + "/input_a.bin", xFileSize, hostX.data(), xByteSize),
-            "Failed to read input_a.bin.");
+        CHECK_COND(ReadFile(inputDir + "/input_a.bin", xFileSize, hostX.data(), xByteSize), "Failed to read input_a.bin.");
         CHECK_COND(xFileSize == xByteSize, "input_a.bin size does not match the expected tensor size.");
         CHECK_COND(
             ReadFile(inputDir + "/input_b.bin", weightFileSize, hostWeight.data(), weightByteSize),
@@ -199,7 +203,7 @@ int main(int argc, char* argv[])
                     ACL_SUCCESS,
                 "Failed to copy groupList to device.");
 
-            QuantGroupedMatmulMxfp4SplitMKernel<<<tilingData.usedCoreNum, nullptr, stream>>>(
+            QuantGroupedMatmulMxfp8SplitMKernel<<<tilingData.usedCoreNum, nullptr, stream>>>(
                 dX, dWeight, dXScale, dWeightScale, dGroupList, dY, tilingData);
             CHECK_COND(aclrtSynchronizeStream(stream) == ACL_SUCCESS, "Failed to synchronize stream.");
             CHECK_COND(
@@ -213,8 +217,8 @@ int main(int argc, char* argv[])
             return 1;
         }
         return 0;
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
+    } catch (const std::exception& ex) {
+        std::cerr << ex.what() << std::endl;
         return 1;
     }
 }

@@ -20,7 +20,7 @@
 
 #include "quant_matmul_tiling_base.h"
 
-template <DataType aDataType, DataType bDataType>
+template <mm::DataType aDataType, mm::DataType bDataType>
 class QuantMatmulTilingSwat : public QuantMatmulTilingBase<aDataType, bDataType> {
 public:
     QuantMatmulTilingSwat() = default;
@@ -226,7 +226,7 @@ private:
         // the tail statistics used by later scheduling decisions.
         runInfo_.baseM = Align(std::min(args_.m, BASIC_BLOCK_SIZE_256), CUBE_BLOCK);
         runInfo_.baseN = Align(std::min(args_.n, BASIC_BLOCK_SIZE_256), CUBE_BLOCK);
-        runInfo_.baseK = Align(std::min(args_.k, aDataType == DataType::FP4 ? BASIC_BLOCK_SIZE_256 : BASIC_BLOCK_SIZE_128), TILING_MXFP_DIVISOR_SIZE);
+        runInfo_.baseK = Align(std::min(args_.k, aDataType == mm::DataType::DT_FLOAT4_E2M1 ? BASIC_BLOCK_SIZE_256 : BASIC_BLOCK_SIZE_128), TILING_MXFP_DIVISOR_SIZE);
 
         uint64_t blockNum = CeilDiv(args_.m, runInfo_.baseM) * CeilDiv(args_.n, runInfo_.baseN);
         if (blockNum < platformInfo_.aicNum) {

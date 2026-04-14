@@ -10,7 +10,7 @@
 
 /*!
  * \file block_scheduler_utils.h
- * \brief Scheduler traits shared by the grouped MXFP4 recipe wrappers.
+ * \brief Scheduler traits shared by grouped MX recipe wrappers.
  */
 #ifndef GROUPED_MATMUL_BLOCK_SCHEDULER_UTILS_H
 #define GROUPED_MATMUL_BLOCK_SCHEDULER_UTILS_H
