@@ -27,4 +27,10 @@ struct QuantMatmulMxSwatScheduler {
     // stored in this tag type.
     static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
+
+template <uint64_t FULL_LOAD_MODE_>
+struct MatmulA16W16SwatScheduler {
+    static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
+};
+
 #endif
