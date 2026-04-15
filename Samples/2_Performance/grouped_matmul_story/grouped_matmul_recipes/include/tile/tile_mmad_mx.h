@@ -15,7 +15,7 @@
 #ifndef GROUPED_MATMUL_RECIPE_TILE_MMAD_MX_H
 #define GROUPED_MATMUL_RECIPE_TILE_MMAD_MX_H
 
-#include "impl/atom/cube_compute/mmad.h"
+#include "include/tensor.h"
 
 namespace Tile {
 

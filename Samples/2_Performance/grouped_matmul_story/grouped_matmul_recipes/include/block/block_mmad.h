@@ -9,22 +9,20 @@
  */
 
 /*!
- * \file dispatch_policy.h
- * \brief Dispatch policy tags used by grouped MX recipe kernels.
+ * \file block_mmad.h
+ * \brief block mmad interface.
  */
-#ifndef GROUPED_MATMUL_RECIPE_DISPATCH_POLICY_H
-#define GROUPED_MATMUL_RECIPE_DISPATCH_POLICY_H
+#pragma once
 
-#include "kernel_utils/common_utils.h"
-#include "kernel_utils/integral_constant.h"
-#include "kernel_utils/tuple_utils.h"
+namespace Block {
 
-struct KernelMultiBlockOnKAxisWithScale {};
-
-struct QuantMatmulMxMultiBlockMmad {
-    using ScheduleType = KernelMultiBlockOnKAxisWithScale;
+template <
+    class DispatchPolicy_, class AType_, class LayoutA_, class BType_, class LayoutB_, class CType_, class LayoutC_,
+    class BiasType_ = void, class Enable = void>
+class BlockMmad {
+    static_assert(AscendC::Std::always_false_v<DispatchPolicy_>, "BlockMmad is not implemented for this DispatchPolicy");
 };
 
-struct KernelMixDynamicKL1NTailResplit {};
+} // namespace Block
 
-#endif
+#include "weight_quant_grouped_matmul_mxfp8fp4_block_mmad_split_m.h"

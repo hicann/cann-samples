@@ -35,6 +35,10 @@ constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM = 6;
 constexpr static uint32_t FINAL_ACCUMULATION = 3U;
 constexpr static uint32_t NON_FINAL_ACCUMULATION = 2U;
 
+constexpr uint64_t SYNC_MODE4 = 4;
+
+constexpr uint64_t FLAG_ID_MAX = 16;
+
 inline uint64_t GetShapeWithDataTypeFp4(uint64_t shape)
 {
     return shape << 1;

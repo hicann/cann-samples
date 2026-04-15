@@ -15,7 +15,7 @@
 #ifndef GROUPED_MATMUL_RECIPE_COPY_SCALE_L1_TO_L0A_H
 #define GROUPED_MATMUL_RECIPE_COPY_SCALE_L1_TO_L0A_H
 
-#include "impl/atom/cube_datamove/copy_l12l0.h"
+#include "include/tensor.h"
 #include "kernel_utils/common_utils.h"
 #include "../utils/grouped_matmul_constant.h"
 

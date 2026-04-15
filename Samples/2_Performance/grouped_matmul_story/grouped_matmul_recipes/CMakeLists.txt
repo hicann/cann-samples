@@ -38,16 +38,10 @@ add_grouped_matmul_recipe(
     quant_grouped_matmul_mxfp8
 )
 
-install(FILES
-    ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/scripts/gen_data.py
-    ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/scripts/verify_result.py
-    DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/quant_grouped_matmul_mxfp4
-)
-
-install(FILES
-    ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/scripts/gen_data.py
-    ${GROUPED_MATMUL_STORY_DIR}/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/scripts/verify_result.py
-    DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/quant_grouped_matmul_mxfp8
+add_grouped_matmul_recipe(
+    weight_quant_grouped_matmul_mxfp8fp4
+    weight_quant_grouped_matmul_mxfp8fp4/weight_quant_grouped_matmul_mxfp8fp4_split_m.cpp
+    weight_quant_grouped_matmul_mxfp8fp4
 )
 
 # Remove legacy install layout from old versions.
@@ -55,3 +49,15 @@ install(CODE
     "file(REMOVE_RECURSE \"\${CMAKE_INSTALL_PREFIX}/${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/examples\")"
 )
 
+# Install helper scripts into the same directory as the executables. Host code
+# uses the executable directory as baseDir and runs `python3 verify_result.py`
+# there; gen_data.py is also documented as run from that cwd.
+set(RECIPE_VARIANTS quant_grouped_matmul_mxfp4 quant_grouped_matmul_mxfp8 weight_quant_grouped_matmul_mxfp8fp4)
+foreach(variant IN LISTS RECIPE_VARIANTS)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/examples/${variant}/scripts/
+        DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/${variant}
+        FILES_MATCHING
+        PATTERN "*.py"
+        PATTERN "*.sh"
+    )
+endforeach()

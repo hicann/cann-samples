@@ -9,22 +9,20 @@
  */
 
 /*!
- * \file dispatch_policy.h
- * \brief Dispatch policy tags used by grouped MX recipe kernels.
+ * \file block_prologue.h
+ * \brief block prologue interface.
  */
-#ifndef GROUPED_MATMUL_RECIPE_DISPATCH_POLICY_H
-#define GROUPED_MATMUL_RECIPE_DISPATCH_POLICY_H
+#pragma once
 
-#include "kernel_utils/common_utils.h"
-#include "kernel_utils/integral_constant.h"
-#include "kernel_utils/tuple_utils.h"
+#include "../policy/dispatch_policy.h"
 
-struct KernelMultiBlockOnKAxisWithScale {};
+namespace Prologue {
 
-struct QuantMatmulMxMultiBlockMmad {
-    using ScheduleType = KernelMultiBlockOnKAxisWithScale;
+template <class DispatchPolicy, class... Args>
+class BlockPrologue {
+    static_assert(AscendC::Std::always_false_v<DispatchPolicy>, "BlockPrologue is not implemented for this DispatchPolicy");
 };
 
-struct KernelMixDynamicKL1NTailResplit {};
+} // namespace Prologue
 
-#endif
+#include "weight_quant_grouped_matmul_mxfp8fp4_block_prologue_split_m.h"

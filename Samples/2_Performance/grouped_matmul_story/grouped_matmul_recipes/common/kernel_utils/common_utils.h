@@ -91,4 +91,13 @@ __aicore__ inline uint64_t Align(uint64_t a, uint64_t b)
     return (a + b - 1) / b * b;
 }
 
+template <typename T>
+__aicore__ constexpr uint32_t GetKBUnit()
+{
+    if constexpr (AscendC::IsSameType<T, AscendC::int4b_t>::value || AscendC::IsSameType<T, fp4x2_e2m1_t>::value ||
+                  AscendC::IsSameType<T, fp4x2_e1m2_t>::value) {
+        return 2048;
+    }
+    return 1024 / sizeof(T);
+}
 #endif
