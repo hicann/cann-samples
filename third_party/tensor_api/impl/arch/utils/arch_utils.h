@@ -30,7 +30,7 @@ namespace AscendC {
 namespace Te {
 
 template<const LoadDataTrait& trait, bool transpose> 
-constexpr LoadDataTrait TransTrait = LoadDataTrait(trait, transpose); 
+constexpr LoadDataTrait TransTrait = LoadDataTrait(trait, transpose);
 
 template <typename T>
 __aicore__ inline uint8_t GetCacheModeFromTensor(const T& tensor) {

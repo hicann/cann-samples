@@ -54,6 +54,14 @@ struct IterAdaptor
         return {ptr + ic};
     }
 
+    __aicore__ inline constexpr DerivedType operator&(uint64_t mask) const {
+        return {(iterator)(reinterpret_cast<uint64_t>(ptr) & mask)};
+    }
+
+    __aicore__ inline constexpr DerivedType operator|(uint64_t mask) const {
+        return {(iterator)(reinterpret_cast<uint64_t>(ptr) | mask)};
+    }
+
     __aicore__ inline constexpr iterator Get() const {
         return ptr; 
     }

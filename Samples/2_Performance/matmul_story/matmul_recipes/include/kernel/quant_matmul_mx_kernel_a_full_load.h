@@ -174,6 +174,14 @@ __aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_F
 
     BlockCoord blockIdx;
     constexpr int64_t kPos = 0L;
+    bool isBMatrixOnlyNeedLoadOnce = params.problemShape.m <= params.qbmmParams.baseM && (params.problemShape.k & 0xff) == 0;
+    if (isBMatrixOnlyNeedLoadOnce) {
+        gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+        gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+    } else {
+        gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+        gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+    }
     while (bs.GetTileIdx(blockIdx)) {
         // The scheduler packs GM origin into M/N and retains logical tile
         // indices in K/B so shape reconstruction still works.
