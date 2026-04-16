@@ -82,6 +82,31 @@ toolkit 安装包文件名格式如下：
      cmake --install build --prefix ./build_out
      ```
 
+4. 运行验证
+
+   - 选项A: 运行指定的Target(以vector_add为例)
+
+     上一步将`<target_name>` 替换为`vector_add`编译成功后，编译输出二进制文件在`./build/Samples/0_Introduction/vector_add/`目录下，即编译产物在第一步构建的`build`文件夹下与样例目录对应的位置，执行如下命令运行：
+     ```sh
+     ./build/Samples/0_Introduction/vector_add/vector_add
+     ```
+     可以得到结果如下：
+     ```
+     Vector add completed successfully!
+     ```
+
+   - 选项B: 运行全量编译并安装后的matmul用例
+
+     完成第三步的安装后，所有编译生成文件都在`build_out`文件夹下，`matmul`用例的可运行文件在`./build_out/0_Introduction/matmul`目录下，执行如下命令运行：
+     ```
+     ./build_out/0_Introduction/matmul/matmul 100 50 200
+     ```
+     可以得到结果如下：
+     ```
+     matmul run successfully!
+     ```
+     开发者可自行尝试运行`build_out`下的其它用例。
+
 ## 📂目录结构
 
 ```
