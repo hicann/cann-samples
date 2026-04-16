@@ -64,6 +64,8 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 #### Tensor a 的搬运说明
 
+> 输入Layout说明：标准输入(m, k)、(k, n)对应ND排布。转置输入(k, m)、(n, k)对应DN排布
+
 | **缓冲区变化** | **Shape排布变化** | **Layout变化** | **所属流水** | **所用指令** |
 |-|-|-|-|-|
 | GM -> L1 | (m, k) -> (ceil(kL1/k0), ceil(mL1/m0), m0, k0) | ND -> Nz | MTE2 | DataCopy with ND2NZ |
@@ -79,10 +81,9 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 | **缓冲区变化** | **Shape排布变化** | **Layout变化** | **所属流水** | **所用指令** |
 |-|-|-|-|-|
-| GM -> L1 | (n, k) -> (ceil(kL1/k0), ceil(nL1/n0), n0, k0) | ND -> Nz | MTE2 | DataCopy with ND2NZ |
-| L1 -> L0B | (ceil(kL1/k0), ceil(nL1/n0), n0, k0) -> (ceil(baseK/k0), ceil(baseN/n0), n0, k0) | Nz -> Zn | MTE1 | LoadData with Load2D |
+| GM -> L1 | (n, k) -> (ceil(kL1/k0), ceil(nL1/n0), n0, k0) | DN -> Zn | MTE2 | DataCopy with ND2NZ |
+| L1 -> L0B | (ceil(kL1/k0), ceil(nL1/n0), n0, k0) -> (ceil(baseK/k0), ceil(baseN/n0), n0, k0) | Zn -> Zn | MTE1 | LoadData with Load2D |
 
-> 这里L1和L0B上的Shape排布其实一样，但L0B默认按照(k, n)方向查看数据，因此Layout会变更成`Zn`
 
   <div align="center">
     <img src="images/image25.png" width="1500" />
@@ -96,7 +97,7 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 | **缓冲区变化** | **Shape排布变化** | **Layout变化** | **所属流水** | **所用指令** |
 |-|-|-|-|-|
-| GM -> L1 | (m, ceil(ceil(k/32)/2), 2) -> (ceil(mL1/m0), ceil(ceil(kL1/32)/k0), m0, k0) | ND -> Zz | MTE2 | DataCopy with ND2NZ |
+| GM -> L1 | (m, ceil(ceil(k/32)/2), 2) -> (ceil(mL1/m0), ceil(ceil(kL1/32)/k0), m0, k0) | ND -> Zz | MTE2 | DataCopy with DN2NZ |
 | L1 -> L0A_MX | (ceil(mL1/m0), ceil(ceil(kL1/32)/k0), m0, k0) -> (ceil(baseM/m0), ceil(ceil(baseK/32)/k0), m0, k0) | Zz -> Zz | MTE1 | LoadData with Load2D_MX |
 
   <div align="center">
@@ -109,8 +110,8 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 | **缓冲区变化** | **Shape排布变化** | **Layout变化** | **所属流水** | **所用指令** |
 |-|-|-|-|-|
-| GM -> L1 | (n, ceil(ceil(k/32)/2), 2) -> (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) | ND -> Zz | MTE2 | DataCopy with ND2NZ |
-| L1 -> L0B_MX | (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) -> (ceil(baseN/n0), ceil(ceil(baseK/32)/k0), n0, k0) | Zz -> Nn | MTE1 | LoadData with Load2D_MX |
+| GM -> L1 | (n, ceil(ceil(k/32)/2), 2) -> (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) | DN -> Nn | MTE2 | DataCopy with DN2NZ |
+| L1 -> L0B_MX | (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) -> (ceil(baseN/n0), ceil(ceil(baseK/32)/k0), n0, k0) | Nn -> Nn | MTE1 | LoadData with Load2D_MX |
 
   <div align="center">
     <img src="images/image27.png" width="1500" />
