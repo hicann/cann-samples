@@ -181,7 +181,7 @@ __global__ __aicore__ __cube__ void QuantMatmulMxfp4SwatKernel(uint64_t m, uint6
     constexpr uint32_t BASE_N = 256;
     constexpr uint32_t BASE_K = 256; // 128 / sizeof(fp4x2_e2m1_t)
     constexpr uint32_t PINGPONG_NUM = 2;
-    constexpr uint32_t L1_BUFFER_NUM = 3;
+    constexpr uint32_t L1_BUFFER_NUM = 2;
 
     Params params;
     params.problemShape.m = static_cast<int64_t>(m);

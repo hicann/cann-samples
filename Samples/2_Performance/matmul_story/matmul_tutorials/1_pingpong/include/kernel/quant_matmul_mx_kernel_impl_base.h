@@ -195,7 +195,7 @@ __global__ __aicore__ __cube__ void QuantMatmulMxfp4BaseKernel(uint64_t m, uint6
     constexpr uint32_t BASE_N = 256;
     constexpr uint32_t BASE_K = 256;
     constexpr uint32_t PINGPONG_NUM = 2;
-    constexpr uint32_t L1_BUFFER_NUM = 3;
+    constexpr uint32_t L1_BUFFER_NUM = 2;
     Params params;
     params.problemShape.m = static_cast<int64_t>(m);
     params.problemShape.n = static_cast<int64_t>(n);
