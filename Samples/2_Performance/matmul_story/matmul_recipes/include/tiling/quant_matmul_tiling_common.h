@@ -12,8 +12,7 @@
  * \file quant_matmul_tiling_common.h
  * \brief Shared constants and runtime state for MX tiling generation.
  */
-#ifndef QUANT_MATMUL_TILING_COMMON_H
-#define QUANT_MATMUL_TILING_COMMON_H
+#pragma once
 
 #ifndef __CCE_AICORE__
 #include <cstdint>
@@ -125,4 +124,3 @@ struct QuantMatmulRunInfo {
     bool isAFullLoad{false};
 };
 
-#endif // QUANT_MATMUL_TILING_COMMON_H

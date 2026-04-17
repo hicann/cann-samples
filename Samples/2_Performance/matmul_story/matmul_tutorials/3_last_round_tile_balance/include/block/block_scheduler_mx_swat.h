@@ -11,8 +11,7 @@
 /*!
  * \brief SWAT-style row groups plus optional last-round MN tail split (`mTailTile` x `nTailTile`).
  */
-#ifndef BLOCK_SCHEDULER_MX_LAST_ROUND_TILE_BALANCE_H
-#define BLOCK_SCHEDULER_MX_LAST_ROUND_TILE_BALANCE_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -190,4 +189,3 @@ struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxLastRoundTileBalanceSc
 };
 
 }  // namespace Block
-#endif

@@ -13,8 +13,7 @@
  * \brief Shared constants and runtime state for MATMUL tiling generation.
  */
 
-#ifndef MATMUL_TILING_COMMON_H
-#define MATMUL_TILING_COMMON_H
+#pragma once
 
 #ifndef __CCE_AICORE__
 #include <cstdint>
@@ -72,4 +71,3 @@ struct MatmulA16W16RunInfo {
     uint64_t dbL0c = 1;
 };
 
-#endif

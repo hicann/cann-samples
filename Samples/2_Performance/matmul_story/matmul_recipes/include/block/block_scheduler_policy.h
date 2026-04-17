@@ -13,8 +13,7 @@
  * \brief Scheduler policy definitions for SWAT quantized matmul kernels.
  */
 
-#ifndef BLOCK_SCHEDULER_POLICY_H
-#define BLOCK_SCHEDULER_POLICY_H
+#pragma once
 
 #include <cstdint>
 
@@ -33,4 +32,3 @@ struct MatmulA16W16SwatScheduler {
     static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
 
-#endif

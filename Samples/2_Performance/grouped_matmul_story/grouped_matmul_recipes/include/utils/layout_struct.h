@@ -7,8 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef GROUPED_MATMUL_UTILS_LAYOUT_STRUCT_H
-#define GROUPED_MATMUL_UTILS_LAYOUT_STRUCT_H
+#pragma once
 
 #include "include/tensor.h"
 
@@ -72,4 +71,3 @@ struct Weight8BitUBLayout {
 } // namespace Te
 } // namespace AscendC
 
-#endif // GROUPED_MATMUL_UTILS_LAYOUT_STRUCT_H

@@ -13,8 +13,7 @@
  * \brief SWAT tiling specialization for the MX A-full-load path.
  */
 
-#ifndef QUANT_MATMUL_MX_TILING_A_FULL_LOAD_H
-#define QUANT_MATMUL_MX_TILING_A_FULL_LOAD_H
+#pragma once
 
 #include <algorithm>
 
@@ -334,4 +333,3 @@ private:
     }
 };
 
-#endif // QUANT_MATMUL_MX_TILING_A_FULL_LOAD_H

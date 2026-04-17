@@ -8,8 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef BLOCK_SCHEDULER_UTILS_H
-#define BLOCK_SCHEDULER_UTILS_H
+#pragma once
 
 namespace Block {
 
@@ -18,4 +17,3 @@ template <class ProblemShape, class BlockScheduler = void>
 struct BlockSchedulerSelector;
 
 }  // namespace Block
-#endif

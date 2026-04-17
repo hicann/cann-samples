@@ -12,8 +12,7 @@
  * \file quant_grouped_matmul_tiling_common.h
  * \brief Shared runtime state for grouped MX tiling generation.
  */
-#ifndef QUANT_GROUPED_MATMUL_TILING_COMMON_H
-#define QUANT_GROUPED_MATMUL_TILING_COMMON_H
+#pragma once
 
 #ifndef __CCE_AICORE__
 #include <cstdint>
@@ -76,4 +75,3 @@ struct QuantGroupedMatmulRunInfo {
     uint32_t scaleFactorA{1U};
     uint32_t scaleFactorB{1U};
 };
-#endif // QUANT_GROUPED_MATMUL_TILING_COMMON_H

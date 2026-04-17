@@ -13,8 +13,7 @@
  * \brief Block-level A16W16 MMAD pipeline for SWAT non-full-load path.
  */
 
-#ifndef MATMUL_A16W16_BLOCK_MMAD_SWAT_H
-#define MATMUL_A16W16_BLOCK_MMAD_SWAT_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/layout_utils.h"
@@ -258,4 +257,3 @@ private:
 };
 } // namespace Block
 
-#endif

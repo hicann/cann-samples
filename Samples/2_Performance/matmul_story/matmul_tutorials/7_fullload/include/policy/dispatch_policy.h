@@ -12,8 +12,7 @@
  * \file dispatch_policy.h
  * \brief
  */
-#ifndef DISPATCH_POLICY_H
-#define DISPATCH_POLICY_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 
@@ -30,4 +29,3 @@ struct QuantMatmulMxMultiBlockWithSwat {
     static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
 
-#endif

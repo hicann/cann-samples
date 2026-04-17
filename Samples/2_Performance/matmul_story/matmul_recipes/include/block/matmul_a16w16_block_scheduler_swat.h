@@ -13,8 +13,7 @@
  * \brief SWAT block scheduler for *A16W16 non-full-load path.
  */
 
-#ifndef MATMUL_A16W16_BLOCK_SCHEDULER_SWAT_H
-#define MATMUL_A16W16_BLOCK_SCHEDULER_SWAT_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 #include "utils/matmul_a16w16_constant.h"
@@ -230,4 +229,3 @@ struct BlockSchedulerSelector<ProblemShape_, MatmulA16W16SwatScheduler<NO_FULL_L
     using SchedulerOp = BlockSchedulerA16W16Swat<ProblemShape_>;
 };
 } // namespace Block
-#endif

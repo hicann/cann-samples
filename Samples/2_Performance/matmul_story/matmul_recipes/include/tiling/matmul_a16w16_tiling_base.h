@@ -13,8 +13,7 @@
  * \brief Base tiling class for A16W16 matmul.
  */
 
-#ifndef MATMUL_A16W16_TILING_BASE_H
-#define MATMUL_A16W16_TILING_BASE_H
+#pragma once
 
 #include <cstdint>
 #include <memory>
@@ -147,4 +146,3 @@ private:
     }
 };
 
-#endif

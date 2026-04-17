@@ -13,8 +13,7 @@
  * \brief
  */
 
-#ifndef UTILS_COMMON_UTILS_H
-#define UTILS_COMMON_UTILS_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -100,4 +99,3 @@ __aicore__ constexpr uint32_t GetKBUnit()
     }
     return 1024 / sizeof(T);
 }
-#endif

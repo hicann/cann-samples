@@ -12,8 +12,7 @@
  * \file quant_grouped_matmul_mx_block_mmad_split_m.h
  * \brief Block-level grouped MX MMAD wrapper for split-M recipes.
  */
-#ifndef QUANT_GROUPED_MATMUL_MX_BLOCK_MMAD_SPLIT_M_H
-#define QUANT_GROUPED_MATMUL_MX_BLOCK_MMAD_SPLIT_M_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/layout_utils.h"
@@ -31,76 +30,85 @@ namespace Block {
 
 namespace {
 // Half of one L0C bank (float workspace) when double-buffering the accumulator tile.
-constexpr static uint64_t HALF_L0C_SIZE = L0C_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(float);
-constexpr static uint64_t SCALE_BUFFER_NUM = 2UL;
+static constexpr uint64_t HALF_L0C_SIZE = L0C_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(float);
+static constexpr uint64_t SCALE_BUFFER_NUM = 2UL;
 // MTE1_MTE2 event ids: input ring (0-1) then scale ping-pong (4-5); cross-pipe sync uses base 2 + buffer id.
-constexpr static uint16_t INPUT_BUFFER_MTE1_MTE2_BASE = 2;
+static constexpr uint16_t INPUT_BUFFER_MTE1_MTE2_BASE = 2;
 // Scale ping-pong uses ids 4 + scaleL1BufId (0 or 1).
-constexpr static uint16_t SCALE_BUFFER_MTE1_MTE2_BASE = 4;
+static constexpr uint16_t SCALE_BUFFER_MTE1_MTE2_BASE = 4;
 
 } // namespace
 
 template <
     class DispatchPolicy_,
-    class AType_,
-    class LayoutA_,
-    class BType_,
-    class LayoutB_,
+    class ATypeTuple_,
+    class LayoutATuple_,
+    class BTypeTuple_,
+    class LayoutBTuple_,
     class CType_,
     class LayoutC_,
-    class Enable = void>
-class BlockMmad {
-    static_assert(AscendC::Std::always_false_v<DispatchPolicy_>, "Should not be here!");
-};
-
-template <
-    class DispatchPolicy_,
-    class AType_,
-    class LayoutA_,
-    class BType_,
-    class LayoutB_,
-    class CType_,
-    class LayoutC_>
+    class BiasType_>
 class BlockMmad<
     DispatchPolicy_,
-    AType_,
-    LayoutA_,
-    BType_,
-    LayoutB_,
+    ATypeTuple_,
+    LayoutATuple_,
+    BTypeTuple_,
+    LayoutBTuple_,
     CType_,
     LayoutC_,
-    AscendC::Std::enable_if_t<
-        AscendC::Std::is_base_of_v<
-            QuantMatmulMxMultiBlockMmad,
-            DispatchPolicy_>>> {
+    BiasType_,
+    AscendC::Std::enable_if_t<AscendC::Std::is_base_of_v<QuantMatmulMxMultiBlockMmad, DispatchPolicy_>>> {
 public:
-    using AType = AType_;
-    using BType = BType_;
+    template <typename T>
+    struct TypeUnpack {
+        using Data = T;
+        using Scale = void;
+    };
+
+    template <typename T0, typename T1>
+    struct TypeUnpack<AscendC::Std::tuple<T0, T1>> {
+        using Data = T0;
+        using Scale = T1;
+    };
+
+    template <typename T>
+    struct LayoutUnpack {
+        using Data = T;
+        using Scale = void;
+    };
+
+    template <typename T0, typename T1>
+    struct LayoutUnpack<AscendC::Std::tuple<T0, T1>> {
+        using Data = T0;
+        using Scale = T1;
+    };
+
+    using AType = typename TypeUnpack<ATypeTuple_>::Data;
+    using ScaleAType = typename TypeUnpack<ATypeTuple_>::Scale;
+    using BType = typename TypeUnpack<BTypeTuple_>::Data;
+    using ScaleBType = typename TypeUnpack<BTypeTuple_>::Scale;
     using CType = CType_;
-    using LayoutA = LayoutA_;
-    using LayoutB = LayoutB_;
+    using BiasType = BiasType_;
+    using LayoutA = typename LayoutUnpack<LayoutATuple_>::Data;
+    using LayoutScaleA = typename LayoutUnpack<LayoutATuple_>::Scale;
+    using LayoutB = typename LayoutUnpack<LayoutBTuple_>::Data;
+    using LayoutScaleB = typename LayoutUnpack<LayoutBTuple_>::Scale;
     using MxL0AType = typename AscendC::GetL0DataType<AType, true>::Type;
     using MxL0BType = typename AscendC::GetL0DataType<BType, true>::Type;
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t>;
-    static constexpr bool transA = ::TagToTrans<LayoutA>::value;
-    static constexpr bool transB = ::TagToTrans<LayoutB>::value;
-    static constexpr CubeFormat formatB = ::TagToFormat<LayoutB>::format;
-    static_assert(!transA, "QuantGroupedMatmulMxBlockMmadSplitM only supports non-transposed A.");
-    static_assert(transB, "QuantGroupedMatmulMxBlockMmadSplitM only supports transposed B.");
-    static_assert(formatB == CubeFormat::ND, "QuantGroupedMatmulMxBlockMmadSplitM only supports ND-format B.");
     // MXFP8: zero-pad L1 K tail to match NZ layout / ND2NZ path (see Tile::PadMxK*L1); MXFP4 keeps unpadded L1 views.
-    static constexpr bool kUseMxFp8L1KPad_ = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> &&
+    static constexpr bool kUseMxFp8L1KPad_ =
+        AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> &&
         AscendC::Std::is_one_of_v<BType, fp8_e5m2_t, fp8_e4m3fn_t>;
-    constexpr static uint64_t HALF_L0_SIZE = L0A_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(AType);
+    static constexpr uint64_t HALF_L0_SIZE = L0A_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(AType);
     using MakeLayoutAL1 = AscendC::Te::NzLayoutFormat<AType>;
     using MakeLayoutBL1 = AscendC::Te::ZnLayoutFormat<BType>;
 
     struct Params {
         GM_ADDR aGmAddr{nullptr};
         GM_ADDR bGmAddr{nullptr};
-        GM_ADDR groupListGmAddr{nullptr};
         GM_ADDR x1ScaleGmAddr{nullptr};
         GM_ADDR x2ScaleGmAddr{nullptr};
         GM_ADDR cGmAddr{nullptr};
@@ -116,7 +124,7 @@ public:
     __aicore__ inline BlockMmad()
     {
         // Set all MTE1/MTE2 handshake flags so the first K stage can enter the copy/compute loop uniformly.
-        #pragma unroll
+#pragma unroll
         for (uint8_t i = 0; i < GroupedMatmulRecipe::MTE1_MTE2_EVENT_ID_NUM; ++i) {
             AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(i);
         }
@@ -128,7 +136,7 @@ public:
     __aicore__ inline ~BlockMmad()
     {
         // Wait for every in-flight transfer and cube sync before disabling MM layout transform.
-        #pragma unroll
+#pragma unroll
         for (uint8_t i = 0; i < GroupedMatmulRecipe::MTE1_MTE2_EVENT_ID_NUM; ++i) {
             AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(i);
         }
@@ -501,4 +509,3 @@ private:
 };
 } // namespace Block
 
-#endif // QUANT_GROUPED_MATMUL_MX_BLOCK_MMAD_SPLIT_M_H

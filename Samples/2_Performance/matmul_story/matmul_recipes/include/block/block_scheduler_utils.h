@@ -13,8 +13,7 @@
  * \brief Utility helpers shared by the SWAT block schedulers.
  */
 
-#ifndef BLOCK_SCHEDULER_UTILS_H
-#define BLOCK_SCHEDULER_UTILS_H
+#pragma once
 
 namespace Block {
 
@@ -26,4 +25,3 @@ template <class ProblemShape, class BlockScheduler = void, bool TransA = false, 
 struct BlockSchedulerSelector;
 
 } // namespace Block
-#endif

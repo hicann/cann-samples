@@ -12,8 +12,7 @@
  * \file copy_scale_gm_to_l1.h
  * \brief Scale-copy helpers that move MX scale tensors from GM to L1.
  */
-#ifndef TILE_COPY_SCALE_GM_TO_L1_H
-#define TILE_COPY_SCALE_GM_TO_L1_H
+#pragma once
 
 #include "include/utils/utils.h"
 #include "impl/atom/copy_traits_impl.h"
@@ -204,4 +203,3 @@ struct AscendC::Te::CopyTraits<::Tile::CopyScaleGM2L1>
         ::Tile::CopyScaleGM2L1, AscendC::Te::LoadDataTraitDefault, ::Tile::CopyScaleGM2L1,
         AscendC::Te::LoadDataTraitDefault> {};
 
-#endif // TILE_COPY_SCALE_GM_TO_L1_H

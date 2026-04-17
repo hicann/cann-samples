@@ -12,8 +12,7 @@
  * \file dispatch_policy.h
  * \brief Dispatch policy tags used by grouped MX recipe kernels.
  */
-#ifndef GROUPED_MATMUL_RECIPE_DISPATCH_POLICY_H
-#define GROUPED_MATMUL_RECIPE_DISPATCH_POLICY_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/integral_constant.h"
@@ -27,4 +26,3 @@ struct QuantMatmulMxMultiBlockMmad {
 
 struct KernelMixDynamicKL1NTailResplit {};
 
-#endif

@@ -7,8 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef GROUPED_MATMUL_RECIPE_COPY_WEIGHT_UB_TO_L1_H
-#define GROUPED_MATMUL_RECIPE_COPY_WEIGHT_UB_TO_L1_H
+#pragma once
 
 #include "include/tensor.h"
 #include "include/utils/utils.h"
@@ -69,4 +68,3 @@ struct AscendC::Te::CopyTraits<AscendC::Te::CopyUB2L1Custom>
           AscendC::Te::CopyUB2L1Custom, AscendC::Te::DataCopyTraitDefault,
           AscendC::Te::CopyUB2L1Custom, AscendC::Te::DataCopyTraitDefault> {};
 
-#endif

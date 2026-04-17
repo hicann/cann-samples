@@ -13,8 +13,7 @@
  * \brief Tile helper that copies MX scaleA data from L1 to L0A.
  */
 
-#ifndef MATMUL_TILE_DATAMOVE_COPY_L1_TO_L0A_H
-#define MATMUL_TILE_DATAMOVE_COPY_L1_TO_L0A_H
+#pragma once
 
 #include "impl/atom/cube_datamove/copy_l12l0.h"
 #include "kernel_utils/common_utils.h"
@@ -61,4 +60,3 @@ struct AscendC::Te::CopyTraits<::Tile::CopyL12L0MxScaleA3510>
         ::Tile::CopyL12L0MxScaleA3510, LoadDataTraitDefault, ::Tile::CopyL12L0MxScaleA3510,
         LoadDataTraitDefault> {};
 
-#endif

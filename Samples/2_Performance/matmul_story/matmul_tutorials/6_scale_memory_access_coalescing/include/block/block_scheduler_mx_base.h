@@ -14,8 +14,7 @@
  * - In the last round, split tail blocks into mTailTile x nTailTile pieces for load balance
  */
 
-#ifndef BLOCK_SCHEDULER_MX_BASE_H
-#define BLOCK_SCHEDULER_MX_BASE_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -191,4 +190,3 @@ struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxBaseScheduler> {
 };
 
 }  // namespace Block
-#endif

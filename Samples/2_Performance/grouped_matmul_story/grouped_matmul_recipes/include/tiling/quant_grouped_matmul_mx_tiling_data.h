@@ -12,14 +12,13 @@
  * \file quant_grouped_matmul_mx_tiling_data.h
  * \brief POD tiling payload shared by grouped MX recipe host and kernel.
  */
-#ifndef QUANT_GROUPED_MATMUL_MX_TILING_DATA_H
-#define QUANT_GROUPED_MATMUL_MX_TILING_DATA_H
+#pragma once
 
 #include <cstdint>
 
 struct QuantGroupedMatmulMxTilingData {
     uint32_t groupNum = 0;
-    uint32_t maxM = 0;
+    uint32_t m = 0;
     uint32_t n = 0;
     uint32_t k = 0;
     uint32_t baseM = 0;
@@ -36,4 +35,3 @@ struct QuantGroupedMatmulMxTilingData {
 using QuantGroupedMatmulMxfp4TilingData = QuantGroupedMatmulMxTilingData;
 using QuantGroupedMatmulMxfp8TilingData = QuantGroupedMatmulMxTilingData;
 
-#endif // QUANT_GROUPED_MATMUL_MX_TILING_DATA_H

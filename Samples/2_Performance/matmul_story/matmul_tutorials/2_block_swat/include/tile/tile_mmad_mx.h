@@ -13,8 +13,7 @@
  * \brief Tile-level MMAD traits used by the SWAT MXFP4 kernels.
  */
 
-#ifndef MATMUL_COMMON_CMCT_TILE_COMPUTE_H
-#define MATMUL_COMMON_CMCT_TILE_COMPUTE_H
+#pragma once
 #include "impl/atom/cube_compute/mmad.h"
 namespace Tile {
 
@@ -85,4 +84,3 @@ struct MmadTraits<::Tile::MmadMxWithBias>
 
 } // namespace Te
 } // namespace AscendC
-#endif

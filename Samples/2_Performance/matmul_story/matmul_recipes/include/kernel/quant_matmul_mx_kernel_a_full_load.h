@@ -13,8 +13,7 @@
  * \brief Kernel-side SWAT MX implementation for the A-full-load path.
  */
 
-#ifndef QUANT_MATMUL_MX_KERNEL_A_FULL_LOAD_H
-#define QUANT_MATMUL_MX_KERNEL_A_FULL_LOAD_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -218,4 +217,3 @@ __aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_F
 #undef QBMM_MX_KERNEL_A_FULL_LOAD_CLASS_TEM_PARAMS
 #undef QBMM_MX_KERNEL_A_FULL_LOAD_FUN_TEM_PARAMS
 
-#endif

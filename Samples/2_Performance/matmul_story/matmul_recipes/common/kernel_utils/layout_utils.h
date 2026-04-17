@@ -13,8 +13,7 @@
  * \brief Layout tags and mapping traits used by TE tensor wrappers.
  */
 
-#ifndef UTILS_LAYOUT_UTILS_H
-#define UTILS_LAYOUT_UTILS_H
+#pragma once
 
 // Cube format definitions.
 #include "matmul/matmul_config.h"
@@ -59,4 +58,3 @@ struct TagToTrans<layout::ColumnMajor> {
     static constexpr bool value = true;
 };
 
-#endif

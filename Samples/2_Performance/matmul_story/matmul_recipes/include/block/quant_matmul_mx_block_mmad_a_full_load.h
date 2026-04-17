@@ -13,8 +13,7 @@
  * \brief Block-level MX MMAD pipeline for the SWAT A-full-load path.
  */
 
-#ifndef QUANT_MATMUL_MX_BLOCK_MMAD_A_FULL_LOAD_H
-#define QUANT_MATMUL_MX_BLOCK_MMAD_A_FULL_LOAD_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/layout_utils.h"
@@ -371,4 +370,3 @@ private:
 };
 } // namespace Block
 
-#endif

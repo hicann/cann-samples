@@ -11,8 +11,7 @@
 /*!
  * \brief SWAT-style scheduler: M-row sliding window and zig-zag N order for better locality.
  */
-#ifndef BLOCK_SCHEDULER_MX_SWAT_H
-#define BLOCK_SCHEDULER_MX_SWAT_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -134,5 +133,4 @@ struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler> {
 };
 
 }  // namespace Block
-#endif
 

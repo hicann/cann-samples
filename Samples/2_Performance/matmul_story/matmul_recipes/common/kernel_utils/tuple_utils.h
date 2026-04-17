@@ -13,8 +13,7 @@
  * \brief Tuple access helpers for nested Ascend C tuple-like values.
  */
 
-#ifndef UTILS_TUPLE_UTILS_H
-#define UTILS_TUPLE_UTILS_H
+#pragma once
 
 #include "lib/std/tuple.h"
 #include "./integral_constant.h"
@@ -33,4 +32,3 @@ __aicore__ constexpr inline decltype(auto) Get(T&& t)
     return Get<Second, Rest...>(AscendC::Std::get<First>(AscendC::Std::forward<T>(t)));
 }
 
-#endif

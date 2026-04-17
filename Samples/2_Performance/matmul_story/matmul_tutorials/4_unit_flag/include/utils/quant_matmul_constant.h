@@ -8,8 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef UTILS_QUANT_MATMUL_CONSTANT_H
-#define UTILS_QUANT_MATMUL_CONSTANT_H
+#pragma once
 
 constexpr uint64_t IDX_A_OFFSET = 0UL;
 constexpr uint64_t IDX_B_OFFSET = 1UL;
@@ -46,4 +45,3 @@ constexpr int64_t DOUBLE_BUFFER_COUNT = 2LL;
 constexpr int64_t OFFSET_4_8 = 2LL;
 constexpr int64_t L1_FOUR_BUFFER = 4LL;
 
-#endif

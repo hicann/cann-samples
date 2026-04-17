@@ -14,9 +14,11 @@
  */
 #pragma once
 
+#include "block_mmad.h"
 #include "kernel_basic_intf.h"
 #include "include/tensor.h"
 #include "kernel_utils/tensor_utils.h"
+#include "../policy/dispatch_policy.h"
 #include "../utils/grouped_matmul_constant.h"
 #include "../tile/tile_mmad_mx.h"
 #include "../tile/copy_scale_gm_to_l1.h"
@@ -36,6 +38,7 @@ using GroupedMatmulRecipe::FLAG_ID_MAX;
 using GroupedMatmulRecipe::MX_DIVISOR_SIZE;
 using GroupedMatmulRecipe::MX_GROUP_SIZE;
 using GroupedMatmulRecipe::NON_FINAL_ACCUMULATION;
+using GroupedMatmulRecipe::SYNC_MODE4;
 
 namespace Block {
 // Macro aliases keep the specialization declaration compact for this single dispatch-policy binding.

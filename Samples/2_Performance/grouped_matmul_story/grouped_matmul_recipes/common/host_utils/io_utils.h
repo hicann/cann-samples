@@ -13,8 +13,7 @@
  * \brief
  */
 
-#ifndef IO_UTILS_H
-#define IO_UTILS_H
+#pragma once
 
 #include <fcntl.h>
 #include <limits.h>
@@ -112,4 +111,3 @@ inline bool WriteFile(const std::string& filePath, const void* buffer, size_t si
     return true;
 }
 
-#endif // IO_UTILS_H

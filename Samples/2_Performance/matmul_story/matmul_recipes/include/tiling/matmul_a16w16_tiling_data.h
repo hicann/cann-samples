@@ -13,8 +13,7 @@
  * \brief Serialized tiling data passed from host launcher to kernel.
  */
 
-#ifndef MATMUL_A16W16_TILING_DATA_H
-#define MATMUL_A16W16_TILING_DATA_H
+#pragma once
 
 #ifndef __CCE_AICORE__
 #include <cstdint>
@@ -45,4 +44,3 @@ struct alignas(8) MatmulA16W16TilingData {
 };
 #pragma pack(pop)
 
-#endif

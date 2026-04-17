@@ -12,8 +12,7 @@
  * \file integral_constant.h
  * \brief Minimal integral-constant aliases used by device-side template code.
  */
-#ifndef UTILS_INTEGRAL_CONSTANT_H
-#define UTILS_INTEGRAL_CONSTANT_H
+#pragma once
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
 #else
@@ -35,4 +34,3 @@ using Int = AscendC::Std::integral_constant<int32_t, t>;
 
 using _0 = Int<0>;
 
-#endif

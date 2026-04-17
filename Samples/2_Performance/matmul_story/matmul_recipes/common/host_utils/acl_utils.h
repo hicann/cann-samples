@@ -12,8 +12,7 @@
  * \file acl_utils.h
  * \brief RAII wrapper for ACL runtime initialization, device setup, and stream cleanup.
  */
-#ifndef ACL_UTILS_H
-#define ACL_UTILS_H
+#pragma once
 
 #include <cstdint>
 
@@ -71,4 +70,3 @@ private:
     bool aclInitialized_{false};
 };
 
-#endif // ACL_UTILS_H

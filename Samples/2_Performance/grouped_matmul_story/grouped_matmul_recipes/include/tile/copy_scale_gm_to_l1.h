@@ -12,8 +12,7 @@
  * \file copy_scale_gm_to_l1.h
  * \brief Scale-copy helpers that move grouped MX scale tensors from GM to L1.
  */
-#ifndef GROUPED_MATMUL_RECIPE_COPY_SCALE_GM_TO_L1_H
-#define GROUPED_MATMUL_RECIPE_COPY_SCALE_GM_TO_L1_H
+#pragma once
 
 #include "include/utils/utils.h"
 #include "include/tensor.h"
@@ -183,4 +182,3 @@ struct AscendC::Te::CopyTraits<::Tile::CopyScaleGM2L1>
         ::Tile::CopyScaleGM2L1, AscendC::Te::LoadDataTraitDefault, ::Tile::CopyScaleGM2L1,
         AscendC::Te::LoadDataTraitDefault> {};
 
-#endif

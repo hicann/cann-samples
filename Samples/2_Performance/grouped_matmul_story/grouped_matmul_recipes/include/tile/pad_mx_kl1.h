@@ -12,8 +12,7 @@
  * \file pad_mx_kl1.h
  * \brief zero-pad A/B L1 buffers along K when the GM slice is shorter than the L1-aligned layout.
  */
-#ifndef GROUPED_MATMUL_RECIPE_TILE_PAD_MX_KL1_H
-#define GROUPED_MATMUL_RECIPE_TILE_PAD_MX_KL1_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 #include "include/tensor.h"
@@ -133,4 +132,3 @@ struct PadMxKBL1 : public PadMxKL1Base {
 };
 } // namespace Tile
 
-#endif // GROUPED_MATMUL_RECIPE_TILE_PAD_MX_KL1_H

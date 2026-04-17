@@ -13,8 +13,7 @@
  * \brief Kernel-side SWAT A16W16 implementation for the non-full-load path.
  */
 
-#ifndef MATMUL_A16W16_KERNEL_SWAT_H
-#define MATMUL_A16W16_KERNEL_SWAT_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -156,4 +155,3 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
 
 } // namespace Kernel
 
-#endif

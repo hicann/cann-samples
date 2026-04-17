@@ -13,8 +13,7 @@
  * \brief Common block-level MMAD template declaration.
  */
 
-#ifndef BLOCK_MMAD_H
-#define BLOCK_MMAD_H
+#pragma once
 
 #include "kernel_utils/integral_constant.h"
 
@@ -27,4 +26,3 @@ class BlockMmad {
 };
 } // namespace Block
 
-#endif

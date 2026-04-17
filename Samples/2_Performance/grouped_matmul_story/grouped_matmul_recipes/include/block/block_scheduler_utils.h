@@ -12,8 +12,7 @@
  * \file block_scheduler_utils.h
  * \brief Scheduler traits shared by grouped MX recipe wrappers.
  */
-#ifndef GROUPED_MATMUL_BLOCK_SCHEDULER_UTILS_H
-#define GROUPED_MATMUL_BLOCK_SCHEDULER_UTILS_H
+#pragma once
 
 #include "kernel_utils/tuple_utils.h"
 
@@ -41,4 +40,3 @@ __aicore__ inline bool IsNTail(int64_t nTileIdx, int64_t nTileNum)
 
 } // namespace Block
 
-#endif

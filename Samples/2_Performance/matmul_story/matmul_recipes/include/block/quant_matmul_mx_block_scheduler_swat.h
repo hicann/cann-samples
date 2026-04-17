@@ -13,8 +13,7 @@
  * \brief SWAT block scheduler for the MX non-full-load path.
  */
 
-#ifndef QUANT_MATMUL_MX_BLOCK_SCHEDULER_SWAT_H
-#define QUANT_MATMUL_MX_BLOCK_SCHEDULER_SWAT_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 
@@ -242,4 +241,3 @@ struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<NO_FULL_
 
 } // namespace Block
 
-#endif

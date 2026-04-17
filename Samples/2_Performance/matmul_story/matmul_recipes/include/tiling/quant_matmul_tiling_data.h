@@ -13,8 +13,7 @@
  * \brief Serialized tiling data passed from the host launcher to the kernel.
  */
 
-#ifndef QUANT_MATMUL_TILING_DATA_H
-#define QUANT_MATMUL_TILING_DATA_H
+#pragma once
 
 #ifndef __CCE_AICORE__
 #include <cstdint>
@@ -60,4 +59,3 @@ struct alignas(8) QuantMatmulTilingData {
 };
 #pragma pack(pop)
 
-#endif // QUANT_MATMUL_TILING_DATA_H

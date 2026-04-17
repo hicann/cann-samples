@@ -13,8 +13,7 @@
  * \brief TensorAPI version of the MXFP4 quantized matmul kernel (A-full-load, scaleA per-load path).
  */
 
-#ifndef QUANT_MATMUL_MX_KERNEL_Base_IMPL_H
-#define QUANT_MATMUL_MX_KERNEL_Base_IMPL_H
+#pragma once
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
 #else
@@ -185,4 +184,3 @@ __aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS
 
 } // namespace Kernel
 
-#endif

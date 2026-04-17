@@ -13,8 +13,7 @@
  * \brief Base class that drives the common MX tiling workflow.
  */
 
-#ifndef QUANT_MATMUL_TILING_BASE_H
-#define QUANT_MATMUL_TILING_BASE_H
+#pragma once
 
 #include <cstdint>
 #include <cstdio>
@@ -105,4 +104,3 @@ private:
     }
 };
 
-#endif // QUANT_MATMUL_TILING_BASE_H

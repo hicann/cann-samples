@@ -12,8 +12,7 @@
  * \file tile_mmad_mx.h
  * \brief Tile-level MMAD traits used by grouped MX kernels.
  */
-#ifndef GROUPED_MATMUL_RECIPE_TILE_MMAD_MX_H
-#define GROUPED_MATMUL_RECIPE_TILE_MMAD_MX_H
+#pragma once
 
 #include "include/tensor.h"
 
@@ -83,4 +82,3 @@ struct MmadTraits<::Tile::MmadMxWithBias>
 } // namespace Te
 } // namespace AscendC
 
-#endif

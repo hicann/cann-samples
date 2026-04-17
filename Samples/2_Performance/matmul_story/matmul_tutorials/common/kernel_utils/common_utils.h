@@ -13,8 +13,7 @@
  * \brief
  */
 
-#ifndef UTILS_COMMON_UTILS_H
-#define UTILS_COMMON_UTILS_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -92,4 +91,3 @@ __aicore__ inline uint64_t Align(uint64_t a, uint64_t b)
 }
 
 
-#endif

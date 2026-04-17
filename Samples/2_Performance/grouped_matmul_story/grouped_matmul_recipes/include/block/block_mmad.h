@@ -14,6 +14,8 @@
  */
 #pragma once
 
+#include "kernel_utils/integral_constant.h"
+
 namespace Block {
 
 template <
@@ -25,4 +27,6 @@ class BlockMmad {
 
 } // namespace Block
 
+// Include all concrete BlockMmad specializations here.
 #include "weight_quant_grouped_matmul_mxfp8fp4_block_mmad_split_m.h"
+#include "quant_grouped_matmul_mx_block_mmad_split_m.h"

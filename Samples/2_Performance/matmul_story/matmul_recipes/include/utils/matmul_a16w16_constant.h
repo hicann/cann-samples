@@ -13,8 +13,7 @@
  * \brief Shared constants and helper types for A16W16 matmul.
  */
 
-#ifndef UTILSmatmul_A16W16_CONSTANT_H
-#define UTILSmatmul_A16W16_CONSTANT_H
+#pragma once
 
 #ifndef __CCE_AICORE__
 #include <cstdint>
@@ -50,4 +49,3 @@ constexpr uint64_t WINDOW_LEN = 4UL;
 constexpr uint64_t L1_FOUR_BUFFER = 4UL;
 constexpr uint64_t BIAS_TABLE_NUM = 256UL;
 
-#endif

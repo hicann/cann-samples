@@ -8,8 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef QUANT_MATMUL_MX_KERNEL_UNIT_FLAG_IMPL_H
-#define QUANT_MATMUL_MX_KERNEL_UNIT_FLAG_IMPL_H
+#pragma once
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
 #else
@@ -213,4 +212,3 @@ __global__ __aicore__ __cube__ void QuantMatmulMxfp4UnitFlagKernel(uint64_t m, u
 
 } // namespace Kernel
 
-#endif

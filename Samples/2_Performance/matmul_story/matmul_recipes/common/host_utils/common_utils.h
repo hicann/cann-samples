@@ -13,8 +13,7 @@
  * \brief Host-side argument parsing, shape helpers, and error utilities for matmul examples.
  */
 
-#ifndef COMMON_UTILS_H
-#define COMMON_UTILS_H
+#pragma once
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
@@ -180,4 +179,3 @@ constexpr T GetSizeWithDataType(T shape)
     }
 }
 
-#endif // COMMON_UTILS_H

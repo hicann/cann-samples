@@ -12,8 +12,7 @@
  * \file copy_scale_l1_to_l0b.h
  * \brief Tile helper that copies grouped MX scaleB data from L1 to L0B.
  */
-#ifndef GROUPED_MATMUL_RECIPE_COPY_SCALE_L1_TO_L0B_H
-#define GROUPED_MATMUL_RECIPE_COPY_SCALE_L1_TO_L0B_H
+#pragma once
 
 #include "include/tensor.h"
 #include "kernel_utils/common_utils.h"
@@ -59,4 +58,3 @@ struct LoadData2BTrait {
 
 } // namespace AscendC::Te
 
-#endif

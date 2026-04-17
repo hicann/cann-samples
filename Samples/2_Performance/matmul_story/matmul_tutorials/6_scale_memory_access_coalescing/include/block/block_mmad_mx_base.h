@@ -8,8 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef MATMUL_BLOCK_MMAD_MX_BASE_H
-#define MATMUL_BLOCK_MMAD_MX_BASE_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -321,4 +320,3 @@ private:
     uint64_t l1BufferScaleBOffset_[2] = {0UL};
 };
 } // namespace Block
-#endif

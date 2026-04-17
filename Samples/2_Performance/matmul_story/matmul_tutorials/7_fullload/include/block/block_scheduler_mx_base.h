@@ -14,8 +14,7 @@
  * - In the last round, split the tail block into mTailTile x nTailTile pieces, shared by multiple blocks
  */
 
-#ifndef BLOCK_SCHEDULER_MX_BASE_H
-#define BLOCK_SCHEDULER_MX_BASE_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -191,4 +190,3 @@ struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxLastRoundTileBalanceSc
 };
 
 }  // namespace Block
-#endif

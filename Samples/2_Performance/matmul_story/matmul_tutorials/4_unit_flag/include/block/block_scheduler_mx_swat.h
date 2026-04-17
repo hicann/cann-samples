@@ -11,8 +11,7 @@
 /*!
  * \brief Last-round tile split: extra blocks share tail MN tiles for load balance (SWAT-style row groups).
  */
-#ifndef BLOCK_SCHEDULER_MX_LAST_ROUND_TILE_BALANCE_H
-#define BLOCK_SCHEDULER_MX_LAST_ROUND_TILE_BALANCE_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -190,4 +189,3 @@ struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxLastRoundTileBalanceSc
 };
 
 }  // namespace Block
-#endif

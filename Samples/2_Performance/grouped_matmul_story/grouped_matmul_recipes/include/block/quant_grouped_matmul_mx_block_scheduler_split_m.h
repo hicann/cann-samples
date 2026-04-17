@@ -13,8 +13,7 @@
  * \brief
  */
 
- #ifndef MATMUL_BLOCK_BLOCK_SCHEDULER_GMM_ASWT_WITH_TAIL_SPLIT_H
- #define MATMUL_BLOCK_BLOCK_SCHEDULER_GMM_ASWT_WITH_TAIL_SPLIT_H
+#pragma once
  #include "./block_scheduler_utils.h"
  
 namespace Block {
@@ -26,6 +25,10 @@ namespace Block {
      using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
      using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
      using ProblemShape = ProblemShape_;
+     struct Params {
+         int32_t baseM{0};
+         int32_t baseN{0};
+     };
  
  private:
      int64_t mCnt_;
@@ -46,7 +49,6 @@ namespace Block {
      int64_t roundIdx_;
      int32_t baseM_;
      int32_t baseN_;
-     int32_t baseK_;
      int32_t mBaseTail_;
      int32_t nBaseTail_;
      uint32_t blockNum_ = AscendC::GetBlockNum();
@@ -55,8 +57,13 @@ namespace Block {
      uint32_t endBlockIdx_{blockNum_ - 1};
  
  public:
-     __aicore__ inline BlockSchedulerGmmAswtWithTailSplit(int32_t baseM, int32_t baseN, int32_t baseK)
-         : baseM_(baseM), baseN_(baseN), baseK_(baseK)
+     __aicore__ inline BlockSchedulerGmmAswtWithTailSplit(const Params &params)
+         : baseM_(params.baseM), baseN_(params.baseN)
+     {
+     }
+ 
+     __aicore__ inline BlockSchedulerGmmAswtWithTailSplit(int32_t baseM, int32_t baseN, int32_t /*baseK*/)
+         : BlockSchedulerGmmAswtWithTailSplit(Params{baseM, baseN})
      {
      }
  
@@ -223,4 +230,3 @@ namespace Block {
  };
 
 } // namespace Block
- #endif

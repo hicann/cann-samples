@@ -12,8 +12,7 @@
  * \file quant_grouped_matmul_mx_tiling_split_m.h
  * \brief Host-side tiling helper for grouped MX split-M samples.
  */
-#ifndef QUANT_GROUPED_MATMUL_MX_TILING_SPLIT_M_H
-#define QUANT_GROUPED_MATMUL_MX_TILING_SPLIT_M_H
+#pragma once
 
 #include <algorithm>
 #include <cstdint>
@@ -315,7 +314,7 @@ private:
 
         tilingData = {};
         tilingData.groupNum = static_cast<uint32_t>(args_.groupNum);
-        tilingData.maxM = static_cast<uint32_t>(args_.m);
+        tilingData.m = static_cast<uint32_t>(args_.m);
         tilingData.n = static_cast<uint32_t>(args_.n);
         tilingData.k = static_cast<uint32_t>(args_.k);
         tilingData.baseM = static_cast<uint32_t>(runInfo_.baseM);
@@ -335,7 +334,7 @@ private:
         printf("  strategy           : split_m\n");
         printf("[GroupedMatmul Tiling Data]\n");
         printf("  groupNum           : %u\n", tilingData.groupNum);
-        printf("  maxM               : %u\n", tilingData.maxM);
+        printf("  m                  : %u\n", tilingData.m);
         printf("  n                  : %u\n", tilingData.n);
         printf("  k                  : %u\n", tilingData.k);
         printf("  baseM              : %u\n", tilingData.baseM);
@@ -353,4 +352,3 @@ private:
 using QuantGroupedMatmulMxfp4TilingSplitM = QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT4_E2M1>;
 using QuantGroupedMatmulMxfp8TilingSplitM = QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT8_E4M3FN>;
 
-#endif // QUANT_GROUPED_MATMUL_MX_TILING_SPLIT_M_H

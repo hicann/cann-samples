@@ -28,8 +28,8 @@
 #include "host_utils/acl_utils.h"
 #include "host_utils/common_utils.h"
 #include "host_utils/io_utils.h"
+#include "block/block_mmad.h"
 #include "kernel/quant_grouped_matmul_mx_kernel_split_m.h"
-#include "policy/dispatch_policy.h"
 #include "tiling/quant_grouped_matmul_mx_tiling_data.h"
 #include "tiling/quant_grouped_matmul_mx_tiling_split_m.h"
 
@@ -39,22 +39,46 @@ __global__ __aicore__ __cube__ void QuantGroupedMatmulMxfp8SplitMKernel(
 {
     using AType = fp8_e4m3fn_t;
     using BType = fp8_e4m3fn_t;
+    using ScaleAType = fp8_e8m0_t;
+    using ScaleBType = fp8_e8m0_t;
     using CType = bfloat16_t;
-    using LayoutA = layout::RowMajor;
-    using LayoutB = layout::ColumnMajor;
-    using LayoutC = layout::RowMajor;
+    using LayoutA = typename AscendC::Te::NDLayoutFormat<AType>;
+    using LayoutB = typename AscendC::Te::DNLayoutFormat<BType>;
+    using LayoutC = typename AscendC::Te::NDLayoutFormat<CType>;
+    using LayoutScaleA = typename AscendC::Te::ScaleANDLayoutFormat<ScaleAType>;
+    using LayoutScaleB = typename AscendC::Te::ScaleBDNLayoutFormat<ScaleBType>;
 
     using ProblemShape = MatmulShape;
     using DispatchPolicy = QuantMatmulMxMultiBlockMmad;
-    using BlockMmad = Block::BlockMmad<DispatchPolicy, AType, LayoutA, BType, LayoutB, CType, LayoutC>;
+    using BlockMmad = Block::BlockMmad<
+        DispatchPolicy, AscendC::Std::tuple<AType, ScaleAType>, AscendC::Std::tuple<LayoutA, LayoutScaleA>,
+        AscendC::Std::tuple<BType, ScaleBType>, AscendC::Std::tuple<LayoutB, LayoutScaleB>, CType, LayoutC>;
     using BlockScheduler = Block::BlockSchedulerGmmAswtWithTailSplit<ProblemShape, false, true>;
     using GroupedKernel = Kernel::QuantGroupedMatmulMxfp8KernelSplitM<ProblemShape, BlockMmad, BlockScheduler>;
     using Params = typename GroupedKernel::Params;
+    using SchedulerParams = typename BlockScheduler::Params;
 
     Params params = {
-        {static_cast<int64_t>(tilingData.maxM), static_cast<int64_t>(tilingData.n), static_cast<int64_t>(tilingData.k), 1},
-        {x, weight, groupList, xScale, weightScale, y},
-        &tilingData,
+        {static_cast<int64_t>(tilingData.m), static_cast<int64_t>(tilingData.n), static_cast<int64_t>(tilingData.k), 1},
+        {x, weight, xScale, weightScale, y},
+        SchedulerParams{
+            static_cast<int32_t>(tilingData.baseM),
+            static_cast<int32_t>(tilingData.baseN),
+        },
+        {
+            tilingData.groupNum,
+            tilingData.m,
+            tilingData.n,
+            tilingData.k,
+            tilingData.baseM,
+            tilingData.baseN,
+            tilingData.baseK,
+            tilingData.kAL1,
+            tilingData.kBL1,
+            tilingData.scaleKAL1,
+            tilingData.dbL0C,
+        },
+        groupList,
     };
     GroupedKernel kernel;
     kernel(params);

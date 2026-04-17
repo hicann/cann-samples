@@ -12,8 +12,7 @@
  * \file copy_scale_l1_to_l0a.h
  * \brief Tile helper that copies grouped MX scaleA data from L1 to L0A.
  */
-#ifndef GROUPED_MATMUL_RECIPE_COPY_SCALE_L1_TO_L0A_H
-#define GROUPED_MATMUL_RECIPE_COPY_SCALE_L1_TO_L0A_H
+#pragma once
 
 #include "include/tensor.h"
 #include "kernel_utils/common_utils.h"
@@ -52,4 +51,3 @@ struct AscendC::Te::CopyTraits<::Tile::CopyL12L0MxScaleA3510>
         ::Tile::CopyL12L0MxScaleA3510, LoadDataTraitDefault, ::Tile::CopyL12L0MxScaleA3510,
         LoadDataTraitDefault> {};
 
-#endif

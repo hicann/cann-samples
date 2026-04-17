@@ -8,8 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ACL_UTILS_H
-#define ACL_UTILS_H
+#pragma once
 
 #include <cstdint>
 #include <vector>
@@ -92,4 +91,3 @@ private:
     std::vector<void*> deviceBuffers_{};
 };
 
-#endif // ACL_UTILS_H

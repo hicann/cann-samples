@@ -13,8 +13,7 @@
  * \brief
  */
 
-#ifndef COMMON_UTILS_H
-#define COMMON_UTILS_H
+#pragma once
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -161,4 +160,3 @@ inline GroupedMatmulMxfp4Args ParseArguments(int argc, char* argv[])
     return args;
 }
 
-#endif // COMMON_UTILS_H

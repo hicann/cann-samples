@@ -12,8 +12,7 @@
  * \file dispatch_policy.h
  * \brief Dispatch policy tags used by the quantized matmul recipe kernels.
  */
-#ifndef DISPATCH_POLICY_H
-#define DISPATCH_POLICY_H
+#pragma once
 
 #include <cstdint>
 
@@ -46,5 +45,3 @@ template <uint64_t FULL_LOAD_MODE_>
 struct MatmulA16W16MultiBlockWithSwat {
     static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
-
-#endif

@@ -12,8 +12,7 @@
  * \file quant_grouped_matmul_mx_kernel_split_m.h
  * \brief Sample-side grouped MX split-M kernel wrapper.
  */
-#ifndef QUANT_GROUPED_MATMUL_MX_KERNEL_SPLIT_M_H
-#define QUANT_GROUPED_MATMUL_MX_KERNEL_SPLIT_M_H
+#pragma once
 
 #include "kernel_basic_intf.h"
 #include "include/tensor.h"
@@ -29,10 +28,6 @@ namespace Kernel {
 template <class ProblemShape, class BlockMmad, class BlockScheduler>
 class KernelQGmmMx {
 public:
-    static constexpr bool transA = BlockMmad::transA;
-    static constexpr bool transB = BlockMmad::transB;
-    static_assert(!transA, "QuantGroupedMatmulMxKernelSplitM only supports non-transposed A.");
-    static_assert(transB, "QuantGroupedMatmulMxKernelSplitM only supports transposed B.");
     using AType = typename BlockMmad::AType;
     using BType = typename BlockMmad::BType;
     using CType = typename BlockMmad::CType;
@@ -49,10 +44,26 @@ public:
     using MakeLayoutScaleA = AscendC::Te::ScaleANDLayoutFormat<ScaleType>;
     using MakeLayoutScaleB = AscendC::Te::ScaleBDNLayoutFormat<ScaleType>;
 
+    struct TilingParams {
+        uint32_t groupNum{0U};
+        uint32_t m{0U};
+        uint32_t n{0U};
+        uint32_t k{0U};
+        uint32_t baseM{0U};
+        uint32_t baseN{0U};
+        uint32_t baseK{0U};
+        uint32_t kAL1{0U};
+        uint32_t kBL1{0U};
+        uint32_t scaleKAL1{0U};
+        uint8_t dbL0C{0U};
+    };
+
     struct Params {
         ProblemShape problemShape;
         typename BlockMmad::Params mmadParams;
-        const QuantGroupedMatmulMxTilingData* gmmParams{nullptr};
+        typename BlockScheduler::Params schedulerParams;
+        TilingParams kernelParams;
+        GM_ADDR groupListGmAddr{nullptr};
         Params() = default;
     };
 
@@ -82,8 +93,7 @@ private:
         ResetGmAddr(params);
         Init(params);
         using SchedulerOp = BlockScheduler;
-        SchedulerOp bs(static_cast<int32_t>(params.gmmParams->baseM), static_cast<int32_t>(params.gmmParams->baseN),
-                       static_cast<int32_t>(params.gmmParams->baseK));
+        SchedulerOp bs(params.schedulerParams);
         for (uint32_t groupIdx = 0; groupIdx < groupNum_; ++groupIdx) {
             UpdateOffset(groupIdx);
             SetMNK(groupIdx);
@@ -91,7 +101,7 @@ private:
                 continue;
             }
             mmadOp_.UpdateParamsForNextProblem(problemShape_);
-            BaseMBalance(bs, AscendC::Std::get<MNK_M>(problemShape_), params.gmmParams->baseM);
+            BaseMBalance(bs, AscendC::Std::get<MNK_M>(problemShape_), params.kernelParams.baseM);
             typename SchedulerOp::TupleShape bsProblemShape{
                 AscendC::Std::get<MNK_M>(problemShape_), AscendC::Std::get<MNK_N>(problemShape_),
                 AscendC::Std::get<MNK_K>(problemShape_), 1L};
@@ -105,22 +115,29 @@ private:
 
     __aicore__ inline void Init(const Params& params)
     {
-        groupListPtr_ = params.mmadParams.groupListGmAddr;
-        groupNum_ = params.gmmParams->groupNum;
-        curBaseM_ = params.gmmParams->baseM;
+        groupListPtr_ = params.groupListGmAddr;
+        groupNum_ = params.kernelParams.groupNum;
+        curBaseM_ = params.kernelParams.baseM;
         baseOffset_ = {0, 0, 0, 0, 0};
-        AscendC::Std::get<MNK_M>(problemShape_) = params.gmmParams->maxM;
-        AscendC::Std::get<MNK_N>(problemShape_) = params.gmmParams->n;
-        AscendC::Std::get<MNK_K>(problemShape_) = params.gmmParams->k;
+        AscendC::Std::get<MNK_M>(problemShape_) = params.kernelParams.m;
+        AscendC::Std::get<MNK_N>(problemShape_) = params.kernelParams.n;
+        AscendC::Std::get<MNK_K>(problemShape_) = params.kernelParams.k;
         if (groupListPtr_ != nullptr) {
             groupListGlobal_.SetGlobalBuffer((__gm__ int64_t*)groupListPtr_);
         }
-        TupleShape l0Shape{static_cast<int64_t>(params.gmmParams->baseM), static_cast<int64_t>(params.gmmParams->baseN),
-                           static_cast<int64_t>(params.gmmParams->baseK)};
-        typename BlockMmad::L1Params l1Params{static_cast<uint64_t>(params.gmmParams->kAL1),
-                                              static_cast<uint64_t>(params.gmmParams->kBL1),
-                                              static_cast<uint64_t>(params.gmmParams->scaleKAL1)};
-        mmadOp_.Init(problemShape_, l0Shape, l1Params, params.gmmParams->dbL0C == GroupedMatmulRecipe::DOUBLE_BUFFER);
+        TupleShape l0Shape{
+            static_cast<int64_t>(params.kernelParams.baseM),
+            static_cast<int64_t>(params.kernelParams.baseN),
+            static_cast<int64_t>(params.kernelParams.baseK)};
+        typename BlockMmad::L1Params l1Params{
+            static_cast<uint64_t>(params.kernelParams.kAL1),
+            static_cast<uint64_t>(params.kernelParams.kBL1),
+            static_cast<uint64_t>(params.kernelParams.scaleKAL1)};
+        mmadOp_.Init(
+            problemShape_,
+            l0Shape,
+            l1Params,
+            params.kernelParams.dbL0C == GroupedMatmulRecipe::DOUBLE_BUFFER);
     }
 
     template <class SchedulerOp>
@@ -200,7 +217,7 @@ private:
             }
             int64_t mOffset = AscendC::Std::get<0>(tileIdx) * static_cast<int64_t>(curBaseM_) +
                               AscendC::Std::get<2>(singleShape);
-            int64_t nOffset = AscendC::Std::get<1>(tileIdx) * static_cast<int64_t>(params.gmmParams->baseN) +
+            int64_t nOffset = AscendC::Std::get<1>(tileIdx) * static_cast<int64_t>(params.kernelParams.baseN) +
                               AscendC::Std::get<3>(singleShape);
             int64_t tileM = AscendC::Std::get<MNK_M>(singleShape);
             int64_t tileN = AscendC::Std::get<MNK_N>(singleShape);
@@ -251,4 +268,3 @@ using QuantGroupedMatmulMxfp8KernelSplitM = QuantGroupedMatmulMxKernelSplitM<Pro
 
 } // namespace Kernel
 
-#endif // QUANT_GROUPED_MATMUL_MX_KERNEL_SPLIT_M_H

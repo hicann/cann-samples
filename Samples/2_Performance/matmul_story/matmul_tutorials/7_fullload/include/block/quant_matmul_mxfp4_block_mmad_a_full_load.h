@@ -8,8 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef QUANT_MATMUL_MXFP4_BLOCK_MMAD_A_FULL_LOAD_H
-#define QUANT_MATMUL_MXFP4_BLOCK_MMAD_A_FULL_LOAD_H
+#pragma once
 
 #if ASC_DEVKIT_MAJOR >= 9
 #include "kernel_basic_intf.h"
@@ -320,4 +319,3 @@ private:
     uint64_t l1BufferScaleBOffset_[2] = {0UL};
 };
 } // namespace Block
-#endif

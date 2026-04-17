@@ -12,8 +12,7 @@
  * \file pad_mx_kl1.h
  * \brief Zero-pad A/B L1 buffers along K when GM slices are shorter than the L1-aligned layout.
  */
-#ifndef TILE_PAD_KL1_H
-#define TILE_PAD_KL1_H
+#pragma once
 
 #include "kernel_utils/common_utils.h"
 #include "impl/atom/copy_traits_impl.h"
@@ -141,4 +140,3 @@ struct PadMxKBL1 : public PadMxKL1Base {
 };
 } // namespace Tile
 
-#endif // TILE_PAD_KL1_H

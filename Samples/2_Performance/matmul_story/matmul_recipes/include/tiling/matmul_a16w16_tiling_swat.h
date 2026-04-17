@@ -13,8 +13,7 @@
  * \brief SWAT tiling specialization for A16W16 non-full-load path.
  */
 
-#ifndef MATMUL_A16W16_TILING_SWAT_H
-#define MATMUL_A16W16_TILING_SWAT_H
+#pragma once
 
 #include <algorithm>
 #include <cmath>
@@ -649,4 +648,3 @@ private:
     }
 };
 
-#endif

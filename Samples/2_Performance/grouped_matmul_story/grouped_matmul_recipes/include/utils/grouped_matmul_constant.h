@@ -12,8 +12,7 @@
  * \file grouped_matmul_constant.h
  * \brief Shared constants for grouped MX recipe wrappers.
  */
-#ifndef GROUPED_MATMUL_CONSTANT_H
-#define GROUPED_MATMUL_CONSTANT_H
+#pragma once
 
 #include <cstdint>
 
@@ -50,4 +49,3 @@ inline uint64_t GetSizeWithDataTypeFp4(uint64_t shape)
 }
 } // namespace GroupedMatmulRecipe
 
-#endif

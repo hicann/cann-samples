@@ -13,8 +13,7 @@
  * \brief
  */
 
-#ifndef COMMON_UTILS_H
-#define COMMON_UTILS_H
+#pragma once
 #include <cstdio>
 #include <stdexcept>
 #include <string>
@@ -64,4 +63,3 @@ T GetSizeWithDataTypeFP4(T shape)
     return (shape + 1) >> 1;
 }
 
-#endif // COMMON_UTILS_H

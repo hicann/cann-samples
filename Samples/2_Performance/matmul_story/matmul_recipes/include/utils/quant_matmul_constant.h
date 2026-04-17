@@ -12,8 +12,7 @@
  * \file quant_matmul_constant.h
  * \brief Shared constants and helper types for MX quantized matmul.
  */
-#ifndef UTILS_QUANT_MATMUL_CONSTANT_H
-#define UTILS_QUANT_MATMUL_CONSTANT_H
+#pragma once
 
 #ifndef __CCE_AICORE__
 #include <cstdint>
@@ -57,4 +56,3 @@ constexpr int32_t MXFP_DIVISOR_SIZE = 64;
 constexpr int32_t MXFP_MULTI_BASE_SIZE = 2;
 constexpr int64_t DOUBLE_BUFFER_COUNT = 2LL;
 
-#endif
