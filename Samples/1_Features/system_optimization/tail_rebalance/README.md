@@ -81,7 +81,10 @@ if (tileIdx / blockNum == (perCoreBlockNum - 1) && tailCnt > 1)
     // 计算子块在M维度和N维度上的起始偏移
     int64_t mSplitOffset = mSplitIdx * splitBlkM;
     int64_t nSplitOffset = nSplitIdx * splitBlkN;
-
+    //跳过那些超出原始维度范围的无效子块
+    if (mSplitOffset >= curM || nSplitOffset >= curN) {
+        continue;
+    }
     // 更新当前子块的实际尺寸（边界处理）
     curM = (curM - mSplitOffset) < splitBlkM ? (curM - mSplitOffset) : splitBlkM;
     curN = (curN - nSplitOffset) < splitBlkN ? (curN - nSplitOffset) : splitBlkN;
