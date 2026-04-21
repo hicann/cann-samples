@@ -10,6 +10,7 @@
 # ----------------------------------------------------------------------------
 
 set(CPP_FILES
+    src/0_native.cpp
     src/1_multi_core.cpp
     src/2_double_buffer.cpp
     src/3_bandwidth_utilization.cpp

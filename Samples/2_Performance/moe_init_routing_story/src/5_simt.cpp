@@ -33,7 +33,6 @@
 #include "acl/acl_rt.h"
 #include "kernel_operator.h"
 #include "platform/platform_ascendc.h"
-#include "simt_api/asc_simt.h"
 
 #include "moe_mrgsort.h"
 #include "moe_mrgsort_out.h"
@@ -465,7 +464,7 @@ public:
     }
 };
 
-__simt_vf__ __aicore__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void ComputeExpertFirstIndexSimt(
+__simt_vf__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void ComputeExpertFirstIndexSimt(
     int32_t elementNum, int32_t expertStart, int32_t expertEnd, __gm__ int32_t *sortedExpertIdGmAddr,
     __ubuf__ int32_t *expertFirstIndexLocalAddr)
 {
@@ -483,7 +482,7 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void ComputeExpertFi
     }
 }
 
-__simt_vf__ __aicore__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void ComputeExpertCountOutSimt(
+__simt_vf__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void ComputeExpertCountOutSimt(
     int32_t elementNum, int32_t expertStart, int32_t expertEnd, __gm__ int32_t *sortedExpertIdGmAddr,
     __ubuf__ int32_t *expertFirstIndexLocalAddr, __ubuf__ int32_t *expertCountOutLocalAddr)
 {
@@ -668,8 +667,8 @@ private:
     }
 };
 
-__simt_vf__ __aicore__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void GatherOutSimt(
-    int32_t curLoopElements, int32_t cols, int32_t k,
+__simt_vf__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void GatherOutSimt(
+    int32_t curLoopElements, int32_t cols, uint64_t magic, uint64_t shift,
     __gm__ float *xGmAddr, __ubuf__ int32_t *expandedRowIdxLocalAddr, __ubuf__ float *xLocalAddr)
 {
     auto threadIdx0 = static_cast<int32_t>(Simt::GetThreadIdx<0>());
@@ -680,7 +679,8 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(SIMT_THREAD_NUM) inline void GatherOutSimt(
 
     for (auto i = threadIdx0; i < curLoopElements; i += threadNum0) {
         int64_t rowIdx = expandedRowIdxLocalAddr[i];
-        int64_t xSrcOffset = rowIdx * cols;
+        // rowIdx / k * cols的快除写法
+        int64_t xSrcOffset = static_cast<int64_t>(Simt::UintDiv(static_cast<uint64_t>(rowIdx), magic, shift)) * cols;
         int64_t xLocalOffset = i * cols;
         for (auto j = threadIdx1; j < cols; j += threadNum1) {
             xLocalAddr[xLocalOffset + j]  = xGmAddr[xSrcOffset + j];
@@ -803,6 +803,10 @@ public:
             return;
         }
         
+        uint64_t magic = 0;
+        uint64_t shift = 0;
+        GetUintDivMagicAndShift(magic, shift, static_cast<uint64_t>(k_));
+
         int64_t curLoopElements = curCorePerLoopIndicesElements_;
         for (int64_t indicesLoop = 0; indicesLoop < indicesLoops_; indicesLoop++) {
             if (indicesLoop == indicesLoops_ - 1) {
@@ -819,9 +823,9 @@ public:
             __ubuf__ int32_t *expandedRowIdxLocalAddr = (__ubuf__ int32_t *)subRowIdxLocal.GetPhyAddr();
             __ubuf__ float *xLocalAddr = (__ubuf__ float *)xLocal.GetPhyAddr();
             
-            Simt::VF_CALL<GatherOutSimt>(Simt::Dim3{16, 128, 1}, 
+            Simt::VF_CALL<GatherOutSimt>(Simt::Dim3{SIMT_X_THREAD_NUM, SIMT_Y_THREAD_NUM, 1}, 
                                         static_cast<int32_t>(curLoopElements), static_cast<int32_t>(cols_), 
-                                        static_cast<int32_t>(k_), xGmAddr, expandedRowIdxLocalAddr, xLocalAddr);
+                                        magic, shift, xGmAddr, expandedRowIdxLocalAddr, xLocalAddr);
 
             xCopyInQueue_.EnQue(xLocal);
             SyncAll();
