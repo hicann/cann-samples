@@ -307,18 +307,18 @@ MicroAPI 让中间值在寄存器上流动：
 
 ```cpp
 // src/3_vf.cpp
-AscendC::MicroAPI::Duplicate(vregReduceSum, 0);
+AscendC::Reg::Duplicate(vregReduceSum, 0);
 for (uint16_t i = 0; i < vfLoopRNum_; i++) {
-    preg = AscendC::MicroAPI::UpdateMask<float>(r);
-    AscendC::MicroAPI::DataCopy<DATA_TYPE, LoadDist::DIST_UNPACK_B16>(vregXIn, xInAddr + i * VL_B32_SIZE);
-    AscendC::MicroAPI::Cast<float, DATA_TYPE, castTraitB162B32>(vregX, vregXIn, preg);
-    AscendC::MicroAPI::Mul(vregXQuared, vregX, vregX, preg);
-    AscendC::MicroAPI::Add(vregReduceSum, vregReduceSum, vregXQuared, pregAll);
+    preg = AscendC::Reg::UpdateMask<float>(r);
+    AscendC::Reg::DataCopy<DATA_TYPE, LoadDist::DIST_UNPACK_B16>(vregXIn, xInAddr + i * VL_B32_SIZE);
+    AscendC::Reg::Cast<float, DATA_TYPE, castTraitB162B32>(vregX, vregXIn, preg);
+    AscendC::Reg::Mul(vregXQuared, vregX, vregX, preg);
+    AscendC::Reg::Add(vregReduceSum, vregReduceSum, vregXQuared, pregAll);
 }
-AscendC::MicroAPI::ReduceSum(vregReduceSum, vregReduceSum, preg);
-AscendC::MicroAPI::Sqrt(vregRms, vregRms, preg);
+AscendC::Reg::ReduceSum(vregReduceSum, vregReduceSum, preg);
+AscendC::Reg::Sqrt(vregRms, vregRms, preg);
 // 只把真正需要的 RMS 标量写回 UB
-AscendC::MicroAPI::DataCopy<float, StoreDist::DIST_FIRST_ELEMENT_B32>(rmsAddr, vregRms, preg);
+AscendC::Reg::DataCopy<float, StoreDist::DIST_FIRST_ELEMENT_B32>(rmsAddr, vregRms, preg);
 ```
 
 **性能数据：**

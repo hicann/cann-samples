@@ -63,24 +63,24 @@ static constexpr int64_t BLOCK_BYTES = 32;
 static constexpr int MAX_ERROR_ELEM_NUM = 100;
 static constexpr uint32_t VL_B32_SIZE = 256 / sizeof(float);
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB162B32 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::UNKNOWN,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
+static constexpr AscendC::Reg::CastTrait castTraitB162B32 = {
+    AscendC::Reg::RegLayout::ZERO,
+    AscendC::Reg::SatMode::UNKNOWN,
+    AscendC::Reg::MaskMergeMode::ZEROING,
     AscendC::RoundMode::UNKNOWN,
 };
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB322Int16 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::NO_SAT,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
+static constexpr AscendC::Reg::CastTrait castTraitB322Int16 = {
+    AscendC::Reg::RegLayout::ZERO,
+    AscendC::Reg::SatMode::NO_SAT,
+    AscendC::Reg::MaskMergeMode::ZEROING,
     AscendC::RoundMode::CAST_TRUNC,
 };
 
-static constexpr AscendC::MicroAPI::CastTrait castTraitB162Int8 = {
-    AscendC::MicroAPI::RegLayout::ZERO,
-    AscendC::MicroAPI::SatMode::NO_SAT,
-    AscendC::MicroAPI::MaskMergeMode::ZEROING,
+static constexpr AscendC::Reg::CastTrait castTraitB162Int8 = {
+    AscendC::Reg::RegLayout::ZERO,
+    AscendC::Reg::SatMode::NO_SAT,
+    AscendC::Reg::MaskMergeMode::ZEROING,
     AscendC::RoundMode::CAST_TRUNC,
 };
 
@@ -213,62 +213,62 @@ public:
 
     __simd_vf__ inline void ComputeRmsVf(__ubuf__ DATA_TYPE *xInAddr, __ubuf__ float *rmsAddr)
     {
-        AscendC::MicroAPI::RegTensor<DATA_TYPE> vregXIn;
-        AscendC::MicroAPI::RegTensor<float> vregX;
-        AscendC::MicroAPI::RegTensor<float> vregXQuared;
-        AscendC::MicroAPI::RegTensor<float> vregReduceSum;
-        AscendC::MicroAPI::RegTensor<float> vregRms;
+        AscendC::Reg::RegTensor<DATA_TYPE> vregXIn;
+        AscendC::Reg::RegTensor<float> vregX;
+        AscendC::Reg::RegTensor<float> vregXQuared;
+        AscendC::Reg::RegTensor<float> vregReduceSum;
+        AscendC::Reg::RegTensor<float> vregRms;
 
-        AscendC::MicroAPI::MaskReg preg = AscendC::MicroAPI::CreateMask<float>();
-        AscendC::MicroAPI::MaskReg pregAll =
-            AscendC::MicroAPI::CreateMask<float, AscendC::MicroAPI::MaskPattern::ALL>();
+        AscendC::Reg::MaskReg preg = AscendC::Reg::CreateMask<float>();
+        AscendC::Reg::MaskReg pregAll =
+            AscendC::Reg::CreateMask<float, AscendC::Reg::MaskPattern::ALL>();
         uint32_t r = tilingData_->r;
 
-        AscendC::MicroAPI::Duplicate(vregReduceSum, 0);
+        AscendC::Reg::Duplicate(vregReduceSum, 0);
         for (uint16_t i = 0; i < vfLoopRNum_; i++) {
-            preg = AscendC::MicroAPI::UpdateMask<float>(r);
-            AscendC::MicroAPI::DataCopy<DATA_TYPE, AscendC::MicroAPI::LoadDist::DIST_UNPACK_B16>(
+            preg = AscendC::Reg::UpdateMask<float>(r);
+            AscendC::Reg::DataCopy<DATA_TYPE, AscendC::Reg::LoadDist::DIST_UNPACK_B16>(
                 vregXIn, xInAddr + i * VL_B32_SIZE);
-            AscendC::MicroAPI::Cast<float, DATA_TYPE, castTraitB162B32>(vregX, vregXIn, preg);
-            AscendC::MicroAPI::Mul(vregXQuared, vregX, vregX, preg);
-            AscendC::MicroAPI::Add(vregReduceSum, vregReduceSum, vregXQuared, pregAll);
+            AscendC::Reg::Cast<float, DATA_TYPE, castTraitB162B32>(vregX, vregXIn, preg);
+            AscendC::Reg::Mul(vregXQuared, vregX, vregX, preg);
+            AscendC::Reg::Add(vregReduceSum, vregReduceSum, vregXQuared, pregAll);
         }
 
         r = tilingData_->r;
-        preg = AscendC::MicroAPI::UpdateMask<float>(r);
-        AscendC::MicroAPI::ReduceSum(vregReduceSum, vregReduceSum, preg);
-        preg = AscendC::MicroAPI::CreateMask<float, AscendC::MicroAPI::MaskPattern::VL1>();
-        AscendC::MicroAPI::Muls(vregRms, vregReduceSum, rInv_, preg);
-        AscendC::MicroAPI::Adds(vregRms, vregRms, tilingData_->epsilon, preg);
-        AscendC::MicroAPI::Sqrt(vregRms, vregRms, preg);
-        AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::StoreDist::DIST_FIRST_ELEMENT_B32>(
+        preg = AscendC::Reg::UpdateMask<float>(r);
+        AscendC::Reg::ReduceSum(vregReduceSum, vregReduceSum, preg);
+        preg = AscendC::Reg::CreateMask<float, AscendC::Reg::MaskPattern::VL1>();
+        AscendC::Reg::Muls(vregRms, vregReduceSum, rInv_, preg);
+        AscendC::Reg::Adds(vregRms, vregRms, tilingData_->epsilon, preg);
+        AscendC::Reg::Sqrt(vregRms, vregRms, preg);
+        AscendC::Reg::DataCopy<float, AscendC::Reg::StoreDist::DIST_FIRST_ELEMENT_B32>(
             rmsAddr, vregRms, preg);
     }
 
     __simd_vf__ inline void ComputeNormQuantVf(
         __ubuf__ DATA_TYPE *xInAddr, __ubuf__ float *gammaAddr, __ubuf__ float *rmsAddr, __ubuf__ OUTPUT_DTYPE *yAddr)
     {
-        AscendC::MicroAPI::RegTensor<DATA_TYPE> vregXIn;
-        AscendC::MicroAPI::RegTensor<float> vregX, vregGamma, vregRms, vregNorm;
-        AscendC::MicroAPI::RegTensor<half> VregYFp16;
-        AscendC::MicroAPI::RegTensor<OUTPUT_DTYPE> VregY;
-        AscendC::MicroAPI::MaskReg preg = AscendC::MicroAPI::CreateMask<float>();
+        AscendC::Reg::RegTensor<DATA_TYPE> vregXIn;
+        AscendC::Reg::RegTensor<float> vregX, vregGamma, vregRms, vregNorm;
+        AscendC::Reg::RegTensor<half> VregYFp16;
+        AscendC::Reg::RegTensor<OUTPUT_DTYPE> VregY;
+        AscendC::Reg::MaskReg preg = AscendC::Reg::CreateMask<float>();
         uint32_t r = tilingData_->r;
 
-        AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::LoadDist::DIST_BRC_B32>(vregRms, rmsAddr);
+        AscendC::Reg::DataCopy<float, AscendC::Reg::LoadDist::DIST_BRC_B32>(vregRms, rmsAddr);
         for (uint16_t i = 0; i < vfLoopRNum_; i++) {
-            preg = AscendC::MicroAPI::UpdateMask<float>(r);
-            AscendC::MicroAPI::DataCopy<DATA_TYPE, AscendC::MicroAPI::LoadDist::DIST_UNPACK_B16>(
+            preg = AscendC::Reg::UpdateMask<float>(r);
+            AscendC::Reg::DataCopy<DATA_TYPE, AscendC::Reg::LoadDist::DIST_UNPACK_B16>(
                 vregXIn, xInAddr + i * VL_B32_SIZE);
-            AscendC::MicroAPI::Cast<float, DATA_TYPE, castTraitB162B32>(vregX, vregXIn, preg);
-            AscendC::MicroAPI::DataCopy(vregGamma, gammaAddr + i * VL_B32_SIZE);
-            AscendC::MicroAPI::Div(vregNorm, vregX, vregRms, preg);
-            AscendC::MicroAPI::Mul(vregNorm, vregNorm, vregGamma, preg);
-            AscendC::MicroAPI::Muls(vregNorm, vregNorm, scale_, preg);
-            AscendC::MicroAPI::Adds(vregNorm, vregNorm, offset_, preg);
-            AscendC::MicroAPI::Cast<half, float, castTraitB322Int16>(VregYFp16, vregNorm, preg);
-            AscendC::MicroAPI::Cast<OUTPUT_DTYPE, half, castTraitB162Int8>(VregY, VregYFp16, preg);
-            AscendC::MicroAPI::DataCopy<OUTPUT_DTYPE, AscendC::MicroAPI::StoreDist::DIST_PACK4_B32>(
+            AscendC::Reg::Cast<float, DATA_TYPE, castTraitB162B32>(vregX, vregXIn, preg);
+            AscendC::Reg::DataCopy(vregGamma, gammaAddr + i * VL_B32_SIZE);
+            AscendC::Reg::Div(vregNorm, vregX, vregRms, preg);
+            AscendC::Reg::Mul(vregNorm, vregNorm, vregGamma, preg);
+            AscendC::Reg::Muls(vregNorm, vregNorm, scale_, preg);
+            AscendC::Reg::Adds(vregNorm, vregNorm, offset_, preg);
+            AscendC::Reg::Cast<half, float, castTraitB322Int16>(VregYFp16, vregNorm, preg);
+            AscendC::Reg::Cast<OUTPUT_DTYPE, half, castTraitB162Int8>(VregY, VregYFp16, preg);
+            AscendC::Reg::DataCopy<OUTPUT_DTYPE, AscendC::Reg::StoreDist::DIST_PACK4_B32>(
                 yAddr + i * VL_B32_SIZE, VregY, preg);
         }
     }
