@@ -45,6 +45,14 @@ toolkit 安装包文件名格式如下：
 
    请将 `${install_path}` 替换为 toolkit 的实际安装目录，例如 `/usr/local/Ascend` 或 `${HOME}/Ascend`。
 
+3. **前置依赖**
+
+   编译用到的依赖如下，请确保已安装并且满足版本要求：
+   
+   - cmake >= 3.16.0
+   - python >= 3.8.0
+   - zip
+
 ## ⚡️快速入门
 
 1. 配置项目

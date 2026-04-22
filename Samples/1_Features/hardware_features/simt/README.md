@@ -116,7 +116,7 @@ kernel_name<<<numBlocks, dynUBufSize, stream>>>(args...)
 * dynUBufSize：用于指定动态内存的总大小。
 * stream：类型为aclrtStream, 用于维护异步操作的执行顺序，确保在device上按照程序中的代码调用顺序执行。
 
-**SIMD VF**调用方式如下:
+**SIMT VF**调用方式如下:
 ```
 asc_vf_call<funcptr>(dim3 threadNums, ...Args)
 ```
