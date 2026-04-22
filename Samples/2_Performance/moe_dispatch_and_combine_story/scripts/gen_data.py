@@ -535,6 +535,46 @@ def dispatch(
     dist.destroy_process_group()
     print(f"[dispatch][rank={rank}] process group destroyed", flush=True)
 
+def comm_quant_round_trip(
+        comm_quant_mode: int, tensor: torch.Tensor, token_dtype: torch.dtype,  
+) -> torch.Tensor:
+
+    def comm_quant(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        quant_dtype = torch.int8 if comm_quant_mode == 2 else torch.int16
+        quant_dtype_max = 127.0 if comm_quant_mode == 2 else 2047.0
+
+        blocks = tensor.view(-1, element_per_block).to(torch.float32)
+        blocks_max, _ = blocks.abs().max(dim=-1, keepdim=True)
+        blocks_scales = blocks_max / quant_dtype_max
+        blocks_scales[blocks_scales==0.0] = 1.0 # block_scales = 0 的时候改成 1，避免除 0
+        blocks_quant = (blocks / blocks_scales).to(torch.float16).round().to(quant_dtype)
+
+        return blocks_quant, blocks_scales.to(token_dtype)
+
+    def comm_dequant(blocks_quant: torch.Tensor, blocks_scales: torch.Tensor) -> torch.Tensor:
+        blocks_scales = blocks_scales.to(torch.float32)
+        blocks_quant = blocks_quant.to(torch.float16).to(torch.float32)
+        blocks_dequant = (blocks_quant * blocks_scales).to(token_dtype)
+        tensor_dequant = blocks_dequant.view(-1, h + token_pad_length)
+
+        return tensor_dequant
+    
+    if comm_quant_mode == 0:
+        return tensor
+    
+    h = tensor.size(1)
+
+    block_size = 32  # 核函数侧，一个 block 有 32 字节
+    computation_dtype = torch.float32
+
+    computation_dtype_size = torch.finfo(computation_dtype).bits // 8   # 用于量化计算的数据类型的字节数
+    element_per_block =  block_size // computation_dtype_size # element_per_block 值为 8
+
+    token_pad_length = (element_per_block - (tensor.size(1) % element_per_block)) % element_per_block
+    padded_tensor = torch.cat([tensor, tensor.new_zeros(tensor.size(0), token_pad_length)], dim=1)
+
+    padded_tensor_after_round_trip = comm_dequant(*comm_quant(padded_tensor))
+    return padded_tensor_after_round_trip[:, :tensor.size(1)]
 
 def combine(
     rank: int,
@@ -586,6 +626,7 @@ def combine(
     transfer_order_indices = transfer_idx_1d.argsort(stable=True)
 
     recv_tokens = recv_tokens[transfer_order_indices]
+    recv_tokens = comm_quant_round_trip(2, recv_tokens, token_dtype)
     local_topk_weights = topk_weights_per_chip[rank].flatten()
     scaled_recv_tokens = recv_tokens.to(torch.float32) * local_topk_weights.to(
         torch.float32

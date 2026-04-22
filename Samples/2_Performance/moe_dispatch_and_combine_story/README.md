@@ -67,6 +67,7 @@
 
 - **硬件**：NPU多卡环境。
 - **芯片型号**：默认`--npu-arch=dav-3510`。
+- **软件环境**：需要已安装 Ascend CANN Toolkit，并在构建和运行前加载 Toolkit 环境变量。
 
 ---
 
@@ -87,7 +88,7 @@ moe_dispatch_and_combine_story/
    └─ verify_result.py                  # 比对输出与 golden
 ```
 
-运行过程中会在当前目录生成：
+在本示例目录运行本示例，运行过程中会在本示例目录生成：
 
 - `input/`：输入 bin（按 `chip_{rankId}` 分目录）
 - `golden/`：golden bin（用于精度对比）
@@ -95,68 +96,77 @@ moe_dispatch_and_combine_story/
 
 ---
 
-## 生成测试数据（input + golden）
+## 环境准备
 
-在该目录下执行（默认值可以不填写）：
+构建和运行前，需要先加载 Ascend Toolkit 环境变量。若使用 root 用户按默认路径安装，可执行：
 
-```bash
-python3 scripts/gen_data.py \
-  --chip-num-per-server 2 \
-  --bs 8 \
-  --h 7168 \
-  --k 8 \
-  --token-dtype-choice 1 \
-  --quant-mode 4 \
-  --expert-recv-info-type 1
+```sh
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
 ```
 
-参数均有默认值，只需要填写与默认值不一样的：
+如果 Toolkit 安装在自定义路径，请将上述路径替换为实际安装目录下的 `set_env.sh`。建议在同一个 shell 会话中完成后续的构建、数据生成、运行和校验，避免环境变量丢失。
+
+---
+
+## 构建
+
+在本示例目录执行 CMake 构建，目标为 `moe_dispatch_and_combine_story`（见本示例目录下的 `CMakeLists.txt`）。构建完成后，可执行文件会生成到 `build/Samples/2_Performance/moe_dispatch_and_combine_story/` 目录下。以下命令中的 `${cann_samples_path}` 表示用户本地 `cann-samples` 仓库所在目录，请根据实际路径替换。
+
 ```bash
-python3 scripts/gen_data.py --chip-num-per-server 2 --bs 8
+cd ${cann_samples_path}/Samples/2_Performance/moe_dispatch_and_combine_story
+cmake -S ../../../ -B ../../../build
+cmake --build ../../../build --target moe_dispatch_and_combine_story
 ```
 
-- **`--bs`**：算子入参bs 大小。
-- **`--h`**：0 算子入参hidden size大小。
-- **`--k`**：0 算子入参topk 大小。
+---
+
+## 生成测试数据（input + golden）及 output
+
+构建完成后，在本示例目录生成一组用于运行和精度校验的测试数据（命令行未传入的参数使用默认值）：
+
+```bash
+python3 ./scripts/gen_data.py --chip-num-per-server 2 --bs 8
+```
+
+该脚本会在本示例目录生成 `input/` 和 `golden/`。其中 `input/` 作为算子运行输入，`golden/` 作为后续 `verify_result.py` 的精度比对基准。算子运行后会在本示例目录生成 `output/`，用于保存实际运行输出。
+
+脚本参数均有默认值，只需要传入与默认值不同的配置。常用参数如下：
+
+- **`--bs`**：算子入参 batch size 大小。
+- **`--h`**：算子入参 hidden size 大小。
+- **`--k`**：算子入参 topk 大小。
 - **`--chip-num-per-server`**：生成的 rank 数。
 - **`--token-dtype-choice`**：0 表示 bfloat16，1 表示 float16（默认 1）。
 - **`--quant-mode`**：0 表示不量化，4 表示 MXFP8动态量化。
-
-## 编译
-
-该示例通过 CMake 构建目标 `moe_dispatch_and_combine_story`（见 `CMakeLists.txt`）。
-
-```bash
-cmake -S . -B build
-cmake --build build --target moe_dispatch_and_combine_story
-```
 
 ---
 
 ## 运行（Dispatch + Combine）
 
-在包含 `input/` 的运行目录下执行（建议就在本目录运行）：
+测试数据生成后，在本示例目录运行构建产物。命令行参数依次为 `rankNum` 和 `bs`，需要与生成数据时的 `--chip-num-per-server`、`--bs` 保持一致：
 
 ```bash
-./moe_dispatch_and_combine_story <rankNum> <bs>
+../../../build/Samples/2_Performance/moe_dispatch_and_combine_story/moe_dispatch_and_combine_story <rankNum> <bs>
 ```
 
-示例：
+例如前面生成的是 2 张卡、batch size 为 8 的数据，则执行：
 
 ```bash
-./moe_dispatch_and_combine_story 2 8
+../../../build/Samples/2_Performance/moe_dispatch_and_combine_story/moe_dispatch_and_combine_story 2 8
 ```
+
+运行完成后，算子输出会写入本示例目录下的 `output/`，并按 `chip_{rankId}` 分目录保存。
 
 ---
 
 ## 精度验证（output vs golden）
 
-运行完成后，在本目录执行（路径默认，可以不填写）：
+算子运行结束后，在本示例目录执行精度校验脚本：
 
 ```bash
-python3 scripts/verify_result.py --golden-dir ./golden --op-out-dir ./output
+python3 ./scripts/verify_result.py
 ```
 
-该脚本会逐个比对 `golden/**/*.bin` 与 `output/**/*.bin`（按相对路径对应），并打印每个 bin 的一致性结果。
+该脚本默认读取本示例目录下的 `golden/` 与 `output/`，逐个比对 `golden/**/*.bin` 与 `output/**/*.bin`（按相对路径对应），并打印每个 bin 的一致性结果。
 
 ---
