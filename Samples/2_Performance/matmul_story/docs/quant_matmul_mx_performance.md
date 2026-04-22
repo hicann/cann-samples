@@ -42,6 +42,8 @@ $$
 | scaleB | 右矩阵量化参数 | `float8_e8m0` | ND | (n, ceil(k/64), 2) |
 | c | 输出矩阵 | `float32` 或 `float16` 或 `bfloat16` | ND | (m, n) |
 
+<a id="quant-matmul-mx-operator-implementation"></a>
+
 ### 算子实现说明
 
 与传统非量化Matmul算子相比，MX量化场景新增了输入变量`scaleA`和`scaleB`，需要将其搬运至L1缓冲区，再搬运至`L0A_MX`和`L0B_MX`独立缓冲区。
@@ -117,6 +119,8 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
     <img src="images/image27.png" width="1500" />
   </div>
 
+<a id="quant-matmul-mx-implementation-constraints"></a>
+
 ### 算子实现约束
 
 #### MX量化场景共性约束
@@ -139,6 +143,8 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 ## 算子性能建模
 
+<a id="quant-matmul-mx-performance-bottleneck-analysis"></a>
+
 ### 性能瓶颈分析
 
 MX量化矩阵乘算子的性能瓶颈主要分为以下两类：
@@ -146,6 +152,8 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类：
 1. **Cube Bound**：算子性能受限于硬件的算力规格，本身已经实现连续的MMAD计算。这种场景通常意味着算子性能已经最优，但需要重点关注**多核计算负载是否均衡**，避免出现单核Cube Bound，但整体Cube利用率偏低的情况。
 
 2. **Memory Bound**：算子性能受限于数据搬运能力，主要的性能优化手段是减少搬运量、提高带宽利用率或者将低带宽的搬运转换成高带宽的搬运，进而发挥算子极致性能。因Bound在不同的流水上而区分出**MTE2 Bound**、**MTE1 Bound**以及**FIXPIPE Bound**。
+
+<a id="quant-matmul-mx-performance-modeling-formulas"></a>
 
 ### 性能建模公式
 
