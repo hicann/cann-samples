@@ -20,7 +20,7 @@ set(CPP_FILES
     src/6_binary_sum.cpp
 )
 
-configure_file(utils/gen_rms_norm_quant_data.py gen_rms_norm_quant_data.py COPYONLY)
+configure_file(scripts/gen_data.py gen_data.py COPYONLY)
 
 set(INSTALL_TARGETS "")
 foreach(CPP_FILE ${CPP_FILES})
@@ -49,6 +49,6 @@ install(TARGETS ${INSTALL_TARGETS}
     RUNTIME DESTINATION 2_Performance/rms_norm_quant_story
 )
 
-install(FILES utils/gen_rms_norm_quant_data.py
+install(FILES scripts/gen_data.py
     DESTINATION 2_Performance/rms_norm_quant_story
 )
