@@ -103,7 +103,7 @@ python3 gen_data.py expect_m_per_group 3 128 384 256 256
 cmake -S . -B build
 cmake --build build --parallel
 cmake --install build --prefix ./build_out
-cd build_out/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4
+cd build_out/2_Performance/grouped_matmul_story/grouped_matmul_recipes/quant_grouped_matmul_mxfp4
 ```
 
 之后可按需执行以下命令：
@@ -115,7 +115,10 @@ python3 gen_data.py group_list 128,128,0 384 256 256
 # 生成数据方式二：按专家数和平均 M 随机生成 grouplist
 python3 gen_data.py expect_m_per_group 3 128 384 256 256
 
-# 运行可执行文件并校验结果（以上面的 group_list 示例为例）
+# 运行可执行文件（以上面的 group_list 示例为例）
+# 程序会在执行完成后自动调用 verify_result.py 进行结果校验
 ./quant_grouped_matmul_mxfp4 3 384 256 256
-```
 
+# 可选：手动再次校验（用于调试/复核）
+python3 verify_result.py 3 384 256 256
+```

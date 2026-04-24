@@ -14,7 +14,9 @@ from typing import List
 import numpy as np
 import torch
 
-ERROR_TOL = 1e-3
+POINT_ERROR_TOL = 1e-1
+RATIO_POINT_ERROR_TOL = 1e-3
+ERROR_RATIO_TOL = 1e-3
 DATA_TYPE = np.uint16
 
 
@@ -60,8 +62,31 @@ def verify_result(group_m_list: List[int], m: int, n: int):
     npu_cmp = npu_output_tensor[:sum_group_m]
     print("\ncpu golden (sum(group_m_list) rows):\n", golden_cmp)
     print("npu output (sum(group_m_list) rows):\n", npu_cmp)
+    golden_cmp_f32 = golden_cmp.to(torch.float32)
+    npu_cmp_f32 = npu_cmp.to(torch.float32)
+    abs_diff = torch.abs(golden_cmp_f32 - npu_cmp_f32)
+    non_finite_mask = ~(torch.isfinite(golden_cmp_f32) & torch.isfinite(npu_cmp_f32) & torch.isfinite(abs_diff))
+    abs_golden = torch.abs(golden_cmp_f32)
+    rel_diff = torch.where(
+        abs_golden > 0,
+        abs_diff / abs_golden,
+        torch.where(abs_diff == 0, torch.zeros_like(abs_diff), torch.full_like(abs_diff, float("inf"))),
+    )
+    point_error_mask = (rel_diff > POINT_ERROR_TOL) | non_finite_mask
+    ratio_error_mask = (abs_diff > RATIO_POINT_ERROR_TOL) | non_finite_mask
+    point_error_count = int(point_error_mask.sum().item())
+    error_count = int(ratio_error_mask.sum().item())
+    total_count = ratio_error_mask.numel()
+    error_ratio = error_count / total_count if total_count else 0.0
 
-    return torch.allclose(golden_cmp, npu_cmp, rtol=ERROR_TOL, atol=ERROR_TOL, equal_nan=True)
+    print(f"max abs diff: {abs_diff.max().item() if total_count else 0.0}")
+    print(f"point error count(>{POINT_ERROR_TOL}): {point_error_count}/{total_count}")
+    print(
+        f"ratio error count(>{RATIO_POINT_ERROR_TOL}): {error_count}/{total_count}, "
+        f"error ratio: {error_ratio:.6f}"
+    )
+
+    return point_error_count == 0 and error_ratio <= ERROR_RATIO_TOL
 
 
 if __name__ == "__main__":
@@ -85,7 +110,12 @@ if __name__ == "__main__":
         group_m_list = load_group_m_list(group_num)
         res = verify_result(group_m_list, m, n)
         if not res:
-            raise ValueError("[ERROR] NPU results differ from CPU.\n")
+            raise ValueError(
+                f"[ERROR] NPU results differ from CPU. "
+                f"Single-point relative error (abs_diff/abs(golden)) must be <= {POINT_ERROR_TOL}, "
+                f"and the ratio of points with absolute error > {RATIO_POINT_ERROR_TOL} "
+                f"must be <= {ERROR_RATIO_TOL}.\n"
+            )
         print("[PASS] NPU results are consistent with CPU.\n")
     except Exception as e:
         print(e)

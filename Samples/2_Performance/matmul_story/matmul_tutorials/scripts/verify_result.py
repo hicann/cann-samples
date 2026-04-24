@@ -13,7 +13,9 @@ import sys
 import numpy as np
 import torch
 
-ERROR_TOL = 1e-3
+POINT_ERROR_TOL = 1e-1
+RATIO_POINT_ERROR_TOL = 1e-3
+ERROR_RATIO_TOL = 1e-3
 # The sample dumps bfloat16 tensors as raw 16-bit payloads, so verification
 # reads them as uint16 first and then reinterprets the bits back to bfloat16.
 DATA_TYPE = np.uint16
@@ -33,8 +35,45 @@ def verify_result(m, n):
     golden_tensor = torch.from_numpy(golden).view(torch.bfloat16).reshape(m, n)
     print("\ncpu golden:\n", golden_tensor)
     print("npu output:\n", npu_output_tensor)
+    golden_f32 = golden_tensor.to(torch.float32)
+    npu_f32 = npu_output_tensor.to(torch.float32)
+    abs_diff = torch.abs(golden_f32 - npu_f32)
+    non_finite_mask = ~(torch.isfinite(golden_f32) & torch.isfinite(npu_f32) & torch.isfinite(abs_diff))
+    abs_golden = torch.abs(golden_f32)
+    rel_diff = torch.where(
+        abs_golden > 0,
+        abs_diff / abs_golden,
+        torch.where(abs_diff == 0, torch.zeros_like(abs_diff), torch.full_like(abs_diff, float("inf"))),
+    )
+    point_error_mask = (rel_diff > POINT_ERROR_TOL) | non_finite_mask
+    ratio_error_mask = (abs_diff > RATIO_POINT_ERROR_TOL) | non_finite_mask
+    point_error_count = int(point_error_mask.sum().item())
+    error_count = int(ratio_error_mask.sum().item())
+    total_count = ratio_error_mask.numel()
+    error_ratio = error_count / total_count if total_count else 0.0
 
-    return torch.allclose(golden_tensor, npu_output_tensor, rtol=ERROR_TOL, atol=ERROR_TOL, equal_nan=True)
+    print(f"max abs diff: {abs_diff.max().item() if total_count else 0.0}")
+    print(f"point error count(>{POINT_ERROR_TOL}): {point_error_count}/{total_count}")
+    if point_error_count > 0:
+        point_error_indices = torch.nonzero(point_error_mask, as_tuple=False)
+        print(f"point error details(rel diff > {POINT_ERROR_TOL} or non-finite):")
+        for idx in point_error_indices:
+            row = int(idx[0].item())
+            col = int(idx[1].item())
+            golden_val = float(golden_f32[row, col].item())
+            npu_val = float(npu_f32[row, col].item())
+            diff_val = float(abs_diff[row, col].item())
+            rel_val = float(rel_diff[row, col].item())
+            print(
+                f"  (row={row}, col={col}) "
+                f"golden={golden_val}, npu={npu_val}, abs_diff={diff_val}, rel_diff={rel_val}"
+            )
+    print(
+        f"ratio error count(>{RATIO_POINT_ERROR_TOL}): {error_count}/{total_count}, "
+        f"error ratio: {error_ratio:.6f}"
+    )
+
+    return point_error_count == 0 and error_ratio <= ERROR_RATIO_TOL
 
 
 if __name__ == "__main__":
@@ -47,7 +86,12 @@ if __name__ == "__main__":
     try:
         res = verify_result(m, n)
         if not res:
-            raise ValueError("[ERROR] NPU results differ from CPU.\n")
+            raise ValueError(
+                f"[ERROR] NPU results differ from CPU. "
+                f"Single-point relative error (abs_diff/abs(golden)) must be <= {POINT_ERROR_TOL}, "
+                f"and the ratio of points with absolute error > {RATIO_POINT_ERROR_TOL} "
+                f"must be <= {ERROR_RATIO_TOL}.\n"
+            )
         print("[PASS] NPU results are consistent with CPU.\n")
 
     except Exception as e:

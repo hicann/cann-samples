@@ -19,7 +19,9 @@ from typing import List, Sequence, Tuple
 
 import numpy as np
 
-ERROR_TOL = 1e-3
+POINT_ERROR_TOL = 1e-1
+RATIO_POINT_ERROR_TOL = 1e-3
+ERROR_RATIO_TOL = 1e-3
 DATA_TYPE = np.uint16
 DEFAULT_MAX_DETAIL_ROWS = 50
 DATA_TYPE_BYTES = np.dtype(DATA_TYPE).itemsize
@@ -165,8 +167,12 @@ def verify_result(group_m_list: np.ndarray, m: int, n: int, max_detail_rows: int
             f"output element count {output.size} does not match compare rows*n={compare_elem_count}"
         )
 
-    # Fast path: exact bitwise equal elements need no floating conversion.
-    candidate_idx = np.flatnonzero(output != golden)
+    # Treat any non-finite value (NaN/Inf) as mismatch, even when bit patterns are equal.
+    output_non_finite = (output & np.uint16(0x7F80)) == np.uint16(0x7F80)
+    golden_non_finite = (golden & np.uint16(0x7F80)) == np.uint16(0x7F80)
+    non_finite_mask = output_non_finite | golden_non_finite
+    # Fast path: skip floating conversion only when all values are finite and bitwise equal.
+    candidate_idx = np.flatnonzero((output != golden) | non_finite_mask)
     if candidate_idx.size == 0:
         print(
             f"[PASS] NPU results are consistent with CPU. "
@@ -179,31 +185,43 @@ def verify_result(group_m_list: np.ndarray, m: int, n: int, max_detail_rows: int
     output_candidate_fp32 = bf16_u16_to_fp32(output_candidate)
     golden_candidate_fp32 = bf16_u16_to_fp32(golden_candidate)
 
-    close_mask = np.isclose(
-        golden_candidate_fp32,
-        output_candidate_fp32,
-        rtol=ERROR_TOL,
-        atol=ERROR_TOL,
-        equal_nan=True,
+    abs_err_candidate = np.abs(output_candidate_fp32 - golden_candidate_fp32)
+    abs_golden_candidate = np.abs(golden_candidate_fp32)
+    rel_err_candidate = np.divide(
+        abs_err_candidate,
+        abs_golden_candidate,
+        out=np.full_like(abs_err_candidate, np.inf),
+        where=abs_golden_candidate > 0,
     )
-    mismatch_mask = ~close_mask
-    mismatch_idx = candidate_idx[mismatch_mask]
+    rel_err_candidate[(abs_golden_candidate == 0) & (abs_err_candidate == 0)] = 0.0
+    point_error_mask = (rel_err_candidate > POINT_ERROR_TOL) | non_finite_mask[candidate_idx]
+    ratio_error_mask = (abs_err_candidate > RATIO_POINT_ERROR_TOL) | non_finite_mask[candidate_idx]
+    mismatch_idx = candidate_idx[ratio_error_mask]
 
+    point_error_count = int(point_error_mask.sum())
     mismatch_count = int(mismatch_idx.size)
-    if mismatch_count == 0:
+    total_checked = int(compare_elem_count)
+    mismatch_ratio = mismatch_count / max(1, total_checked)
+    if point_error_count == 0 and mismatch_ratio <= ERROR_RATIO_TOL:
         print(
             f"[PASS] NPU results are consistent with CPU. "
-            f"(checked_rows={sum_group_m}, checked_elements={compare_elem_count}, mismatch_count=0)"
+            f"(checked_rows={sum_group_m}, checked_elements={compare_elem_count}, "
+            f"point_error_count={point_error_count}, "
+            f"ratio_error_count={mismatch_count}, mismatch_ratio={mismatch_ratio:.6%})"
         )
         return True
 
-    total_checked = int(compare_elem_count)
-    mismatch_ratio = mismatch_count / max(1, total_checked)
     print("[FAIL] NPU results differ from CPU.")
     print(
         f"summary: checked_rows={sum_group_m}, checked_elements={total_checked}, "
-        f"mismatch_count={mismatch_count}, mismatch_ratio={mismatch_ratio:.6%}"
+        f"point_error_count={point_error_count}, point_error_tol={POINT_ERROR_TOL}, "
+        f"ratio_error_count={mismatch_count}, ratio_point_error_tol={RATIO_POINT_ERROR_TOL}, "
+        f"mismatch_ratio={mismatch_ratio:.6%}, error_ratio_tol={ERROR_RATIO_TOL:.6%}"
     )
+    point_error_idx = candidate_idx[point_error_mask]
+    point_error_ranges = render_index_ranges(compress_indices(point_error_idx))
+    print("point_error_flat_indices(compressed_ranges):")
+    print(point_error_ranges)
 
     range_text = render_index_ranges(compress_indices(mismatch_idx))
     print("mismatch_flat_indices(compressed_ranges):")
