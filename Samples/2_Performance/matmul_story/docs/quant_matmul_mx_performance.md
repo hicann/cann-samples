@@ -53,7 +53,7 @@ $$
 MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 <div align="center">
-  <img src="images/image23.png" width="800" />
+  <img src="images/mx-quant-matmul-data-movement-overview.png" width="800" />
 </div>
 
 关于每个输入在各个缓冲区上的Shape关系和排布要求，可以参考下面的详细介绍。
@@ -74,7 +74,7 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 | L1 -> L0A | (ceil(kL1/k0), ceil(mL1/m0), m0, k0) -> (ceil(baseK/k0), ceil(baseM/m0), m0, k0) | Nz -> Nz | MTE1 | LoadData with Load2D |
 
   <div align="center">
-    <img src="images/image24.png" width="1500" />
+    <img src="images/mx-quant-tensor-a-gm-l1-l0-path.png" width="1500" />
   </div>
 
 > 图示以MXFP4为例，图片中标注的`K0 = 64`表示在该示例中沿K轴按64对齐后的最小分块进行组织，对于MXFP8场景`K0 = 32`。
@@ -88,7 +88,7 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 
   <div align="center">
-    <img src="images/image25.png" width="1500" />
+    <img src="images/mx-quant-tensor-b-gm-l1-l0-path.png" width="1500" />
   </div>
 
 > 图示同样以MXFP4为例，`K0 = 64`仅用于说明分形排布与指令搬运的最小K轴粒度，对于MXFP8场景`K0 = 32`。
@@ -103,7 +103,7 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 | L1 -> L0A_MX | (ceil(mL1/m0), ceil(ceil(kL1/32)/k0), m0, k0) -> (ceil(baseM/m0), ceil(ceil(baseK/32)/k0), m0, k0) | Zz -> Zz | MTE1 | LoadData with Load2D_MX |
 
   <div align="center">
-    <img src="images/image26.png" width="1500" />
+    <img src="images/mx-quant-scalea-gm-l1-l0-mx-path.png" width="1500" />
   </div>
 
 #### Tensor scaleB 的搬运说明
@@ -116,7 +116,7 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 | L1 -> L0B_MX | (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) -> (ceil(baseN/n0), ceil(ceil(baseK/32)/k0), n0, k0) | Nn -> Nn | MTE1 | LoadData with Load2D_MX |
 
   <div align="center">
-    <img src="images/image27.png" width="1500" />
+    <img src="images/mx-quant-scaleb-gm-l1-l0-mx-path.png" width="1500" />
   </div>
 
 <a id="quant-matmul-mx-implementation-constraints"></a>
@@ -301,7 +301,7 @@ $$
   下图对比了传统的列优先分配和SWAT的理论效果。
 
   <div align="center">
-    <img src="images/image28.png" width="1800" />
+    <img src="images/swat-column-major-vs-adaptive-window.png" width="1800" />
   </div>
 
 - **适用场景**
@@ -320,7 +320,7 @@ $$
 - **效果对比**
 
   <div align="center">
-    <img src="images/image29.png" width="1100" />
+    <img src="images/l1-double-buffer-bank-conflict-compare.png" width="1100" />
   </div>
 
 - **适用场景**
@@ -339,7 +339,7 @@ $$
 - **效果对比**
 
   <div align="center">
-    <img src="images/image30.png" width="1100" />
+    <img src="images/mx-quant-scale-l1-cache-reuse.png" width="1100" />
   </div>
 
 - **适用场景**
@@ -356,7 +356,7 @@ $$
 - **效果对比**
 
   <div align="center">
-    <img src="images/image31.png" width="1500" />
+    <img src="images/matmul-mte2-full-load-l1-template.png" width="1500" />
   </div>
 
 - **适用场景**
@@ -377,7 +377,7 @@ $$
 - **效果对比**
 
   <div align="center">
-    <img src="images/image32.png" width="1500" />
+    <img src="images/tail-round-multicore-load-balance.png" width="1500" />
   </div>
 
 - **适用场景**
@@ -398,7 +398,7 @@ $$
   下图展示了使能Double Buffer后流水图的预期变化，从而有效提升不同流水间的并行度。如果缓冲区空间足够，可以进一步延伸出`4-Buffer`等其他分配方案，从而适配不同场景。
 
   <div align="center">
-    <img src="images/image33.png" width="1500" />
+    <img src="images/double-buffer-l1-l0-pipeline-compare.png" width="1500" />
   </div>
 
 - **适用场景**
@@ -417,7 +417,7 @@ $$
   由性能建模可知，为充分发挥计算访存比，需尽可能用满`L0C`缓冲区，导致存在无法在`L0C`缓冲区上开启Double Buffer的场景，此时可启用UnitFlag功能来提高指令并行度。
 
   <div align="center">
-    <img src="images/image34.png" width="1500" />
+    <img src="images/unitflag-mmad-fixpipe-parallel-compare.png" width="1500" />
   </div>
 
 - **适用场景**

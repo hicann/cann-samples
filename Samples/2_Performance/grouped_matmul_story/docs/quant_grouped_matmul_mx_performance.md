@@ -189,7 +189,7 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
   下图展示了L1,L0A,L0B使能Double Buffer后流水图的预期变化，从而有效提升不同流水间的并行度。
 
   <div align="center">
-    <img src="images/image33.png" width="1500" />
+    <img src="images/double-buffer-l1-l0-pipeline-compare.png" width="1500" />
   </div>
 
 - **适用场景**
@@ -210,7 +210,7 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
   由性能建模可知，为充分发挥计算访存比，需尽可能用满`L0C`缓冲区，导致存在无法在`L0C`缓冲区上开启Double Buffer的场景，可启用UnitFlag功能来提高指令并行度。
 
   <div align="center">
-    <img src="images/image34.png" width="1500" />
+    <img src="images/unitflag-mmad-fixpipe-parallel-compare.png" width="1500" />
   </div>
 
 - **适用场景**
@@ -234,7 +234,7 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
   下图对比了传统的列优先分配和SWAT的理论效果。
 
   <div align="center">
-    <img src="images/image28.png" width="1800" />
+    <img src="images/swat-column-major-vs-adaptive-window.png" width="1800" />
   </div>
 
 - **适用场景**
@@ -255,7 +255,7 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
 - **效果对比**
 
   <div align="center">
-    <img src="images/image29.png" width="1100" />
+    <img src="images/l1-double-buffer-bank-conflict-compare.png" width="1100" />
   </div>
 
 - **适用场景**
@@ -276,7 +276,7 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
 - **效果对比**
 
   <div align="center">
-    <img src="images/image30.png" width="1100" />
+    <img src="images/mx-quant-scale-l1-cache-reuse.png" width="1100" />
   </div>
 
 - **适用场景**
@@ -336,7 +336,7 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
 - **效果对比**
 
   <div align="center">
-    <img src="images/image32.png" width="1500" />
+    <img src="images/tail-round-multicore-load-balance.png" width="1500" />
   </div>
 
 - **适用场景**
