@@ -41,7 +41,8 @@ namespace Block {
      int64_t nTailCnt_{1};
      int64_t mTailAlign_{1};
      int64_t nTailAlign_{1};
-     int64_t tailCnt_{1}; // Updated only for the last group.
+     int64_t tailCnt_{1};
+     int64_t tailBlockBase_{0};
      int64_t mainMWindow_;
      int64_t tailWindow_;
      int64_t mainRow_;
@@ -122,12 +123,21 @@ namespace Block {
          if (blockIdx_ > endBlockIdx_ && blockIdx_ <= newEndBlockIdx) {
              round_ += 1;
          }
-         if (blockIdx_ > newEndBlockIdx) { // No tail split is needed when blockIdx is not in the last round.
-             mTailCnt_ = 1;
-             nTailCnt_ = 1;
-             tailCnt_ = 1;
-         }
-         endBlockIdx_ = newEndBlockIdx;
+        if (blockIdx_ > newEndBlockIdx) {
+            mTailCnt_ = 1;
+            nTailCnt_ = 1;
+            tailCnt_ = 1;
+            tailBlockBase_ = 0;
+        } else if (tailCnt_ > 1) {
+            // Base physical block of the original (unsplit) tail tile window.
+            // Example: endBlockIdx_=3, tailOriCnt=4, tailCnt=3 -> base=0, so cores (0,1,2),.,(9,10,11) map to 4 tiles.
+            // Example: endBlockIdx_=4, tailOriCnt=1, tailCnt=3 -> base=4, so cores 4/5/6 collaborate.
+            // Example: endBlockIdx_=4, tailOriCnt=2, tailCnt=3 -> base=3, so (3,4,5) and (6,7,8) map to 2 tiles.
+            tailBlockBase_ = endBlockIdx_ + 1 - tailOriCnt;
+        } else {
+            tailBlockBase_ = 0;
+        }
+        endBlockIdx_ = newEndBlockIdx;
      }
  
      __aicore__ inline void UpdateTailTile()
@@ -166,16 +176,19 @@ namespace Block {
          if (round_ == 0 || roundIdx_ > round_ - 1) {
              return false;
          }
-         int64_t newBlockIdx = (roundIdx_ == round_ - 1) ? blockIdx_ / tailCnt_ : blockIdx_;
-         int64_t index = newBlockIdx + roundIdx_ * blockNum_;
-         // Apply the startBlockIdx offset.
-         if (blockIdx_ < startBlockIdx_) {
-             index += blockNum_ - startBlockIdx_;
-         } else if (endBlockIdx_ + 1 >= tailCnt_ * totalCnt_) {
-             index -= startBlockIdx_ / tailCnt_;
-         } else {
-             index -= startBlockIdx_;
-         }
+        int64_t newBlockIdx = static_cast<int64_t>(blockIdx_);
+        if (roundIdx_ == round_ - 1 && tailCnt_ > 1) {
+            newBlockIdx = (tailBlockBase_ + ((newBlockIdx - tailBlockBase_) / tailCnt_) * tailCnt_) / tailCnt_;
+        }
+        int64_t index = newBlockIdx + roundIdx_ * blockNum_;
+        // Apply the startBlockIdx offset.
+        if (blockIdx_ < startBlockIdx_) {
+            index += blockNum_ - startBlockIdx_;
+        } else if (tailCnt_ > 1 && endBlockIdx_ + 1 >= tailCnt_ * totalCnt_) {
+            index -= (tailBlockBase_ + ((startBlockIdx_ - tailBlockBase_) / tailCnt_) * tailCnt_) / tailCnt_;
+        } else {
+            index -= startBlockIdx_;
+        }
          int64_t rowIdx = index / nCnt_ / mainMWindow_;
          if (rowIdx < mainRow_) {
              Get<MNK_M>(blockCoord) = rowIdx * mainMWindow_ + index % mainMWindow_;
