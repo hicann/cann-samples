@@ -18,74 +18,27 @@
 #include <cstdint>
 #include <memory>
 #include "tiling/matmul_a16w16_tiling_data.h"
+#include "tiling/matmul_a16w16_tiling_common.h"
 #include "utils/matmul_a16w16_constant.h"
 #include "platform/platform_ascendc.h"
-
-struct MatmulA16W16PlatformInfo {
-    uint32_t aicNum{0};
-    uint32_t aivNum{0};
-    uint64_t ubSize{0};
-    uint64_t l1Size{0};
-    uint64_t l0aSize{0};
-    uint64_t l0bSize{0};
-    uint64_t l0cSize{0};
-    uint64_t l2Size{0};
-    uint64_t btSize{0};
-    platform_ascendc::SocVersion socVersion{0};
-};
-
-struct MatmulA16W16Args {
-    uint64_t m{0};
-    uint64_t n{0};
-    uint64_t k{0};
-    bool hasBias{false};
-    bool isATrans{false};
-    bool isBTrans{false};
-};
-
-struct MatMulV3TailInfo {
-    uint64_t mCnt = 1UL;
-    uint64_t nCnt = 1UL;
-    uint64_t kCnt = 1UL;
-    uint64_t mTailMain = 0UL;
-    uint64_t nTailMain = 0UL;
-};
-
-struct MatmulA16W16RunInfo {
-    uint64_t baseM{1};
-    uint64_t baseN{1};
-    uint64_t baseK{1};
-    uint64_t singleCoreM{1};
-    uint64_t singleCoreN{1};
-    uint64_t singleCoreK{1};
-    uint32_t mBaseTailSplitCnt{1};
-    uint32_t nBaseTailSplitCnt{1};
-    uint64_t usedCoreNum{1};
-    uint64_t depthA1{1};
-    uint64_t depthB1{1};
-    uint64_t stepKa{1};
-    uint64_t stepKb{1};
-    uint64_t stepM{1};
-    uint64_t stepN{1};
-    uint64_t iterateOrder{0};
-    uint64_t dbL0c{0};
-    uint64_t l1BufferNum{2};
-    MatMulV3TailInfo tailInfo;
-    double defaultBalance{0.0};
-    uint64_t redundantData{0};
-};
 
 class MatmulA16W16TilingBase {
 public:
     MatmulA16W16TilingBase() = default;
     virtual ~MatmulA16W16TilingBase() = default;
 
-    virtual void GetTilingData(uint64_t m, uint64_t n, uint64_t k, MatmulA16W16TilingData& tilingData)
+    virtual void GetTilingData(uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, MatmulA16W16TilingData& tilingData)
     {
         InitCompileInfo();
-        InitShapeArgs(m, n, k);
+        InitShapeArgs(m, n, k, transA, transB);
         DoOpTiling(tilingData);
         PrintTilingData(tilingData);
+    };
+
+    // Calculate the size of the intermediate space fo GM
+    virtual size_t GetWorkSpace()
+    {
+        return 0;
     };
 
 protected:
@@ -112,11 +65,13 @@ private:
         ascendcPlatform->GetCoreMemSize(platform_ascendc::CoreMemType::BT, platformInfo_.btSize);
     }
 
-    void InitShapeArgs(uint64_t m, uint64_t n, uint64_t k, bool hasBias = false)
+    void InitShapeArgs(uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, bool hasBias = false)
     {
         args_.m = m;
         args_.n = n;
         args_.k = k;
+        args_.isATrans = transA;
+        args_.isBTrans = transB;
         args_.hasBias = hasBias;
     }
 
@@ -135,6 +90,7 @@ private:
         printf("  baseM              : %u\n", tilingData.baseM);
         printf("  baseN              : %u\n", tilingData.baseN);
         printf("  baseK              : %u\n", tilingData.baseK);
+        printf("  skSingleCoreK      : %u\n", tilingData.skSingleCoreK);
         printf("  mTailCnt           : %u\n", tilingData.mTailCnt);
         printf("  nTailCnt           : %u\n", tilingData.nTailCnt);
         printf("  mBaseTailSplitCnt  : %u\n", tilingData.mBaseTailSplitCnt);

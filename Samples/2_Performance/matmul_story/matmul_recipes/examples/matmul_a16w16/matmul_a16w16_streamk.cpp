@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file matmul_a16w16_swat.cpp
- * \brief Sample launcher for A16W16 MATMUL SWAT streaming example.
+ * \file matmul_a16w16_streamk.cpp
+ * \brief Sample launcher for A16W16 MATMUL StreamK streaming example.
  */
 #include <cstdint>
 #include <cstdlib>
@@ -28,54 +28,52 @@
 #include "block/block_scheduler_policy.h"
 #include "host_utils/common_utils.h"
 #include "host_utils/io_utils.h"
-#include "kernel/matmul_a16w16_kernel_swat.h"
-#include "tiling/matmul_a16w16_tiling_swat.h"
+#include "kernel/matmul_a16w16_kernel_streamk.h"
+#include "tiling/matmul_a16w16_tiling_streamk.h"
 #include "tiling/matmul_a16w16_tiling_data.h"
+#include "epilogue/matmul_a16w16_block_epilogue_streamk.h"
 
 template <class LAYOUT_A, class LAYOUT_B, class LAYOUT_C>
-__global__ __aicore__ __cube__ void MatMulA16W16SwatKernel(
-    GM_ADDR dA, GM_ADDR dB, GM_ADDR dC, MatmulA16W16TilingData matmulA16W16TilingData)
+__global__ __aicore__ __mix__(1, 2) void MatMulA16W16StreamKKernel(
+    GM_ADDR dA, GM_ADDR dB, GM_ADDR dC, GM_ADDR dWorkSpace, MatmulA16W16TilingData matmulA16W16TilingData)
 {
-    // Data type of the matrix (half or bfloat16_t)
     using TypeA = bfloat16_t;
     using TypeB = bfloat16_t;
     using TypeC = bfloat16_t;
-    // Matrix data layout
     using LayoutA = LAYOUT_A;
     using LayoutB = LAYOUT_B;
     using LayoutC = LAYOUT_C;
 
-    using BlockScheduler = MatmulA16W16SwatScheduler<NO_FULL_LOAD_MODE>;
-    using DispatchPolicy = MatmulA16W16MultiBlockWithSwat<NO_FULL_LOAD_MODE>;
+    using BlockScheduler = MatmulA16W16StreamKScheduler;
+    using DispatchPolicy = MatmulA16W16MultiBlockWithStreamK;
     using BlockMmad = Block::BlockMmad<DispatchPolicy, TypeA, LayoutA, TypeB, LayoutB, TypeC, LayoutC>;
     using ProblemShape = MatmulShape;
-    using MatmulKernelImpl = Kernel::MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockScheduler>;
+    using BlockEpilogue = Block::BlockEpilogueStreamK<float, TypeC>;
+    using MatmulKernelImpl = Kernel::MatmulA16W16KernelStreamK<ProblemShape, BlockMmad, BlockScheduler, BlockEpilogue>;
     using Params = typename MatmulKernelImpl::Params;
-    // Translate the serialized host tiling data into the strongly typed kernel
-    // parameter bundle expected by the device-side implementation.
     Params params = {
         {matmulA16W16TilingData.m, matmulA16W16TilingData.n, matmulA16W16TilingData.k, 1UL},
-        {dA, dB, dC},
+        {dA, dB, dC, dWorkSpace},
+        {matmulA16W16TilingData.usedCoreNum, matmulA16W16TilingData.baseM, matmulA16W16TilingData.baseN,
+         matmulA16W16TilingData.baseK, matmulA16W16TilingData.kL1, matmulA16W16TilingData.skSingleCoreK},
+        {dC, dWorkSpace},
         {matmulA16W16TilingData.mL1, matmulA16W16TilingData.nL1, matmulA16W16TilingData.kL1,
          matmulA16W16TilingData.baseM, matmulA16W16TilingData.baseN, matmulA16W16TilingData.baseK,
-         matmulA16W16TilingData.mBaseTailSplitCnt, matmulA16W16TilingData.nBaseTailSplitCnt,
-         matmulA16W16TilingData.mTailMain, matmulA16W16TilingData.nTailMain, matmulA16W16TilingData.mTailCnt,
-         matmulA16W16TilingData.nTailCnt},
-        {matmulA16W16TilingData.mL1, matmulA16W16TilingData.nL1, matmulA16W16TilingData.kL1,
-         matmulA16W16TilingData.baseM, matmulA16W16TilingData.baseN, matmulA16W16TilingData.baseK,
-         matmulA16W16TilingData.l0cDB}};
+         matmulA16W16TilingData.usedCoreNum}};
     MatmulKernelImpl matmulKernelImpl;
     matmulKernelImpl(params);
 }
 
 namespace {
 template <bool TransA, bool TransB>
-void LaunchKernel(GM_ADDR dA, GM_ADDR dB, GM_ADDR dC, const MatmulA16W16TilingData& tilingData, aclrtStream stream)
+void LaunchKernel(
+    GM_ADDR dA, GM_ADDR dB, GM_ADDR dC, GM_ADDR dWorkSpace, const MatmulA16W16TilingData& tilingData,
+    aclrtStream stream)
 {
     using LAYOUT_A = std::conditional_t<TransA, layout::ColumnMajor, layout::RowMajor>;
     using LAYOUT_B = std::conditional_t<TransB, layout::ColumnMajor, layout::RowMajor>;
-    MatMulA16W16SwatKernel<LAYOUT_A, LAYOUT_B, layout::RowMajor>
-        <<<tilingData.usedCoreNum, nullptr, stream>>>(dA, dB, dC, tilingData);
+    MatMulA16W16StreamKKernel<LAYOUT_A, LAYOUT_B, layout::RowMajor>
+        <<<tilingData.usedCoreNum, nullptr, stream>>>(dA, dB, dC, dWorkSpace, tilingData);
 }
 } // namespace
 
@@ -84,7 +82,7 @@ int main(int argc, char* argv[])
     uint64_t m = 0;
     uint64_t k = 0;
     uint64_t n = 0;
-    bool transA = false;	 
+    bool transA = false;
     bool transB = false;
     try {
         ParseArguments(argc, argv, m, k, n, transA, transB);
@@ -113,9 +111,7 @@ int main(int argc, char* argv[])
     };
     try {
         MatmulA16W16TilingData tilingData;
-        // Host tiling picks the block shape, tail strategy, and buffering plan
-        // // that will later be consumed by the device kernel.
-        std::unique_ptr<MatmulA16W16TilingBase> tilingEngine = std::make_unique<MatmulA16W16TilingSwat>();
+        std::unique_ptr<MatmulA16W16TilingBase> tilingEngine = std::make_unique<MatmulA16W16TilingStreamK>();
         tilingEngine->GetTilingData(m, n, k, transA, transB, tilingData);
         uint32_t deviceCount = 0;
         CHECK_COND(aclrtGetDeviceCount(&deviceCount) == ACL_SUCCESS, "Failed to query ACL device count.");
@@ -128,12 +124,11 @@ int main(int argc, char* argv[])
         size_t sizeA = m * k * sizeof(half);
         size_t sizeB = k * n * sizeof(half);
         size_t sizeC = m * n * sizeof(half);
+        size_t sizeWorkSpace = tilingEngine->GetWorkSpace();
         char exePath[PATH_MAX];
         ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
         std::string baseDir = ".";
         if (len > 0) {
-            // Keep all example assets next to the installed executable so the
-            // launcher, generator, and verifier agree on one local layout.
             exePath[len] = '\0';
             baseDir = exePath;
             size_t lastSlash = baseDir.find_last_of('/');
@@ -143,7 +138,6 @@ int main(int argc, char* argv[])
         }
         std::string inputDir = baseDir + "/input";
         std::string outputDir = baseDir + "/output";
-        // Check if input files exist
         struct stat st;
         if (stat((inputDir + "/input_a.bin").c_str(), &st) != 0) {
             std::cout << "Input files not found !" << std::endl;
@@ -152,15 +146,21 @@ int main(int argc, char* argv[])
         half* hA = nullptr;
         half* hB = nullptr;
         half* hC = nullptr;
+        half* hWorkSpace = nullptr;
         GM_ADDR dA = nullptr;
         GM_ADDR dB = nullptr;
         GM_ADDR dC = nullptr;
+        GM_ADDR dWorkSpace = nullptr;
         CHECK_COND(aclrtMallocHost((void**)&hA, sizeA) == ACL_SUCCESS, "Failed to allocate host buffer for input A.");
         std::unique_ptr<void, aclError (*)(void*)> hostA(hA, aclrtFreeHost);
         CHECK_COND(aclrtMallocHost((void**)&hB, sizeB) == ACL_SUCCESS, "Failed to allocate host buffer for input B.");
         std::unique_ptr<void, aclError (*)(void*)> hostB(hB, aclrtFreeHost);
         CHECK_COND(aclrtMallocHost((void**)&hC, sizeC) == ACL_SUCCESS, "Failed to allocate host buffer for output C.");
         std::unique_ptr<void, aclError (*)(void*)> hostC(hC, aclrtFreeHost);
+        CHECK_COND(
+            aclrtMallocHost((void**)&hWorkSpace, sizeWorkSpace) == ACL_SUCCESS,
+            "Failed to allocate host buffer for WorkSpace");
+        std::unique_ptr<void, aclError (*)(void*)> hostWorkSpace(hWorkSpace, aclrtFreeHost);
         ReadFile(inputDir + "/input_a.bin", sizeA, hA, sizeA);
         ReadFile(inputDir + "/input_b.bin", sizeB, hB, sizeB);
         CHECK_COND(
@@ -176,20 +176,23 @@ int main(int argc, char* argv[])
             "Failed to allocate the device buffer for output C.");
         std::unique_ptr<void, aclError (*)(void*)> deviceC(dC, aclrtFree);
         CHECK_COND(
+            aclrtMalloc((void**)&dWorkSpace, sizeWorkSpace, ACL_MEM_MALLOC_HUGE_ONLY) == ACL_SUCCESS,
+            "Failed to allocate the device buffer for WorkSpace.");
+        std::unique_ptr<void, aclError (*)(void*)> deviceWorkSpace(dWorkSpace, aclrtFree);
+        CHECK_COND(
             aclrtMemcpyAsync(dA, sizeA, hA, sizeA, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
             "Failed to copy input A from host to device.");
         CHECK_COND(
             aclrtMemcpyAsync(dB, sizeB, hB, sizeB, ACL_MEMCPY_HOST_TO_DEVICE, stream) == ACL_SUCCESS,
             "Failed to copy input B from host to device.");
-        // Select different kernels based on forwarding information
         if (transA && transB) {
-            LaunchKernel<true, true>(dA, dB, dC, tilingData, stream);
+            LaunchKernel<true, true>(dA, dB, dC, dWorkSpace, tilingData, stream);
         } else if (transA && !transB) {
-            LaunchKernel<true, false>(dA, dB, dC, tilingData, stream);
+            LaunchKernel<true, false>(dA, dB, dC, dWorkSpace, tilingData, stream);
         } else if (!transA && transB) {
-            LaunchKernel<false, true>(dA, dB, dC, tilingData, stream);
+            LaunchKernel<false, true>(dA, dB, dC, dWorkSpace, tilingData, stream);
         } else {
-            LaunchKernel<false, false>(dA, dB, dC, tilingData, stream);
+            LaunchKernel<false, false>(dA, dB, dC, dWorkSpace, tilingData, stream);
         }
         CHECK_COND(
             aclrtMemcpyAsync(hC, sizeC, dC, sizeC, ACL_MEMCPY_DEVICE_TO_HOST, stream) == ACL_SUCCESS,

@@ -45,3 +45,9 @@ template <uint64_t FULL_LOAD_MODE_>
 struct MatmulA16W16MultiBlockWithSwat {
     static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
+
+/**
+ * @brief Dispatch tag for MatmulA16W16 matmul kernels that use the StreamK
+ *        scheduling family.
+ */
+struct MatmulA16W16MultiBlockWithStreamK {};

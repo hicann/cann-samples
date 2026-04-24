@@ -10,6 +10,7 @@
 
 
 - `matmul_a16w16_swat`：基于 SWAT 模板的实现。
+- `matmul_a16w16_streamk`：基于 STREAMK 模板的实现。
 - `gen_data.py`：生成输入数据和 CPU golden 结果。
 - `verify_result.py`：校验 NPU 输出与 CPU golden 是否一致。
 
@@ -108,4 +109,11 @@ python3 scripts/gen_data.py 100 50 200 false true
 ```bash
 ./matmul_a16w16_swat 100 50 200 
 ./matmul_a16w16_swat 100 50 200 false true
+```
+
+或：
+
+```bash
+./matmul_a16w16_streamk 32 4096 64
+./matmul_a16w16_streamk 32 4096 64 false true
 ```

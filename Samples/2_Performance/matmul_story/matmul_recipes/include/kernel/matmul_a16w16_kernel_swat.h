@@ -101,8 +101,6 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
     if ASCEND_IS_AIV {
         return;
     }
-    // Instantiate mmadOp
-    BlockMmad blockMmadOp;
     int64_t curBlockIdx = AscendC::GetBlockIdx();
     int64_t blockNum = AscendC::GetBlockNum();
     problemShape_ = ToShapeTuple(params.problemShape);
@@ -115,11 +113,11 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
     if (curBlockIdx >= realBlockNum) {
         return;
     }
-
     AscendC::SetMMLayoutTransform(true);
     bool l0cDB = params.kernelParams.dbL0C > 1;
-    blockMmadOp.Init(problemShape_, tileL1, tileL0, l0cDB);
-
+    // Instantiate mmadOp
+    BlockMmad blockMmadOp(problemShape_, tileL1, tileL0, l0cDB);
+    
     int64_t m = Get<MNK_M>(problemShape_);
     int64_t n = Get<MNK_N>(problemShape_);
     int64_t k = Get<MNK_K>(problemShape_);

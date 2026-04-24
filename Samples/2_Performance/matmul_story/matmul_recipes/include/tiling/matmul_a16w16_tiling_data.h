@@ -23,6 +23,7 @@
 
 #pragma pack(push, 8)
 struct alignas(8) MatmulA16W16TilingData {
+    uint32_t usedCoreNum{0};
     uint32_t m{0};
     uint32_t n{0};
     uint32_t k{0};
@@ -32,13 +33,13 @@ struct alignas(8) MatmulA16W16TilingData {
     uint32_t baseM{0};
     uint32_t baseN{0};
     uint32_t baseK{0};
+    uint32_t skSingleCoreK{0};
     uint32_t mTailCnt{0};
     uint32_t nTailCnt{0};
     uint32_t mBaseTailSplitCnt{1};
     uint32_t nBaseTailSplitCnt{1};
     uint32_t mTailMain{0};
     uint32_t nTailMain{0};
-    uint32_t usedCoreNum{0};
     uint8_t l1BufferNum{0};
     uint8_t l0cDB{1};
 };

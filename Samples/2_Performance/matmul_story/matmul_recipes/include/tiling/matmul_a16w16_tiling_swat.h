@@ -274,7 +274,7 @@ private:
     void CalL1Tiling()
     {
         uint64_t totalL1Size = platformInfo_.l1Size;
-        uint64_t reserveBTSize = 0UL;
+        uint64_t reserveBTSize = args_.hasBias ? BASIC_BLOCK_SIZE_256 * DATA_SIZE_FP32 : 0UL;
         runInfo_.depthA1 = totalL1Size / NUM_TWO / runInfo_.baseM / runInfo_.baseK / DATA_SIZE_FP16; // 2: half of l1
         runInfo_.depthB1 = totalL1Size / NUM_TWO / runInfo_.baseN / runInfo_.baseK / DATA_SIZE_FP16; // 2: half of l1
 
