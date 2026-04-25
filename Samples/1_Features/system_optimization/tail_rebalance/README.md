@@ -23,7 +23,7 @@
 
 &ensp;&ensp;尾轮负载均衡首先需要确定尾块拆分的大小，即明确在M维度和N维度上分别需要切分的块数。以下函数基于当前可用的AI核心数量，计算最优的尾块切分方案：
 
-```
+```C++
 // 计算尾块拆分维度
 __aicore__ inline void CalcTailBasicBlock(uint64_t mTileNum, uint64_t nTileNum, uint64_t aicNum, 
                                           uint64_t& tailMCnt, uint64_t& tailNCnt)
@@ -48,7 +48,7 @@ __aicore__ inline void CalcTailBasicBlock(uint64_t mTileNum, uint64_t nTileNum, 
 
 &ensp;&ensp;尾块拆分后，需要重新计算总任务块数并调整多核分配策略，确保各核心负载均衡。具体实现如下：
 
-```
+```C++
 // 重新计算总块数：原始块数 + 尾块拆分后新增的块数
 tileNum = tileNum + (tailCnt - 1) * perTailCnt;
 // Multi-core tile processing loop - distribute tiles across available cores
@@ -68,7 +68,7 @@ for (uint64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += blockNum) {
 
 &ensp;&ensp;当处理到末轮拆分的尾块时，需要重新计算当前核心负责的子块在M维度和N维度上的起始坐标与尺寸，确保数据切分的正确性。具体实现如下：
 
-```
+```C++
 // 判断是否为尾块拆分场景：最后一个核心且存在尾块拆分
 if (tileIdx / blockNum == (perCoreBlockNum - 1) && tailCnt > 1)
 {
@@ -110,18 +110,12 @@ if (tileIdx / blockNum == (perCoreBlockNum - 1) && tailCnt > 1)
 
 ## 3 性能结果对比
 ### 3.1 case前后性能
-&ensp;&ensp;以基础MatMul算子为例，在相同输入规模（M=3000, K=1024, N=2560）下进行性能测试，通过Profiling工具采集硬件流水线执行状态。
+&ensp;&ensp;以基础MatMul算子为例，在相同输入规模（M=2560, K=1024, N=2560）下进行性能测试，通过Profiling工具采集硬件流水线执行状态。
 
-未使用尾轮负载均衡策略优化时：
+使用尾轮负载均衡策略优化后：
 
 <div align="center">
   <img src="./images/image-2.png" alt="原理图" style="width: 80%; height: auto;">
-</div>
-
-使用尾轮负载均衡策略优化结果：
-
-<div align="center">
-  <img src="./images/image-3.png" alt="原理图" style="width: 80%; height: auto;">
 </div>
 
 &ensp;&ensp;可以看到，经过尾轮负载均衡后，尾轮的计算时间显著缩短，整体计算效率得到提升。
@@ -191,6 +185,7 @@ python3 profile_matmul.py 1024 2048 4096
 | matmul    |     86.870 |  43.804 |      1.850 |   12.997 |   51.857 |       2.970 |          2.200 |
 +----
 可以看到，由于尾轮的计算效率提升，整体计算时间缩短，性能有所提升。
+```
 
 ## 6. 支持架构
 

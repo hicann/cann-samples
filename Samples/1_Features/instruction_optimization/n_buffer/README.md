@@ -38,7 +38,7 @@
 
 串行版本：
 
-```
+```C++
 constexpr static int16_t ZERO_FLAG = 0;
 ...
 
@@ -50,7 +50,7 @@ AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(ZERO_FLAG);
 
 DB使能版本：
 
-```
+```C++
 constexpr static int16_t ZERO_FLAG = 0;
 constexpr static int16_t FIRST_FLAG = 1;
 ...
@@ -77,7 +77,7 @@ AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(FIRST_FLAG);
 
 串行版本：
 
-```
+```C++
 // 等待MTE1搬运完成，触发MTE2启动
 AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(ZERO_FLAG);
 
@@ -97,7 +97,7 @@ AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(ZERO_FLAG);
 
 DB使能版本：
 
-```
+```C++
 // 根据当前L1缓冲区索引等待对应事件
 uint64_t l1BufId = l1PingPong & 1;
 AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(l1BufId);
@@ -125,7 +125,7 @@ l1PingPong++;
 
 串行版本：
 
-```
+```C++
 // 等待MMAD计算完成，触发MTE1启动
 AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(ZERO_FLAG);
 
@@ -147,7 +147,7 @@ AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(ZERO_FLAG);
 
 DB使能版本：
 
-```
+```C++
 // 根据当前L0缓冲区索引等待对应事件
 uint64_t l0BufId = l0PingPong & 1;
 AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(l0BufId);
@@ -179,7 +179,7 @@ l0PingPong++;  // 切换L0缓冲区
 
 串行版本：
 
-```
+```C++
 // 等待MMAD计算完成，触发fixpipe搬出数据
 AscendC::SetFlag<AscendC::HardEvent::M_FIX>(ZERO_FLAG);
 AscendC::WaitFlag<AscendC::HardEvent::M_FIX>(ZERO_FLAG);
@@ -197,7 +197,7 @@ AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(ZERO_FLAG);
 
 DB使能版本：
 
-```
+```C++
 // 等待MMAD计算完成，触发fixpipe搬出数据
 AscendC::SetFlag<AscendC::HardEvent::M_FIX>(ZERO_FLAG);
 AscendC::WaitFlag<AscendC::HardEvent::M_FIX>(ZERO_FLAG);
@@ -229,20 +229,13 @@ AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(FIRST_FLAG);
 
 ## 3 性能结果对比
 ### 3.1 case前后性能
-&ensp;&ensp;以基础MatMul算子为例，在相同输入规模（M=512, K=512, N=512）下进行性能测试，通过Profiling工具采集硬件流水线执行状态。
-未开启双buffer优化时：
+&ensp;&ensp;以基础MatMul算子为例，在相同输入规模（M=1024, K=2048, N=4096）下进行性能测试，通过Profiling工具采集硬件流水线执行状态。
 
 <div align="center">
-  <img src="./images/image-2.png" alt="N_buffer_image3" style="width: 80%; height: auto;">
+  <img src="./images/image-2.png" alt="流水图" style="width: 80%; height: auto;">
 </div>
 
-从上图可以看出，在串行执行模式下，计算单元（Cube）与数据搬运单元（MTE2）呈现明显的交替工作状态。当搬运单元加载数据时，计算单元处于空闲等待状态；而当计算单元开始运算时，搬运单元又停止工作。这种“搬-等-算-等”的串行模式导致硬件资源利用率低下，流水线中出现大量空洞，整体执行时间较长。
-
-开双buffer优化结果：
-
-<div align="center">
-  <img src="./images/image-3.png" alt="N_buffer_image4" style="width: 80%; height: auto;">
-</div>
+&ensp;&ensp;从上图可以看出，在串行执行模式下，计算单元（Cube）与数据搬运单元（MTE2）呈现明显的交替工作状态。当搬运单元加载数据时，计算单元处于空闲等待状态；而当计算单元开始运算时，搬运单元又停止工作。这种“搬-等-算-等”的串行模式导致硬件资源利用率低下，流水线中出现大量空洞，整体执行时间较长。
 
 &ensp;&ensp;开启DB特性后，硬件流水线状态发生显著变化。计算单元与搬运单元实现高度并行：在Cube单元处理当前数据块的同时，MTE2单元已经开始预加载下一块数据。从图中可以清晰看到，两条流水线几乎完全重叠，流水线空洞大幅减少，硬件资源得到充分利用。最终体现在执行时间上，算子端到端延迟降低约40%，硬件利用率提升至接近理论峰值。
 

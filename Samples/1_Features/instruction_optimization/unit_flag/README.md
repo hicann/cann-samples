@@ -31,7 +31,7 @@
 主要改动点是配置mmad入参和fixpipe重新配置
 
 改造前
-```
+```C++
 // 执行 M-MAD 操作
 MmadParams para;
 para.cmatrixInitVal = (iter1 == 0 && iter0 == 0);
@@ -52,7 +52,7 @@ AscendC::Te::Copy(copyL0C2GM, gmBlockC_, tensorL0C);
 ```
 
 改造后
-```
+```C++
 // 新增：单元标志控制开关
 constexpr uint32_t UNITFLAG_DISABLE = 0; // 不开启unit_flag  
 constexpr uint32_t NO_FINAL_ACCUMULATION = 2; // 非尾轮标志
@@ -96,21 +96,13 @@ AscendC::Te::Copy(copyL0C2GM, gmBlockC_, tensorL0C, AscendC::Te::FixpipeParams{U
 
 &ensp;&ensp;测试结果表明，开启 unit_flag 优化后，FixPipe 数据搬移流水线与 MMAD 计算流水线实现了深度并行执行，有效隐藏了数据搬移延迟，从而提升了算子的整体执行性能。
 
-未开启unit_flag优化前：
-
 <div align="center">
   <img src="./images/image-3.png" alt="未开启unit_flag优化" style="width: 80%; height: auto;">
 </div>
 
-开启unit_flag优化后：
-
-<div align="center">
-  <img src="./images/image-4.png" alt="开启unit_flag优化后" style="width: 80%; height: auto;">
-</div>
-
 &ensp;&ensp;在优化后的时序图中，fixpipe 流水段长度显著增加，其根本原因在于 fixpipe 与 mmad 的流水线解绑。解绑后，fixpipe 的指令下发时机提前，但其对应的数据搬运操作并未同步启动，而是延迟至尾轮计算完成、数据累加结束后才进行实际的数据搬移。下一轮 mmad 计算必须等待 fixpipe 完成数据搬运后方可开始，导致该轮 mmad 的计算等待时间延长，整体流水线出现展宽。
 <div align="center">
-  <img src="./images/image-5.png" alt="等待fixpipe搬运导致mmad计算拉长">
+  <img src="./images/image-4.png" alt="等待fixpipe搬运导致mmad计算拉长">
 </div>
 
 ## 4. 结论

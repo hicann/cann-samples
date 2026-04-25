@@ -36,7 +36,7 @@ set(DIST_PATH
     1_Features/memory_optimization/l1_bank_conflict
 )
 
-install(TARGETS matmul
+install(TARGETS l1_bank_conflict
     RUNTIME DESTINATION ${DIST_PATH}
 )
 

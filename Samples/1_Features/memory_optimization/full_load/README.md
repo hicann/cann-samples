@@ -25,7 +25,7 @@
 ### 2.1 代码
 以一个典型的MatMul计算为例，修改以下代码可实现A矩阵全载效果：
 
-```
+```C++
 for (uint64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += blockNum) {
 
   // 1. 在 L1 缓存中预先申请 A 矩阵的存储空间
@@ -95,17 +95,12 @@ bool IsFullLoadEnabled(int m, int n, int k, uint32_t numBlocks)
 
 &ensp;&ensp;测试结果表明，启用 A 全载优化后，原先被 MTE2 打断的 MMAD 计算流水线变得连续，从而提升了算子的整体执行性能。
 
-未开启 A 全载优化时：
+开启 A 全载优化后：
 
 <div align="center">
   <img src="./images/image-3.png" alt="未开启A全载优化" style="width: 80%; height: auto;">
 </div>
 
-开启 A 全载优化后：
-
-<div align="center">
-  <img src="./images/image-4.png" alt="开启A全载优化后" style="width: 80%; height: auto;">
-</div>
 
 ## 4. 结论
 

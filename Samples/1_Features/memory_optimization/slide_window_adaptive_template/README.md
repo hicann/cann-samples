@@ -27,7 +27,7 @@
 ### 2.1 代码
 以一个典型的MatMul计算为例，修改以下代码可实现swat效果：
 
-```
+```C++
 // 初始化swat变量
 static constexpr uint64_t WINDOW_LEN = 4UL;
 uint64_t mainWindow = WINDOW_LEN < mTileNum ? WINDOW_LEN : mTileNum;
@@ -76,16 +76,8 @@ for (uint64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += blockNum) {
 ### 3.1 case前后性能
 &ensp;&ensp;以基础MatMul算子为例，在相同输入规模（M=1024, K=1024, N=8192）下进行性能测试，通过Profiling工具采集硬件流水线执行状态。
 
-&ensp;&ensp;未添加swat机制优化时：
-
 <div align="center">
-  <img src="./images/image-3.png" alt="matmul流水图" style="width: 80%; height: auto;">
-</div>
-
-&ensp;&ensp;swat机制优化结果：
-
-<div align="center">
-  <img src="./images/image-4.png" alt="swat流水图" style="width: 80%; height: auto;">
+  <img src="./images/image-3.png" alt="流水图" style="width: 80%; height: auto;">
 </div>
 
 &ensp;&ensp;从优化效果来看，采用 SWAT 机制后，原先因首轮 L2 命中率较低导致数据搬运效率下降，进而引发搬运时间过长、打断后续 MMA 计算流水的问题得到了有效改善。SWAT 优化显著提升了首轮数据搬运效率，使计算流水保持连续，算子整体计算时间明显缩短。

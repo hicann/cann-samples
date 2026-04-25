@@ -9,7 +9,25 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(slide_window_adaptive_template)
-add_subdirectory(full_load)
-add_subdirectory(l1_bank_conflict)
-add_subdirectory(scale_cache)
+add_executable(scale_cache main.cpp)
+
+target_compile_options(scale_cache PRIVATE
+    "-xasc"
+    "--npu-arch=dav-3510"
+    "-w"
+    "-O3"
+)
+
+target_link_libraries(scale_cache
+    cann_samples::ascend_base
+    cann_samples::tensor_api
+)
+
+install(TARGETS scale_cache
+    RUNTIME DESTINATION 1_Features/memory_optimization/scale_cache
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+    DESTINATION 1_Features/memory_optimization/scale_cache
+    FILES_MATCHING PATTERN "*"
+)

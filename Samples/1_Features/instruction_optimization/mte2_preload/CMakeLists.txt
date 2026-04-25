@@ -9,7 +9,34 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(slide_window_adaptive_template)
-add_subdirectory(full_load)
-add_subdirectory(l1_bank_conflict)
-add_subdirectory(scale_cache)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_C_COMPILER ${BISHENG})
+set(CMAKE_CXX_COMPILER ${BISHENG})
+set(CMAKE_LINKER ${BISHENG})
+
+# mte2_preload
+add_executable(mte2_preload main.cpp)
+target_link_directories(mte2_preload PRIVATE ${ASCEND_DIR}/lib64)
+target_compile_options(mte2_preload PRIVATE
+    "-xasc"
+    "--npu-arch=dav-3510"
+    "-w"
+    "-O3"
+)
+
+target_link_libraries(mte2_preload
+    cann_samples::ascend_base
+    cann_samples::tensor_api
+)
+
+install(TARGETS mte2_preload
+    RUNTIME DESTINATION 1_Features/instruction_optimization/mte2_preload
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+    DESTINATION 1_Features/instruction_optimization/mte2_preload
+    FILES_MATCHING PATTERN "*"
+)

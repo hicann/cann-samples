@@ -20,7 +20,7 @@
 
 传统写法：
 
- ```
+ ```C++
  // [Ping A][Pong A][Ping B][Pong B]
 for (uint64_t iter0 = 0; iter0 < kL1TileNum; ++iter0) {
     // 计算A矩阵和B矩阵在L1缓存中单份数据所需的空间大小
@@ -36,7 +36,7 @@ for (uint64_t iter0 = 0; iter0 < kL1TileNum; ++iter0) {
  ```
 切分L1给ping pong分别分配独立的空间来避免L1 bank 冲突：
 
- ```
+ ```C++
  // [Ping A][Ping B] | [Pong A][Pong B]
 for (uint64_t iter0 = 0; iter0 < kL1TileNum; ++iter0) {
     // 使用L1总容量的一半作为Ping和Pong的隔离边界，实现两块Bank空间的完全隔离
@@ -61,18 +61,12 @@ for (uint64_t iter0 = 0; iter0 < kL1TileNum; ++iter0) {
 
 &ensp;&ensp;以基础 MatMul 算子开启 double-buffer 为例，在相同输入规模（M=512, K=512, N=512）下进行性能测试，并利用 Profiling 工具采集硬件流水线的执行状态。
 
-&ensp;&ensp;测试结果表明，启用 L1 bank 冲突优化后，原先被 MTE1 打断的 MMAD 计算流水线变得连续，从而提升了算子的整体执行性能。
-
-未进行 L1 bank 冲突优化时：
-
-<div align="center">
-  <img src="./images/image-2.png" alt="未进行 L1 bank冲突优化" style="width: 80%; height: auto;">
-</div>
+&ensp;&ensp;测试结果表明，启用 L1 bank 冲突优化后，原先 MTE1 搬运流水线的时间变短，从而提升了算子的整体执行性能。
 
 完成 L1 bank 冲突优化后：
 
 <div align="center">
-  <img src="./images/image-3.png" alt="L1 bank冲突优化后" style="width: 80%; height: auto;">
+  <img src="./images/image-2.png" alt="完成 L1 bank冲突优化" style="width: 80%; height: auto;">
 </div>
 
 ## 4. 结论
