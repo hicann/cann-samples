@@ -15,7 +15,7 @@
 #ifndef FIXPIPEOUT_H
 #define FIXPIPEOUT_H
 using namespace AscendC;
-using namespace AscendC::MicroAPI;
+using namespace AscendC::Reg;
 
 constexpr FixpipeConfig PFA_CFG_ROW_MAJOR_UB = {CO2Layout::ROW_MAJOR, true}; // ROW_MAJOR: 使能NZ2ND，输出数据格式为ND格式; true: 用于用户指定目的地址的位置是否是UB
 constexpr FixpipeConfig PFA_CFG_ROW_MAJOR_GM = {CO2Layout::ROW_MAJOR, false}; // ROW_MAJOR: 使能NZ2ND，输出数据格式为ND格式; true: 用于用户指定目的地址的位置是否是UB
