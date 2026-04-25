@@ -23,7 +23,6 @@
 #endif
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/layout_utils.h"
 #include "kernel_utils/tuple_utils.h"
 #include "include/tensor.h"
 
@@ -59,11 +58,9 @@ public:
     using BlockSchedulerParams = typename BlockSchedulerOp::Params;
     using BlockEpilogueParams = typename BlockEpilogue::Params;
 
-    using MakeLayoutA =
-        AscendC::Std::conditional_t<transA, AscendC::Te::DNLayoutFormat<TypeA>, AscendC::Te::NDLayoutFormat<TypeA>>;
-    using MakeLayoutB =
-        AscendC::Std::conditional_t<transB, AscendC::Te::DNLayoutFormat<TypeB>, AscendC::Te::NDLayoutFormat<TypeB>>;
-    using MakeLayoutC = AscendC::Te::NDLayoutFormat<TypeC>;
+    using MakeLayoutA = typename BlockMmad::LayoutA;
+    using MakeLayoutB = typename BlockMmad::LayoutB;
+    using MakeLayoutC = typename BlockMmad::LayoutC;
 
     __gm__ float* workspaceGmAddr_;
 

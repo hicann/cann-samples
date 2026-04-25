@@ -16,7 +16,6 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/layout_utils.h"
 #include "kernel_utils/tuple_utils.h"
 #include "include/tensor.h"
 #include "block_mmad.h"
@@ -32,26 +31,54 @@ namespace Block {
 using namespace AscendC;
 
 template <
-    class DispatchPolicy_, class AType_, class LayoutA_, class BType_,
-    class LayoutB_, class CType_, class LayoutC_>
+    class DispatchPolicy_, class ATypeTuple_, class LayoutATuple_, class BTypeTuple_,
+    class LayoutBTuple_, class CType_, class LayoutC_>
 class BlockMmad<
-    DispatchPolicy_, AType_, LayoutA_, BType_, LayoutB_, CType_, LayoutC_,
+    DispatchPolicy_, ATypeTuple_, LayoutATuple_, BTypeTuple_, LayoutBTuple_, CType_, LayoutC_,
     AscendC::Std::enable_if_t<
         AscendC::Std::is_base_of_v<
             QuantMatmulMxMultiBlockWithSwat<NO_FULL_LOAD_MODE, DispatchPolicy_::stages>,
             DispatchPolicy_>>> {
 public:
-    using AType = AType_;
-    using BType = BType_;
+    template <typename T>
+    struct TypeUnpack {
+        using Data = T;
+        using Scale = void;
+    };
+
+    template <typename T0, typename T1>
+    struct TypeUnpack<AscendC::Std::tuple<T0, T1>> {
+        using Data = T0;
+        using Scale = T1;
+    };
+
+    template <typename T>
+    struct LayoutUnpack {
+        using Data = T;
+        using Scale = void;
+    };
+
+    template <typename T0, typename T1>
+    struct LayoutUnpack<AscendC::Std::tuple<T0, T1>> {
+        using Data = T0;
+        using Scale = T1;
+    };
+
+    using AType = typename TypeUnpack<ATypeTuple_>::Data;
+    using ScaleAType = typename TypeUnpack<ATypeTuple_>::Scale;
+    using BType = typename TypeUnpack<BTypeTuple_>::Data;
+    using ScaleBType = typename TypeUnpack<BTypeTuple_>::Scale;
     using CType = CType_;
-    using LayoutA = LayoutA_;
-    using LayoutB = LayoutB_;
+    using LayoutA = typename LayoutUnpack<LayoutATuple_>::Data;
+    using LayoutScaleA = typename LayoutUnpack<LayoutATuple_>::Scale;
+    using LayoutB = typename LayoutUnpack<LayoutBTuple_>::Data;
+    using LayoutScaleB = typename LayoutUnpack<LayoutBTuple_>::Scale;
     using LayoutC = LayoutC_;
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
-    static constexpr bool transA = TagToTrans<LayoutA>::value;
-    static constexpr bool transB = TagToTrans<LayoutB>::value;
+    static constexpr bool transA = AscendC::IsSameType<LayoutA, AscendC::Te::DNLayoutFormat<AType>>::value;
+ 	static constexpr bool transB = AscendC::IsSameType<LayoutB, AscendC::Te::DNLayoutFormat<BType>>::value;
     static constexpr bool isDTypeFp4 = AscendC::IsSameType<AType, fp4x2_e1m2_t>::value ||
         AscendC::IsSameType<AType, fp4x2_e2m1_t>::value;
     static constexpr uint64_t L1_BUFFER_NUM = DispatchPolicy::stages;

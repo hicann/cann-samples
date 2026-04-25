@@ -59,6 +59,8 @@ public:
     using L1Params = typename BlockMmad::L1Params;
     using AType = typename BlockMmad::AType;
     using BType = typename BlockMmad::BType;
+    using ScaleAType = typename BlockMmad::ScaleAType;
+    using ScaleBType = typename BlockMmad::ScaleBType;
     using CType = typename BlockMmad::CType;
 
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
@@ -66,10 +68,10 @@ public:
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
     using BlockSchedulerParams = typename BlockSchedulerOp::Params;
 
-    using MakeLayoutA = AscendC::Te::NDLayoutFormat<AType>;
-    using MakeLayoutB = AscendC::Te::DNLayoutFormat<BType>;
-    using MakeLayoutScaleA = AscendC::Te::ScaleANDLayoutFormat<fp8_e8m0_t>;
-    using MakeLayoutScaleB = AscendC::Te::ScaleBDNLayoutFormat<fp8_e8m0_t>;
+    using MakeLayoutA = typename BlockMmad::LayoutA;
+    using MakeLayoutB = typename BlockMmad::LayoutB;
+    using MakeLayoutScaleA = typename BlockMmad::LayoutScaleA;
+    using MakeLayoutScaleB = typename BlockMmad::LayoutScaleB;
 
     struct QBMMTiling {
         // Base tile shape and L0C buffering mode selected by host tiling.
@@ -114,8 +116,8 @@ private:
     __gm__ AType* aGmAddr_;
     __gm__ BType* bGmAddr_;
     __gm__ CType* cGmAddr_;
-    __gm__ fp8_e8m0_t* scaleAGmAddr_;
-    __gm__ fp8_e8m0_t* scaleBGmAddr_;
+    __gm__ ScaleAType* scaleAGmAddr_;
+    __gm__ ScaleBType* scaleBGmAddr_;
 };
 
 QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS
@@ -148,8 +150,8 @@ __aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_T
     aGmAddr_ = reinterpret_cast<__gm__ AType*>(params.mmadParams.aGmAddr);
     bGmAddr_ = reinterpret_cast<__gm__ BType*>(params.mmadParams.bGmAddr);
     cGmAddr_ = reinterpret_cast<__gm__ CType*>(params.mmadParams.cGmAddr);
-    scaleAGmAddr_ = reinterpret_cast<__gm__ fp8_e8m0_t*>(params.mmadParams.scaleAGmAddr);
-    scaleBGmAddr_ = reinterpret_cast<__gm__ fp8_e8m0_t*>(params.mmadParams.scaleBGmAddr);
+    scaleAGmAddr_ = reinterpret_cast<__gm__ ScaleAType*>(params.mmadParams.scaleAGmAddr);
+    scaleBGmAddr_ = reinterpret_cast<__gm__ ScaleBType*>(params.mmadParams.scaleBGmAddr);
 }
 
 QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS

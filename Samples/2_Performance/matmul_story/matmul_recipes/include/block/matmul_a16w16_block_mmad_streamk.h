@@ -16,7 +16,6 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/layout_utils.h"
 #include "kernel_utils/tuple_utils.h"
 #include "block_mmad.h"
 #include "include/tensor.h"
@@ -37,11 +36,12 @@ public:
     using TypeC = TypeC_;
     using LayoutA = LayoutA_;
     using LayoutB = LayoutB_;
+    using LayoutC = LayoutC_;
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
-    static constexpr bool transA = TagToTrans<LayoutA>::value;
-    static constexpr bool transB = TagToTrans<LayoutB>::value;
+    static constexpr bool transA = AscendC::IsSameType<LayoutA, AscendC::Te::DNLayoutFormat<TypeA>>::value;
+ 	static constexpr bool transB = AscendC::IsSameType<LayoutB, AscendC::Te::DNLayoutFormat<TypeB>>::value;
     uint64_t m_{1};
     uint64_t n_{1};
     uint64_t k_{1};
