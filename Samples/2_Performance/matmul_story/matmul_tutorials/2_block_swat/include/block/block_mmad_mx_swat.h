@@ -40,7 +40,7 @@ public:
     static constexpr bool transB = true;
 
     static constexpr uint64_t HALF_L0_SIZE = L0A_SIZE / DOUBLE_BUFFER_COUNT;
-    static constexpr uint64_t HALF_L0C_SIZE = L0C_SIZE / DOUBLE_BUFFER_COUNT / sizeof(float);
+    static constexpr uint64_t HALF_L0C_SIZE = L0C_SIZE / DOUBLE_BUFFER_COUNT;
     static constexpr uint64_t BLOCK_CUBE = 16UL;
     static constexpr uint64_t MXFP_GROUP_SIZE_LOCAL = 32UL;
     static constexpr uint64_t MXFP_DIVISOR_SIZE_LOCAL = 64UL;

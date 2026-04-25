@@ -21,7 +21,7 @@ ERROR_RATIO_TOL = 1e-3
 DATA_TYPE = np.uint16
 
 # If m*n is larger than this, avoid dumping full tensors; print summary stats instead.
-FULL_TENSOR_PRINT_MAX_ELEMENTS = 1024
+FULL_TENSOR_PRINT_MAX_ELEMENTS = 128
 # Corner slice size for large-tensor summary (top-left block).
 CORNER_ROWS = 4
 CORNER_COLS = 4

@@ -39,19 +39,19 @@ __global__ __aicore__ __cube__ void QuantMatmulMxfp8SwatKernel(
 {
     // Keep the sample explicit about the datatype/layout combination that this
     // executable demonstrates so host tiling and kernel traits stay in sync.
-    using AType = fp8_e4m3fn_t;
-    using BType = fp8_e4m3fn_t;
-    using CType = bfloat16_t;
+    using TypeA = fp8_e4m3fn_t;
+    using TypeB = fp8_e4m3fn_t;
+    using TypeC = bfloat16_t;
 
-    using layoutA = layout::RowMajor;
-    using layoutB = layout::ColumnMajor;
-    using layoutC = layout::RowMajor;
+    using LayoutA = layout::RowMajor;
+    using LayoutB = layout::ColumnMajor;
+    using LayoutC = layout::RowMajor;
 
     using BlockScheduler = QuantMatmulMxSwatScheduler<NO_FULL_LOAD_MODE>;
     using DispatchPolicy = QuantMatmulMxMultiBlockWithSwat<NO_FULL_LOAD_MODE, Stages>;
     using ProblemShape = MatmulShape;
 
-    using BlockMmad = Block::BlockMmad<DispatchPolicy, AType, layoutA, BType, layoutB, CType, layoutC>;
+    using BlockMmad = Block::BlockMmad<DispatchPolicy, TypeA, LayoutA, TypeB, LayoutB, TypeC, LayoutC>;
     using QuantMatmulKernelImpl = Kernel::QuantMatmulMxKernelSwat<ProblemShape, BlockMmad, BlockScheduler>;
     using Params = typename QuantMatmulKernelImpl::Params;
     using BlockMmadParams = typename BlockMmad::Params;
