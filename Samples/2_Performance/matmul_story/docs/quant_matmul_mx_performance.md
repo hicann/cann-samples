@@ -11,26 +11,26 @@
 - **算子功能**：
   | 对比项 | MXFP8 | MXFP4 |
   | - | - | - |
-  | A/B数据类型 | `float8_e4m3fn` | `float4_e2m1` / `float4_e1m2` |
+  | a/b数据类型 | `float8_e4m3fn` | `float4_e2m1` |
   | 量化方式 | GroupSize=32的pergroup量化 | GroupSize=32的pergroup量化 |
   | scaleA/B数据类型 | `float8_e8m0` | `float8_e8m0` |
   | 显存压缩比 | 相比 FP16/BF16 内存占用减少约 50% | 相比 FP16/BF16 内存占用减少约 75% |
-  | 典型应用场景 | 模型训练，兼顾训练速度与精度的平衡 | 模型推理，侧重极致显存效率与推理速度 |
+  | 典型应用场景 | 模型训推，兼顾速度与精度的平衡 | 模型推理，侧重极致显存效率与推理速度 |
 
 - **计算公式**：
 $$
-c_{i, j} = \sum^{K/G-1}_{g=0}\left(scaleA_{g, i} \cdot scaleB_{g, j} \cdot \sum^{G-1}_{k'=0} (a_{i, gG+k'} \cdot b_{gG + k', j}) \right)
+c_{i, j} = \sum^{ceil(K/G)-1}_{g=0}\left(scaleA_{i, g} \cdot scaleB_{g, j} \cdot \sum^{G-1}_{k'=0} (a_{i, gG+k'} \cdot b_{gG + k', j}) \right)
 $$
 
 #### MXFP4参数说明
 
 | **变量名** | **描述** | **Dtype** | **Layout** | **Shape** |
 |-|-|-|-|-|
-| a | 输入左矩阵 | `float4_e2m1` 或 `float4_e1m2` | ND | (m, k) |
-| b | 输入右矩阵 | `float4_e2m1` 或 `float4_e1m2` | ND | (n, k) |
+| a | 输入左矩阵 | `float4_e2m1` | ND | (m, k) |
+| b | 输入右矩阵 | `float4_e2m1` | ND | (n, k) |
 | scaleA | 左矩阵量化参数 | `float8_e8m0` | ND | (m, ceil(k/64), 2) |
 | scaleB | 右矩阵量化参数 | `float8_e8m0` | ND | (n, ceil(k/64), 2) |
-| c | 输出矩阵 | `float32` 或 `float16` 或 `bfloat16` | ND | (m, n) |
+| c | 输出矩阵 | `bfloat16` | ND | (m, n) |
 
 #### MXFP8参数说明
 
@@ -40,7 +40,7 @@ $$
 | b | 输入右矩阵 | `float8_e4m3fn` | ND | (n, k) |
 | scaleA | 左矩阵量化参数 | `float8_e8m0` | ND | (m, ceil(k/64), 2) |
 | scaleB | 右矩阵量化参数 | `float8_e8m0` | ND | (n, ceil(k/64), 2) |
-| c | 输出矩阵 | `float32` 或 `float16` 或 `bfloat16` | ND | (m, n) |
+| c | 输出矩阵 | `bfloat16` | ND | (m, n) |
 
 <a id="quant-matmul-mx-operator-implementation"></a>
 
@@ -99,7 +99,7 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 | **缓冲区变化** | **Shape排布变化** | **Layout变化** | **所属流水** | **所用指令** |
 |-|-|-|-|-|
-| GM -> L1 | (m, ceil(ceil(k/32)/2), 2) -> (ceil(mL1/m0), ceil(ceil(kL1/32)/k0), m0, k0) | ND -> Zz | MTE2 | DataCopy with DN2NZ |
+| GM -> L1 | (m, ceil(k/64), 2) -> (ceil(mL1/m0), ceil(ceil(kL1/32)/k0), m0, k0) | ND -> Zz | MTE2 | DataCopy with DN2NZ |
 | L1 -> L0A_MX | (ceil(mL1/m0), ceil(ceil(kL1/32)/k0), m0, k0) -> (ceil(baseM/m0), ceil(ceil(baseK/32)/k0), m0, k0) | Zz -> Zz | MTE1 | LoadData with Load2D_MX |
 
   <div align="center">
@@ -112,7 +112,7 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 | **缓冲区变化** | **Shape排布变化** | **Layout变化** | **所属流水** | **所用指令** |
 |-|-|-|-|-|
-| GM -> L1 | (n, ceil(ceil(k/32)/2), 2) -> (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) | DN -> Nn | MTE2 | DataCopy with DN2NZ |
+| GM -> L1 | (n, ceil(k/64), 2) -> (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) | DN -> Nn | MTE2 | DataCopy with DN2NZ |
 | L1 -> L0B_MX | (ceil(nL1/n0), ceil(ceil(kL1/32)/k0), n0, k0) -> (ceil(baseN/n0), ceil(ceil(baseK/32)/k0), n0, k0) | Nn -> Nn | MTE1 | LoadData with Load2D_MX |
 
   <div align="center">
@@ -125,21 +125,22 @@ MX量化场景矩阵乘执行时的完整数据搬运流程如下图所示：
 
 #### MX量化场景共性约束
 
-1. **K维度对齐约束**：由于scale在L0_MX缓冲区上的最小分形为`(16, 2)`，对应输入矩阵在K方向的最小单位为64，要求**baseK是64的整数倍**。
+1. **K维度对齐约束**：由于MX量化场景下MMAD指令限制输入矩阵在K方向长度为64的倍数，要求**baseK是64的整数倍**。
 
-2. **K维度补零处理**：基于约束1，当K轴非64对齐时，存在两类场景：
-   - 当输入矩阵的K维度在内轴，即输入排布为`(m, k)`或`(n, k)`时，`ND2NZ`指令可自动完成K方向补零，无需特殊处理；
-   - 当输入矩阵的K维度在外轴，即输入排布为`(k, m)`或`(k, n)`时，`ND2NZ`指令无法完成K方向补零，**需手动处理K方向补零**。
+2. **指令约束**：`MMAD`指令需关闭`gemv`功能。
+
+3.  **K维度补零处理**：基于共性约束1，当K轴非64对齐时，存在两类场景：
+   - 当输入矩阵的K维度在内轴，即输入排布为`(m, k)`或`(n, k)`时，`ND2NZ`指令可自动完成K方向补零；**仅在MXFP8且Ceil(k/32)是奇数时，需手动处理K方向补零**。
+   - 当输入矩阵的K维度在外轴，即输入排布为`(k, m)`或`(k, n)`时，`ND2NZ`指令无法完成K方向补零，**需在k对齐16后依然非64对齐时手动处理K方向补零**。
 
       推荐补零方法：使用`SET2D`对L1缓冲区目标地址清零 + `ND2NZ`跳写目标地址。
 
-3. **指令约束**：`MMAD`指令需关闭`gemv`功能。
-
 #### MXFP4场景特性约束
 
-1. **数据类型处理（MXFP4量化场景）**：对于MXFP4量化场景，由于`ND2NZ`指令不支持`B4`数据类型，需将输入按`B8`数据类型进行搬运，相应指令的`stride`和`shape`配置均需除以2。
+1. **数据类型处理**：对于MXFP4量化场景，由于`ND2NZ`指令不支持`B4`数据类型，需将输入按`B8`数据类型进行搬运，相应指令的`stride`和`shape`配置均需除以2。
 
-2. **内轴对齐约束（MXFP4量化场景）**：对于MXFP4量化场景，基于约束3，要求输入矩阵内轴为偶数，否则无法用2个`B4`拼成一个`B8`类型。
+2. **内轴对齐约束**：对于MXFP4量化场景，基于约束3，要求输入矩阵内轴为偶数，否则无法用2个`B4`拼成一个`B8`类型。
+
 
 ## 算子性能建模
 
@@ -190,8 +191,8 @@ T_{mte2} \approx \frac{Size_{DDR}}{BandWidth_{DDR}} + \frac{Size_{L2}}{BandWidth
 $$
 
 其中：
-- `Size_DDR = (M + N) × K × (1 × sizeof(dtype) + 1/32)` （首次搬运量）
-- `Size_L2 = MTE2搬运量 - Size_DDR` （重复搬运量）
+- $Size_{DDR} = (M + N) \times K \times (1 \times sizeof(dtype) + \frac{1}{32})$ （首次搬运量）
+- $Size_{L2} = (M \times \frac{N}{baseN} + N \times \frac{M}{baseM}) \times K \times (1 \times sizeof(dtype) + \frac{1}{32}) - Size_{DDR}$ （重复搬运量）
 
 **3. MTE1搬运时间**
 
@@ -286,6 +287,51 @@ $$
 
 本章介绍MXFP4中应用的优化措施，针对不同的Bound类型场景分别提供**搬运效率优化**、**计算效率优化**方法，以及针对因流水阻塞导致Bound类型不明确的场景提供**指令并行度优化**实践。
 
+### 指令并行度优化
+
+#### Double Buffer（双缓冲）
+
+- **原理介绍**
+
+  Double Buffer使用两个缓冲区交替工作：一个缓冲区用于当前计算，另一个并行准备下一轮数据。通过计算与数据加载/准备的重叠，隐藏内存访问延迟，减少流水线停顿，提高算子吞吐量。
+
+  在本算子实践中，Double Buffer通常首先用于L1侧（配合后文的Bank冲突规避），在缓冲区资源允许时也可扩展为`4-Buffer`以进一步提升并行度。
+
+- **Double Buffer（2-Buffer） vs 4-Buffer**
+  - **2-Buffer**：两份buffer交替，覆盖“当前计算/下一轮准备”的基本重叠关系，资源开销更小，适用于多数场景。
+  - **4-Buffer**：在buffer空间足够时，将准备阶段进一步细分（例如同时覆盖更多轮次或更多输入/scale的准备），以减少因搬运抖动、带宽瞬时不足造成的断流风险。
+  - **使能4-Buffer条件**：当Profiling显示存在明显的流水停顿（计算等待搬运），且L1/L0空间评估后仍能保持目标`base`块大小、不引入新的MTE1/FIXPIPE瓶颈时，可考虑使能4-Buffer。
+
+- **效果对比**
+
+  下图展示了使能Double Buffer后流水图的预期变化，从而有效提升不同流水间的并行度。
+
+  <div align="center">
+    <img src="images/double-buffer-l1-l0-pipeline-compare.png" width="1500" />
+  </div>
+
+- **适用场景**
+  - 存在流水停顿的场景
+  - 内存访问延迟成为瓶颈的场景
+  - L1或L0缓冲区空间充足的场景
+
+#### UnitFlag（单元标志）
+
+- **原理介绍**
+
+  UnitFlag为`MMAD`计算指令和`FIXPIPE`数据搬运指令提供基于内存访问的细粒度同步（512B粒度）。未开启时，FIXPIPE需等MMAD指令完全执行完才开始搬出；开启后，MMAD每计算完512B数据，FIXPIPE立即搬出该数据块，**提高计算与搬出流水的并行度**。
+
+- **效果对比**
+
+  <div align="center">
+    <img src="images/unitflag-mmad-fixpipe-parallel-compare.png" width="1500" />
+  </div>
+
+- **适用场景**
+  - MMAD和FIXPIPE流水部分或全部串行执行的场景
+  - 需要提高计算与搬出并行度的场景
+
+
 ### 搬运效率优化
 
 #### SWAT（自适应滑动窗口模板）
@@ -353,6 +399,8 @@ $$
 
   在MTE2 Bound场景中，可通过减少`MTE2`部分的整体搬运量来提高算子性能。对于输入可完整缓存在L1中的场景，可使用全载模板，在不同轮询中使输入始终驻留在L1中，从而减少整体搬运耗时。
 
+  当前样例实现**仅支持A全载（左矩阵a及其scaleA常驻L1）**，暂不支持B全载（右矩阵b及其scaleB常驻L1）。
+
 - **效果对比**
 
   <div align="center">
@@ -372,7 +420,7 @@ $$
 
   当前Matmul算子普遍使用基本块策略进行多核分配。但在处理不同规格输入时，划分的基本块无法均匀分配到所有核上，导致分核不均，尤其是最后一轮计算存在算力浪费，使整体算力利用率无法达到最优。
 
-  可将最后一轮未完全分配的基本块进行二次切分，使其尽量均匀分配到多核中，充分发挥完整算力。
+  为兼顾**双边负载均衡**与尾块浪费问题，会在分核阶段综合考虑M/N两个方向的分配结果：不仅对最后一轮未完全分配的基本块做二次切分，也可能根据整体负载分布对**非尾轮**的`baseM/baseN`（base块大小）做自适应调整，从而使各核工作量更均衡、整体算力利用率更高。
 
 - **效果对比**
 
@@ -385,45 +433,6 @@ $$
   - 输入形状不规则，无法均匀分配的场景
   - 最后一轮计算存在算力浪费的场景
 
-### 指令并行度优化
-
-#### Double Buffer（双缓冲）
-
-- **原理介绍**
-
-  Double Buffer使用两个缓冲区交替工作：一个缓冲区用于当前计算，另一个并行准备下一轮数据。通过计算与数据加载/准备的重叠，隐藏内存访问延迟，减少流水线停顿，提高算子吞吐量。
-
-- **效果对比**
-
-  下图展示了使能Double Buffer后流水图的预期变化，从而有效提升不同流水间的并行度。如果缓冲区空间足够，可以进一步延伸出`4-Buffer`等其他分配方案，从而适配不同场景。
-
-  <div align="center">
-    <img src="images/double-buffer-l1-l0-pipeline-compare.png" width="1500" />
-  </div>
-
-- **适用场景**
-  - 存在流水停顿的场景
-  - 内存访问延迟成为瓶颈的场景
-  - L1或L0缓冲区空间充足的场景
-
-#### UnitFlag（单元标志）
-
-- **原理介绍**
-
-  UnitFlag为`MMAD`计算指令和`FIXPIPE`数据搬运指令提供基于内存访问的细粒度同步（512B粒度）。未开启时，FIXPIPE需等MMAD指令完全执行完才开始搬出；开启后，MMAD每计算完512B数据，FIXPIPE立即搬出该数据块，**实现在无法开启L0C Double-Buffer的情况下提高计算与搬出流水的并行度**。
-
-- **效果对比**
-
-  由性能建模可知，为充分发挥计算访存比，需尽可能用满`L0C`缓冲区，导致存在无法在`L0C`缓冲区上开启Double Buffer的场景，此时可启用UnitFlag功能来提高指令并行度。
-
-  <div align="center">
-    <img src="images/unitflag-mmad-fixpipe-parallel-compare.png" width="1500" />
-  </div>
-
-- **适用场景**
-  - 无法开启L0C Double Buffer的场景
-  - MMAD和FIXPIPE流水串行执行的场景
-  - 需要提高计算与搬出并行度的场景
 
 ## 算子模板归纳
 
@@ -454,7 +463,7 @@ $$
 
 - **模板特点**：
   - 全载模板，主要应用于Decode等MTE2 Bound场景
-  - 适用的Shape特征为m/n较小，满足左右矩阵全载L1缓冲区
+  - 适用的Shape特征为m较小，满足**左矩阵A全载**L1缓冲区（当前样例仅实现A全载，暂不支持B全载）
   - 减少MTE2搬运次数，显著降低数据传输开销
   - 适用于小批量、高频率的计算场景
 
@@ -484,8 +493,9 @@ $$
 | **输入特征** | **推荐模板** | **原因** |
 |-------------|-------------|---------|
 | 大规模矩阵 | SWAT模板 | 提高L2命中率，提升计算单元利用率 |
-| 小规模矩阵 | FullLoad模板 | 减少MTE2搬运，降低搬运开销 |
-| 不规则形状 | SWAT模板 + 尾轮负载均衡 | 均衡多核负载，避免算力浪费 |
+| 小规模矩阵（满足A全载） | FullLoad模板 | A常驻L1，减少MTE2搬运，降低搬运开销 |
+| 不规则形状/分核不均 | SWAT模板 + 负载均衡 | 均衡多核负载，避免算力浪费 |
+
 
 ## 性能调优实践步骤
 
