@@ -10,12 +10,10 @@
 # ----------------------------------------------------------------------------
 
 # simt
-add_executable(simt main.cpp)
+add_executable(simt main.asc)
 target_compile_options(simt PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 target_link_libraries(simt
     PRIVATE

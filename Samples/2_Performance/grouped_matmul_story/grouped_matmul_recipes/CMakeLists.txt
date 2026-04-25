@@ -28,19 +28,19 @@ endfunction()
 
 add_grouped_matmul_recipe(
     quant_grouped_matmul_mxfp4
-    quant_grouped_matmul_mxfp4/quant_grouped_matmul_mxfp4_split_m.cpp
+    quant_grouped_matmul_mxfp4/quant_grouped_matmul_mxfp4_split_m.asc
     quant_grouped_matmul_mxfp4
 )
 
 add_grouped_matmul_recipe(
     quant_grouped_matmul_mxfp8
-    quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_m.cpp
+    quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_m.asc
     quant_grouped_matmul_mxfp8
 )
 
 add_grouped_matmul_recipe(
     weight_quant_grouped_matmul_mxfp8fp4
-    weight_quant_grouped_matmul_mxfp8fp4/weight_quant_grouped_matmul_mxfp8fp4_split_m.cpp
+    weight_quant_grouped_matmul_mxfp8fp4/weight_quant_grouped_matmul_mxfp8fp4_split_m.asc
     weight_quant_grouped_matmul_mxfp8fp4
 )
 

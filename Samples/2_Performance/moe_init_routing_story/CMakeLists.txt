@@ -10,12 +10,12 @@
 # ----------------------------------------------------------------------------
 
 set(CPP_FILES
-    src/0_native.cpp
-    src/1_multi_core.cpp
-    src/2_double_buffer.cpp
-    src/3_bandwidth_utilization.cpp
-    src/4_ub_utilization.cpp
-    src/5_simt.cpp
+    src/0_native.asc
+    src/1_multi_core.asc
+    src/2_double_buffer.asc
+    src/3_bandwidth_utilization.asc
+    src/4_ub_utilization.asc
+    src/5_simt.asc
 )
 set(INSTALL_TARGETS "")
 foreach(CPP_FILE ${CPP_FILES})
@@ -24,10 +24,8 @@ foreach(CPP_FILE ${CPP_FILES})
     target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
     target_compile_definitions(${TARGET_NAME} PRIVATE SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_options(${TARGET_NAME} PRIVATE
-        "-xasc"
-        "--npu-arch=dav-3510"
-        "-w"
-        "-O3"
+        "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+        "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
     )
     target_link_libraries(${TARGET_NAME}
         PRIVATE

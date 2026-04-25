@@ -11,13 +11,13 @@
 
 # rms_norm_quant_story
 set(CPP_FILES
-    src/0_naive.cpp
-    src/1_preload_gamma.cpp
-    src/2_multi_core.cpp
-    src/3_vf.cpp
-    src/4_double_buffer.cpp
-    src/5_ub_utilization.cpp
-    src/6_binary_sum.cpp
+    src/0_naive.asc
+    src/1_preload_gamma.asc
+    src/2_multi_core.asc
+    src/3_vf.asc
+    src/4_double_buffer.asc
+    src/5_ub_utilization.asc
+    src/6_binary_sum.asc
 )
 
 configure_file(scripts/gen_data.py gen_data.py COPYONLY)
@@ -28,10 +28,8 @@ foreach(CPP_FILE ${CPP_FILES})
     set(TARGET_NAME "rms_norm_quant_${TARGET_NAME}")
     add_executable(${TARGET_NAME} ${CPP_FILE})
     target_compile_options(${TARGET_NAME} PRIVATE
-        "-xasc"
-        "--npu-arch=dav-3510"
-        "-w"
-        "-O3"
+        "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+        "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
     )
     target_link_libraries(${TARGET_NAME}
         PRIVATE

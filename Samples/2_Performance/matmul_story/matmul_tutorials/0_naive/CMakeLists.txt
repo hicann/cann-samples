@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(matmul_tutorial_mxfp4_base matmul_tutorial_mxfp4_base.cpp)
+add_executable(matmul_tutorial_mxfp4_base matmul_tutorial_mxfp4_base.asc)
 target_include_directories(matmul_tutorial_mxfp4_base PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
     ${CMAKE_CURRENT_SOURCE_DIR}

@@ -11,17 +11,15 @@
 
 include(${PROJECT_SOURCE_DIR}/cmake/shmem.cmake)
 
-add_executable(moe_dispatch_and_combine_story src/dispatch_and_combine_final.cpp)
+add_executable(moe_dispatch_and_combine_story src/dispatch_and_combine_final.asc)
 target_compile_definitions(moe_dispatch_and_combine_story PRIVATE SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(moe_dispatch_and_combine_story PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 target_compile_options(moe_dispatch_and_combine_story PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 target_link_libraries(moe_dispatch_and_combine_story
     PRIVATE

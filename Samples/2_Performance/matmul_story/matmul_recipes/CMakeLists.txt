@@ -26,18 +26,18 @@ function(add_matmul_recipe target_name source variant)
 endfunction()
 
 add_matmul_recipe(quant_matmul_mxfp4_swat
-    quant_matmul_mxfp4/quant_matmul_mxfp4_swat.cpp quant_matmul_mxfp4)
+    quant_matmul_mxfp4/quant_matmul_mxfp4_swat.asc quant_matmul_mxfp4)
 add_matmul_recipe(quant_matmul_mxfp4_a_full_load
-    quant_matmul_mxfp4/quant_matmul_mxfp4_a_full_load.cpp quant_matmul_mxfp4)
+    quant_matmul_mxfp4/quant_matmul_mxfp4_a_full_load.asc quant_matmul_mxfp4)
 add_matmul_recipe(matmul_a16w16_swat
-    matmul_a16w16/matmul_a16w16_swat.cpp matmul_a16w16)
+    matmul_a16w16/matmul_a16w16_swat.asc matmul_a16w16)
 add_matmul_recipe(matmul_a16w16_streamk
-    matmul_a16w16/matmul_a16w16_streamk.cpp matmul_a16w16)
+    matmul_a16w16/matmul_a16w16_streamk.asc matmul_a16w16)
 
 add_matmul_recipe(quant_matmul_mxfp8_swat
-    quant_matmul_mxfp8/quant_matmul_mxfp8_swat.cpp quant_matmul_mxfp8)
+    quant_matmul_mxfp8/quant_matmul_mxfp8_swat.asc quant_matmul_mxfp8)
 add_matmul_recipe(quant_matmul_mxfp8_a_full_load
-    quant_matmul_mxfp8/quant_matmul_mxfp8_a_full_load.cpp quant_matmul_mxfp8)
+    quant_matmul_mxfp8/quant_matmul_mxfp8_a_full_load.asc quant_matmul_mxfp8)
 
 # Install helper scripts into the same directory as the executables. Host code
 # uses the executable directory as baseDir and runs `python3 verify_result.py`

@@ -10,7 +10,7 @@
 # ----------------------------------------------------------------------------
 
 add_executable(full_quant_fused_infer_attention_score
-${CMAKE_CURRENT_SOURCE_DIR}/examples/full_quant_fused_infer_attention_score_template.cpp)
+${CMAKE_CURRENT_SOURCE_DIR}/examples/full_quant_fused_infer_attention_score_template.asc)
 
 set(COMMON_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -39,10 +39,8 @@ target_include_directories(full_quant_fused_infer_attention_score PRIVATE
 )
 
 target_compile_options(full_quant_fused_infer_attention_score PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 
 target_link_libraries(full_quant_fused_infer_attention_score

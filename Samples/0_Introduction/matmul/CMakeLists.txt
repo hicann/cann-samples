@@ -9,13 +9,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(matmul main.cpp)
+add_executable(matmul main.asc)
 
 target_compile_options(matmul PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 
 target_link_libraries(matmul PRIVATE

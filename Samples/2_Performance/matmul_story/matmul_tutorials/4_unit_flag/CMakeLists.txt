@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(matmul_tutorial_mxfp4_swat_unitflag matmul_tutorial_mxfp4_swat_unitflag.cpp)
+add_executable(matmul_tutorial_mxfp4_swat_unitflag matmul_tutorial_mxfp4_swat_unitflag.asc)
 target_include_directories(matmul_tutorial_mxfp4_swat_unitflag PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
     ${CMAKE_CURRENT_SOURCE_DIR}

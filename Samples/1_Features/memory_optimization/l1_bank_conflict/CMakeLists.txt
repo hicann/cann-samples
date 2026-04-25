@@ -18,13 +18,11 @@ set(CMAKE_CXX_COMPILER ${BISHENG})
 set(CMAKE_LINKER ${BISHENG})
 
 # l1_bank_conflict
-add_executable(l1_bank_conflict main.cpp)
+add_executable(l1_bank_conflict main.asc)
 target_link_directories(l1_bank_conflict PRIVATE ${ASCEND_DIR}/lib64)
 target_compile_options(l1_bank_conflict PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 
 target_link_libraries(l1_bank_conflict

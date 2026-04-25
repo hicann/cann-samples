@@ -18,13 +18,11 @@ set(CMAKE_CXX_COMPILER ${BISHENG})
 set(CMAKE_LINKER ${BISHENG})
 
 # mte2_preload
-add_executable(mte2_preload main.cpp)
+add_executable(mte2_preload main.asc)
 target_link_directories(mte2_preload PRIVATE ${ASCEND_DIR}/lib64)
 target_compile_options(mte2_preload PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 
 target_link_libraries(mte2_preload

@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong.cpp)
+add_executable(matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong.asc)
 target_include_directories(matmul_tutorial_mxfp4_half1l1_ping_halfl1_pong PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
     ${CMAKE_CURRENT_SOURCE_DIR}

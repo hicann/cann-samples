@@ -10,12 +10,10 @@
 # ----------------------------------------------------------------------------
 
 # gelu_without_vf
-add_executable(gelu_without_vf gelu_without_vf.cpp gelu_cpu.cpp)
+add_executable(gelu_without_vf gelu_without_vf.asc gelu_cpu.cpp)
 target_compile_options(gelu_without_vf PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O1"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O1>"
 )
 target_link_libraries(gelu_without_vf
     PRIVATE
@@ -26,12 +24,10 @@ install(TARGETS gelu_without_vf
 )
 
 # gelu_with_vf
-add_executable(gelu_with_vf gelu_with_vf.cpp gelu_cpu.cpp)
+add_executable(gelu_with_vf gelu_with_vf.asc gelu_cpu.cpp)
 target_compile_options(gelu_with_vf PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O1"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O1>"
 )
 target_link_libraries(gelu_with_vf
     PRIVATE

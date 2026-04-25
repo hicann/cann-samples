@@ -15,7 +15,10 @@ set(MATMUL_INSTALL_PREFIX "2_Performance/matmul_story")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(MATMUL_ASCENDC_COMPILE_OPTS "-xasc" "--npu-arch=dav-3510" "-w" "-O3")
+set(MATMUL_ASCENDC_COMPILE_OPTS
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
+)
 
 add_subdirectory(matmul_recipes)
 add_subdirectory(matmul_tutorials)

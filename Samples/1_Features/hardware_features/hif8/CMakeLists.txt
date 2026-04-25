@@ -10,12 +10,10 @@
 # ----------------------------------------------------------------------------
 
 # quantize
-add_executable(quantize_hif8_demo quantize_custom.cpp)
+add_executable(quantize_hif8_demo quantize_custom.asc)
 target_compile_options(quantize_hif8_demo PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 target_link_libraries(quantize_hif8_demo
     PRIVATE

@@ -9,13 +9,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_executable(tail_rebalance main.cpp)
+add_executable(tail_rebalance main.asc)
 
 target_compile_options(tail_rebalance PRIVATE
-    "-xasc"
-    "--npu-arch=dav-3510"
-    "-w"
-    "-O3"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 
 target_link_libraries(tail_rebalance
