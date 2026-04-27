@@ -17,7 +17,10 @@ target_compile_options(matmul PRIVATE
 )
 
 target_link_libraries(matmul PRIVATE
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     cann_samples::tensor_api
 )
 

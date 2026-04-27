@@ -9,14 +9,6 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_C_COMPILER ${BISHENG})
-set(CMAKE_CXX_COMPILER ${BISHENG})
-set(CMAKE_LINKER ${BISHENG})
-
 # unit_flag
 add_executable(unit_flag main.asc)
 target_link_directories(unit_flag PRIVATE ${ASCEND_DIR}/lib64)
@@ -25,7 +17,10 @@ target_compile_options(unit_flag PRIVATE
     "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 target_link_libraries(unit_flag
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     cann_samples::tensor_api
 )
 

@@ -17,7 +17,10 @@ target_compile_options(quantize_hif8_demo PRIVATE
 )
 target_link_libraries(quantize_hif8_demo
     PRIVATE
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
 )
 install(TARGETS quantize_hif8_demo
     RUNTIME DESTINATION 1_Features/hardware_features/hif8

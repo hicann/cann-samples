@@ -34,7 +34,7 @@ add_custom_target(cann_samples_shmem_dependencies
     COMMAND ${CMAKE_COMMAND} -E env
         ASCEND_HOME_PATH=${ASCEND_DIR}
         ASCEND_TOOLKIT_HOME=${ASCEND_DIR}
-        cmake -S "${SHMEM_PATH}" -B "${SHMEM_PATH}/build" -DCMAKE_BUILD_TYPE=RELEASE -DSOC_TYPE=Ascend950
+        cmake -S "${SHMEM_PATH}" -B "${SHMEM_PATH}/build" -DCMAKE_BUILD_TYPE=RELEASE -DSOC_TYPE=Ascend950 -DCMAKE_C_FLAGS=-w -DCMAKE_CXX_FLAGS=-w
     COMMAND ${CMAKE_COMMAND} --build "${SHMEM_PATH}/build" --target install --parallel
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
     COMMENT "Initializing and building third_party/shmem"

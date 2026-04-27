@@ -33,7 +33,10 @@ foreach(CPP_FILE ${CPP_FILES})
     )
     target_link_libraries(${TARGET_NAME}
         PRIVATE
-        cann_samples::ascend_base
+        m
+        dl
+        platform
+        tiling_api
         ascendcl
         runtime
         stdc++

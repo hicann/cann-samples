@@ -17,7 +17,10 @@ target_compile_options(gelu_without_vf PRIVATE
 )
 target_link_libraries(gelu_without_vf
     PRIVATE
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
 )
 install(TARGETS gelu_without_vf
     RUNTIME DESTINATION 1_Features/hardware_features/vector_function
@@ -31,7 +34,10 @@ target_compile_options(gelu_with_vf PRIVATE
 )
 target_link_libraries(gelu_with_vf
     PRIVATE
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
 )
 install(TARGETS gelu_with_vf
     RUNTIME DESTINATION 1_Features/hardware_features/vector_function

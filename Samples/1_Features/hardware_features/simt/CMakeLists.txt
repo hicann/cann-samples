@@ -17,7 +17,10 @@ target_compile_options(simt PRIVATE
 )
 target_link_libraries(simt
     PRIVATE
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     ascendcl
     runtime
     stdc++

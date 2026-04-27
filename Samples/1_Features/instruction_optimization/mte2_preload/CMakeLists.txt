@@ -9,14 +9,6 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_C_COMPILER ${BISHENG})
-set(CMAKE_CXX_COMPILER ${BISHENG})
-set(CMAKE_LINKER ${BISHENG})
-
 # mte2_preload
 add_executable(mte2_preload main.asc)
 target_link_directories(mte2_preload PRIVATE ${ASCEND_DIR}/lib64)
@@ -26,7 +18,10 @@ target_compile_options(mte2_preload PRIVATE
 )
 
 target_link_libraries(mte2_preload
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     cann_samples::tensor_api
 )
 

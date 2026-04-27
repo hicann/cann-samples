@@ -23,7 +23,10 @@ target_compile_options(moe_dispatch_and_combine_story PRIVATE
 )
 target_link_libraries(moe_dispatch_and_combine_story
     PRIVATE
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     cann_samples::shmem
     ascendcl
     runtime

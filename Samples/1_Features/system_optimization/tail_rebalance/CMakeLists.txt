@@ -17,7 +17,10 @@ target_compile_options(tail_rebalance PRIVATE
 )
 
 target_link_libraries(tail_rebalance
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     cann_samples::tensor_api
 )
 

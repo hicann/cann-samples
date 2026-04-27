@@ -16,7 +16,10 @@ target_include_directories(matmul_tutorial_mxfp4_swat PRIVATE
 )
 target_compile_options(matmul_tutorial_mxfp4_swat PRIVATE ${MATMUL_ASCENDC_COMPILE_OPTS})
 target_link_libraries(matmul_tutorial_mxfp4_swat PRIVATE
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     cann_samples::tensor_api
 )
 install(TARGETS matmul_tutorial_mxfp4_swat

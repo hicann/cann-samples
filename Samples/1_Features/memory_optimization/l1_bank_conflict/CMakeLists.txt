@@ -9,14 +9,6 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_C_COMPILER ${BISHENG})
-set(CMAKE_CXX_COMPILER ${BISHENG})
-set(CMAKE_LINKER ${BISHENG})
-
 # l1_bank_conflict
 add_executable(l1_bank_conflict main.asc)
 target_link_directories(l1_bank_conflict PRIVATE ${ASCEND_DIR}/lib64)
@@ -26,7 +18,10 @@ target_compile_options(l1_bank_conflict PRIVATE
 )
 
 target_link_libraries(l1_bank_conflict
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     cann_samples::tensor_api
 )
 

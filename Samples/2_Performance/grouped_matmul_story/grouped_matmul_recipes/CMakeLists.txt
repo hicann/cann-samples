@@ -18,7 +18,10 @@ function(add_grouped_matmul_recipe target_name source variant)
     )
     target_compile_options(${target_name} PRIVATE ${GMM_STORY_ASCENDC_COMPILE_OPTS})
     target_link_libraries(${target_name} PRIVATE
-        cann_samples::ascend_base
+        m
+        dl
+        platform
+        tiling_api
         cann_samples::tensor_api
     )
     install(TARGETS ${target_name}

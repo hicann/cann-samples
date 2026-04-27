@@ -17,7 +17,10 @@ target_compile_options(swat PRIVATE
 )
 
 target_link_libraries(swat
-    cann_samples::ascend_base
+    m
+    dl
+    platform
+    tiling_api
     cann_samples::tensor_api
 )
 

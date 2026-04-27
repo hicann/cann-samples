@@ -17,7 +17,10 @@ function(add_matmul_recipe target_name source variant)
     )
     target_compile_options(${target_name} PRIVATE ${MATMUL_ASCENDC_COMPILE_OPTS})
     target_link_libraries(${target_name} PRIVATE
-        cann_samples::ascend_base
+        m
+        dl
+        platform
+        tiling_api
         cann_samples::tensor_api
     )
     install(TARGETS ${target_name}
