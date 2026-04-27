@@ -98,13 +98,18 @@ public:
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t>;
-    // MXFP8: zero-pad L1 K tail to match NZ layout / ND2NZ path (see Tile::PadMxK*L1); MXFP4 keeps unpadded L1 views.
+    static constexpr bool transA = AscendC::IsSameType<LayoutA, AscendC::Te::DNLayoutFormat<AType>>::value;
+    static constexpr bool transB = AscendC::IsSameType<LayoutB, AscendC::Te::DNLayoutFormat<BType>>::value;
+    static_assert(!transA, "QuantGroupedMatmulMxBlockMmadSplitM only supports non-transposed A.");
+    // MXFP8: zero-pad L1 K tail to match NZ layout / ND2NZ path (see Tile::PadMxK*L1);
+    // MXFP4 keeps unpadded L1 views.
     static constexpr bool kUseMxFp8L1KPad_ =
         AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> &&
         AscendC::Std::is_one_of_v<BType, fp8_e5m2_t, fp8_e4m3fn_t>;
     static constexpr uint64_t HALF_L0_SIZE = L0A_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(AType);
     using MakeLayoutAL1 = AscendC::Te::NzLayoutFormat<AType>;
-    using MakeLayoutBL1 = AscendC::Te::ZnLayoutFormat<BType>;
+    using MakeLayoutBL1 =
+        AscendC::Std::conditional_t<transB, AscendC::Te::ZnLayoutFormat<BType>, AscendC::Te::NzLayoutFormat<BType>>;
 
     struct Params {
         GM_ADDR aGmAddr{nullptr};
@@ -508,4 +513,3 @@ private:
     AscendC::LocalTensor<fp8_e8m0_t> scaleBL1Local_{AscendC::TPosition::A1, 0, L1_SIZE};
 };
 } // namespace Block
-

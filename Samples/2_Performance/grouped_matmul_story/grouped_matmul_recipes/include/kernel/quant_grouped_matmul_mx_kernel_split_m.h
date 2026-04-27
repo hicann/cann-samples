@@ -33,17 +33,19 @@ public:
     using CType = typename BlockMmad::CType;
     using LayoutA = typename BlockMmad::LayoutA;
     using LayoutB = typename BlockMmad::LayoutB;
-    static constexpr CubeFormat formatB = ::TagToFormat<LayoutB>::format;
+    static constexpr bool transA = AscendC::IsSameType<LayoutA, AscendC::Te::DNLayoutFormat<AType>>::value;
+    static constexpr bool transB = AscendC::IsSameType<LayoutB, AscendC::Te::DNLayoutFormat<BType>>::value;
+    static_assert(!transA, "QuantGroupedMatmulMxKernelSplitM only supports non-transposed A.");
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
     using BlockOffset = AscendC::Shape<int64_t, int64_t, int64_t, int64_t, int64_t>;
     using BlockMmadShape = typename BlockMmad::BlockShape;
     using ScaleType = fp8_e8m0_t;
-    using MakeLayoutA = AscendC::Te::NDLayoutFormat<AType>;
-    using MakeLayoutB = AscendC::Te::DNLayoutFormat<BType>;
-    using MakeLayoutScaleA = AscendC::Te::ScaleANDLayoutFormat<ScaleType>;
-    using MakeLayoutScaleB = AscendC::Te::ScaleBDNLayoutFormat<ScaleType>;
+    using MakeLayoutA = typename BlockMmad::LayoutA;
+    using MakeLayoutB = typename BlockMmad::LayoutB;
+    using MakeLayoutScaleA = typename BlockMmad::LayoutScaleA;
+    using MakeLayoutScaleB = typename BlockMmad::LayoutScaleB;
 
     struct TilingParams {
         uint32_t groupNum{0U};
@@ -284,4 +286,3 @@ template <class ProblemShape, class BlockMmad, class BlockScheduler>
 using QuantGroupedMatmulMxfp8KernelSplitM = QuantGroupedMatmulMxKernelSplitM<ProblemShape, BlockMmad, BlockScheduler>;
 
 } // namespace Kernel
-

@@ -20,6 +20,15 @@ ERROR_RATIO_TOL = 1e-3
 DATA_TYPE = np.uint16
 
 
+def parse_bool_arg(arg: str, name: str) -> bool:
+    value = arg.strip().lower()
+    if value in {"1", "true", "t", "yes", "y"}:
+        return True
+    if value in {"0", "false", "f", "no", "n"}:
+        return False
+    raise ValueError(f"{name} must be 0/1/true/false")
+
+
 def parse_group_m_list(arg: str) -> List[int]:
     values = []
     for item in arg.split(","):
@@ -90,8 +99,8 @@ def verify_result(group_m_list: List[int], m: int, n: int):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
-        print("Usage: python3 verify_result.py group_num m k n")
+    if len(sys.argv) not in {5, 7}:
+        print("Usage: python3 verify_result.py group_num m k n [transA transB]")
         sys.exit(1)
 
     try:
@@ -107,6 +116,14 @@ if __name__ == "__main__":
             raise ValueError("k must be a positive multiple of 2")
         if n <= 0:
             raise ValueError("n must be greater than 0")
+        trans_b = True
+        if len(sys.argv) == 7:
+            trans_a = parse_bool_arg(sys.argv[5], "transA")
+            trans_b = parse_bool_arg(sys.argv[6], "transB")
+            if trans_a:
+                raise ValueError("transA=true is not supported")
+        if not trans_b and n % 2 != 0:
+            raise ValueError("n must be a positive multiple of 2 when transB=false")
         group_m_list = load_group_m_list(group_num)
         res = verify_result(group_m_list, m, n)
         if not res:

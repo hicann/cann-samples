@@ -15,6 +15,7 @@
 
 #pragma once
 #include <cstddef>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -85,13 +86,19 @@ constexpr T GetSizeWithDataType(T shape)
     }
 }
 
-struct GroupedMatmulMxfp4Args {
+struct GroupedMatmulMxArgs {
     uint64_t groupNum{0};
     uint64_t m{0};
     uint64_t k{0};
     uint64_t n{0};
+    bool transA{false};
+    bool transB{true};
     size_t groupListBytes{0};
 };
+
+using GroupedMatmulMxfp4Args = GroupedMatmulMxArgs;
+using GroupedMatmulMxfp8Args = GroupedMatmulMxArgs;
+using GroupedMatmulMxfp8Fp4Args = GroupedMatmulMxArgs;
 
 inline std::vector<uint32_t> ParseGroupList(const std::vector<int64_t>& groupListHost)
 {
@@ -126,30 +133,64 @@ inline uint64_t ParsePositiveUint64(const char* arg, const char* name)
     }
 }
 
-inline void PrintUsage(const char* program)
+inline bool ParseBoolArg(const char* arg, const char* name)
 {
-    std::cerr << "Usage: " << program << " group_num m k n" << std::endl;
-    std::cerr << "Example: " << program << " 2 256 4096 1024" << std::endl;
-}
-
-inline GroupedMatmulMxfp4Args ParseArguments(int argc, char* argv[])
-{
-    if (argc != 5) {
-        throw std::invalid_argument("ERROR: Invalid number of arguments, expected exactly 4 arguments: group_num m k n");
+    std::string value(arg ? arg : "");
+    for (char& c : value) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
 
-    GroupedMatmulMxfp4Args args{
+    if (value == "1" || value == "true" || value == "t" || value == "yes" || value == "y") {
+        return true;
+    }
+    if (value == "0" || value == "false" || value == "f" || value == "no" || value == "n") {
+        return false;
+    }
+    throw std::invalid_argument(std::string("ERROR: ") + name + " must be 0/1/true/false");
+}
+
+inline void PrintUsage(const char* program)
+{
+    std::cerr << "Usage: " << program << " group_num m k n [transA transB]" << std::endl;
+    std::cerr << "Args:" << std::endl;
+    std::cerr << "  group_num: number of groups" << std::endl;
+    std::cerr << "  m: row of matrix A" << std::endl;
+    std::cerr << "  k: col of matrix A" << std::endl;
+    std::cerr << "  n: col of matrix B" << std::endl;
+    std::cerr << "  transA (optional): 0/1/true/false, controls layoutA (false=ND, true=DN)"
+              << std::endl;
+    std::cerr << "  transB (optional): 0/1/true/false, controls layoutB (false=ND, true=DN)"
+              << std::endl;
+    std::cerr << "Example: " << program << " 2 256 4096 1024" << std::endl;
+    std::cerr << "Example: " << program << " 2 256 4096 1024 0 0" << std::endl;
+}
+
+inline GroupedMatmulMxArgs ParseArguments(int argc, char* argv[])
+{
+    if (argc != 5 && argc != 7) {
+        throw std::invalid_argument(
+            "ERROR: Invalid number of arguments, expected: group_num m k n [transA transB]");
+    }
+
+    GroupedMatmulMxArgs args{
         ParsePositiveUint64(argv[1], "group_num"),
         ParsePositiveUint64(argv[2], "m"),
         ParsePositiveUint64(argv[3], "k"),
         ParsePositiveUint64(argv[4], "n"),
+        false,
+        true,
         0U};
+
+    if (argc == 7) {
+        args.transA = ParseBoolArg(argv[5], "transA");
+        args.transB = ParseBoolArg(argv[6], "transB");
+    }
 
     constexpr uint64_t int32MaxU64 = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
     CHECK_COND(args.m <= int32MaxU64, "m must not exceed INT32_MAX.");
     CHECK_COND(args.k <= int32MaxU64, "k must not exceed INT32_MAX.");
     CHECK_COND(args.n <= int32MaxU64, "n must not exceed INT32_MAX.");
-    CHECK_COND(args.k % 2UL == 0UL, "k must be even for fp4 packed storage.");
+    CHECK_COND(!args.transA, "Only transA=false is supported in grouped quant matmul samples.");
     CHECK_COND(
         args.groupNum <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()),
         "group_num exceeds addressable size on this platform.");

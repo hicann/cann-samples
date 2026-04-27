@@ -116,8 +116,8 @@ def verify_result(group_m_list: List[int], m: int, n: int):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
-        print("Usage: python3 verify_result.py group_num m k n")
+    if len(sys.argv) not in {5, 7}:
+        print("Usage: python3 verify_result.py group_num m k n [transA transB]")
         sys.exit(1)
 
     try:
@@ -133,6 +133,8 @@ if __name__ == "__main__":
             raise ValueError("k must be greater than 0")
         if n <= 0:
             raise ValueError("n must be greater than 0")
+        if len(sys.argv) == 7 and sys.argv[5].lower() not in {"0", "false"}:
+            raise ValueError("transA=true is not supported")
         group_m_list = load_group_m_list(group_num)
         res = verify_result(group_m_list, m, n)
         if not res:

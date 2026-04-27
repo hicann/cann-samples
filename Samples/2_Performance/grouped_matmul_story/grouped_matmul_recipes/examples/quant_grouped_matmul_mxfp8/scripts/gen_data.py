@@ -24,6 +24,8 @@ from ml_dtypes import float8_e4m3fn
 
 GROUP_LIST_MODE = "group_list"
 EXPECT_M_PER_GROUP_MODE = "expect_m_per_group"
+DEFAULT_TRANS_A = False
+DEFAULT_TRANS_B = True
 
 
 def _recipe_example_root() -> str:
@@ -100,29 +102,48 @@ def build_random_group_m_list(group_num: int, expect_m_per_group: int, m: int) -
     return group_m_list
 
 
-def parse_cli_args(argv: List[str]) -> Tuple[List[int], int, int, int]:
-    if len(argv) == 6 and argv[1] == GROUP_LIST_MODE:
+def parse_bool_arg(arg: str, name: str) -> bool:
+    value = arg.strip().lower()
+    if value in {"1", "true", "t", "yes", "y"}:
+        return True
+    if value in {"0", "false", "f", "no", "n"}:
+        return False
+    raise ValueError(f"{name} must be 0/1/true/false")
+
+
+def parse_cli_args(argv: List[str]) -> Tuple[List[int], int, int, int, bool, bool]:
+    if len(argv) in {6, 8} and argv[1] == GROUP_LIST_MODE:
         group_m_list = parse_group_m_list(argv[2])
         m = int(argv[3])
         k = int(argv[4])
         n = int(argv[5])
         if m < sum(group_m_list):
             raise ValueError(f"m must be greater than or equal to sum(group_m_list)={sum(group_m_list)}")
-        return group_m_list, m, k, n
+        trans_a = DEFAULT_TRANS_A
+        trans_b = DEFAULT_TRANS_B
+        if len(argv) == 8:
+            trans_a = parse_bool_arg(argv[6], "transA")
+            trans_b = parse_bool_arg(argv[7], "transB")
+        return group_m_list, m, k, n, trans_a, trans_b
 
-    if len(argv) == 7 and argv[1] == EXPECT_M_PER_GROUP_MODE:
+    if len(argv) in {7, 9} and argv[1] == EXPECT_M_PER_GROUP_MODE:
         group_num = int(argv[2])
         expect_m_per_group = int(argv[3])
         m = int(argv[4])
         k = int(argv[5])
         n = int(argv[6])
         group_m_list = build_random_group_m_list(group_num, expect_m_per_group, m)
-        return group_m_list, m, k, n
+        trans_a = DEFAULT_TRANS_A
+        trans_b = DEFAULT_TRANS_B
+        if len(argv) == 9:
+            trans_a = parse_bool_arg(argv[7], "transA")
+            trans_b = parse_bool_arg(argv[8], "transB")
+        return group_m_list, m, k, n, trans_a, trans_b
 
     raise ValueError(
         "Usage:\n"
-        "  python3 gen_data.py group_list group_m_list m k n\n"
-        "  python3 gen_data.py expect_m_per_group group_num expect_m_per_group m k n"
+        "  python3 gen_data.py group_list group_m_list m k n [transA transB]\n"
+        "  python3 gen_data.py expect_m_per_group group_num expect_m_per_group m k n [transA transB]"
     )
 
 
@@ -144,20 +165,22 @@ def write_artifacts(base_dir, a_fp8, b_fp8, a_scale, b_scale, group_list, out):
     out.view(torch.uint16).numpy().tofile(os.path.join(output_dir, "cpu_output.bin"))
 
 
-def gen_golden_data_simple(group_m_list: List[int], m: int, k: int, n: int):
+def gen_golden_data_simple(group_m_list: List[int], m: int, k: int, n: int, trans_a: bool, trans_b: bool):
     group_num = len(group_m_list)
+    if trans_a:
+        raise ValueError("transA=true is not supported in grouped quant matmul samples")
 
     # X and scales are sized to the declared M budget (m), not sum(group_m_list), so inputs stay well-defined when
     # some experts have zero rows. Golden output is padded to (m, n) with zeros below the computed rows.
     a_ori = np.random.uniform(1, 8, (m, k)).astype(float8_e4m3fn)
 
-    # Keep each weight group in (N, K) order so it matches the sample's
-    # column-major/filter-major device-side interpretation.
-    b_ori = np.random.uniform(1, 8, (group_num, n, k)).astype(float8_e4m3fn)
+    b_shape = (group_num, n, k) if trans_b else (group_num, k, n)
+    b_ori = np.random.uniform(1, 8, b_shape).astype(float8_e4m3fn)
 
     scale_k = math.ceil(k / 64)
     a_scale = np.random.uniform(1, 8, size=(m, scale_k, 2)).astype(float8_e8m0)
-    b_scale = np.random.uniform(1, 8, size=(group_num, n, scale_k, 2)).astype(float8_e8m0)
+    b_scale_shape = (group_num, n, scale_k, 2) if trans_b else (group_num, scale_k, n, 2)
+    b_scale = np.random.uniform(1, 8, size=b_scale_shape).astype(float8_e8m0)
     group_list = build_group_list(group_m_list)
 
     a_scale_reshape = a_scale.reshape(m, scale_k * 2)
@@ -171,13 +194,19 @@ def gen_golden_data_simple(group_m_list: List[int], m: int, k: int, n: int):
         a_group = a_ori[m_offset : m_offset + group_m]
         a_group_scale = a_scale_broadcast[m_offset : m_offset + group_m]
         b_group = b_ori[group_idx]
-        b_group_transpose = np.swapaxes(b_group, -1, -2)
-        b_group_scale = b_scale[group_idx].reshape(n, -1)
-        b_group_scale_broadcast = np.repeat(b_group_scale, 32, axis=-1)[..., :k]
-        b_group_scale_broadcast_transpose = np.swapaxes(b_group_scale_broadcast, -1, -2)
+        if trans_b:
+            b_dequant_base = np.swapaxes(b_group, -1, -2)
+            b_group_scale = b_scale[group_idx].reshape(n, -1)
+            b_group_scale_broadcast = np.repeat(b_group_scale, 32, axis=-1)[..., :k]
+            b_scale_dequant = np.swapaxes(b_group_scale_broadcast, -1, -2)
+        else:
+            b_dequant_base = b_group
+            b_group_scale = np.swapaxes(b_scale[group_idx], 0, 1).reshape(n, -1)
+            b_group_scale_broadcast = np.repeat(b_group_scale, 32, axis=-1)[..., :k]
+            b_scale_dequant = np.swapaxes(b_group_scale_broadcast, -1, -2)
 
         a_dequant = a_group.astype(np.float32) * a_group_scale.astype(np.float32)
-        b_dequant = b_group_transpose.astype(np.float32) * b_group_scale_broadcast_transpose.astype(np.float32)
+        b_dequant = b_dequant_base.astype(np.float32) * b_scale_dequant.astype(np.float32)
         outputs.append(torch.matmul(torch.from_numpy(a_dequant), torch.from_numpy(b_dequant)).to(torch.bfloat16))
         m_offset += group_m
 
@@ -194,7 +223,7 @@ def gen_golden_data_simple(group_m_list: List[int], m: int, k: int, n: int):
 
 if __name__ == "__main__":
     try:
-        group_m_list, m, k, n = parse_cli_args(sys.argv)
+        group_m_list, m, k, n, trans_a, trans_b = parse_cli_args(sys.argv)
     except ValueError as error:
         print(error)
         sys.exit(1)
@@ -210,7 +239,10 @@ if __name__ == "__main__":
     if m < sum_group_m:
         print(f"m must be greater than or equal to sum(group_m_list)={sum_group_m}")
         sys.exit(1)
+    if trans_a:
+        print("transA=true is not supported")
+        sys.exit(1)
 
     print(f"group_m_list={','.join(str(value) for value in group_m_list)}")
-    print(f"m={m}, sum(group_m_list)={sum_group_m}, k={k}, n={n}")
-    gen_golden_data_simple(group_m_list, m, k, n)
+    print(f"m={m}, sum(group_m_list)={sum_group_m}, k={k}, n={n}, transA={trans_a}, transB={trans_b}")
+    gen_golden_data_simple(group_m_list, m, k, n, trans_a, trans_b)

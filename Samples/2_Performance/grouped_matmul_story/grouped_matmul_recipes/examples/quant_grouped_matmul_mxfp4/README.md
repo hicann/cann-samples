@@ -14,10 +14,11 @@
 
 当前样例需要满足以下约束条件：
 
-- 当前仅支持A不转置，B转置的场景。
-- A 的形状为 `[M, K]`，B 的形状为 `[E, N, K]`。
+- 当前仅支持 `transA=false，transB=true` 和 `transA=false， transB=false` 两种场景。
+- 当 `transB=true` 时，A 的形状为 `[M, K]`，B 的形状为 `[E, N, K]`。
+- 当 `transB=false` 时，A 的形状为 `[M, K]`，B 的形状为 `[E, K, N]`。
 - 当前仅支持m轴分组。
-- 当前样例仅要求输入的 `k` 为偶数，以满足两个 `B4` 打包成一个 `B8` 的存储约束。
+- MXFP4 内轴 `K` 必须为偶数；当 `transB=false` 时，`N` 也必须为偶数。
 
 ## 支持架构
 
@@ -32,7 +33,7 @@ NPU ARCH 3510
 算子执行文件与结果校验脚本的命令行参数格式一致：
 
 ```text
-<program> group_num m k n
+<program> group_num m k n [transA transB]
 ```
 
 - `group_num`：专家数，也就是分组数
@@ -40,6 +41,10 @@ NPU ARCH 3510
 - `m`：总的 `M` 大小，要求满足 `m >= sum(group_m_list)`
 - `k`：矩阵 `A` 的列数，同时也是每组矩阵 `B` 的列数
 - `n`：每组矩阵 `B` 的行数，也是输出矩阵每组结果的列数
+- `transA`：可选参数，当前仅支持 `false`，默认值为 `false`
+- `transB`：可选参数，默认值为 `true`；`true` 表示 B 以 `[E, N, K]` 组织，`false` 表示 B 以 `[E, K, N]` 组织
+
+`transA` 和 `transB` 需要同时省略或同时指定，取值支持 `0/1/true/false`。
 
 其中实际参与计算的 `group_m_list` 由 `gen_data.py` 生成，并写入 `input/input_groupList.bin`。当前文件中保存的是每个分组各自的 `M` 大小，允许某些组为 `0`。
 
@@ -52,13 +57,14 @@ golden 输入数据由 `gen_data.py` 生成。编译安装后请在 `build_out` 
 ### 方式一：显式指定 `group_m_list`
 
 ```bash
-python3 gen_data.py group_list group_m_list m k n
+python3 gen_data.py group_list group_m_list m k n [transA transB]
 ```
 
 示例：
 
 ```bash
 python3 gen_data.py group_list 128,128,0 384 256 256
+python3 gen_data.py group_list 128,128,0 384 256 256 false false
 ```
 
 含义如下：
@@ -72,13 +78,14 @@ python3 gen_data.py group_list 128,128,0 384 256 256
 ### 方式二：按专家数和期望平均值随机生成 `group_m_list`
 
 ```bash
-python3 gen_data.py expect_m_per_group group_num expect_m_per_group m k n
+python3 gen_data.py expect_m_per_group group_num expect_m_per_group m k n [transA transB]
 ```
 
 示例：
 
 ```bash
 python3 gen_data.py expect_m_per_group 3 128 384 256 256
+python3 gen_data.py expect_m_per_group 3 128 384 256 256 false false
 ```
 
 含义如下：
@@ -115,10 +122,10 @@ python3 gen_data.py group_list 128,128,0 384 256 256
 # 生成数据方式二：按专家数和平均 M 随机生成 grouplist
 python3 gen_data.py expect_m_per_group 3 128 384 256 256
 
-# 运行可执行文件（以上面的 group_list 示例为例）
-# 程序会在执行完成后自动调用 verify_result.py 进行结果校验
+# 运行可执行文件并校验结果（默认 transA=false, transB=true）
 ./quant_grouped_matmul_mxfp4 3 384 256 256
 
-# 可选：手动再次校验（用于调试/复核）
-python3 verify_result.py 3 384 256 256
+# 运行 transA=false, transB=false 场景
+python3 gen_data.py group_list 128,128,0 384 256 256 false false
+./quant_grouped_matmul_mxfp4 3 384 256 256 false false
 ```

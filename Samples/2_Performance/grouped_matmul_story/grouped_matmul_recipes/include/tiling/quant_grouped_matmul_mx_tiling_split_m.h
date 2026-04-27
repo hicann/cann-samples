@@ -29,11 +29,12 @@ class QuantGroupedMatmulMxTilingSplitM
 {
 public:
     void GetTilingData(
-        uint32_t numOfGroups, uint32_t m, uint32_t n, uint32_t k, QuantGroupedMatmulMxTilingData& tilingData)
+        uint32_t numOfGroups, uint32_t m, uint32_t n, uint32_t k, bool transB, QuantGroupedMatmulMxTilingData& tilingData)
     {
         args_ = {};
         platformInfo_ = {};
         runInfo_ = {};
+        transB_ = transB;
 
         InitCompileInfo();
         InitShapeArgs(numOfGroups, m, n, k);
@@ -45,6 +46,7 @@ private:
     QuantGroupedMatmulTilingArgs args_{};
     QuantGroupedMatmulPlatformInfo platformInfo_{};
     QuantGroupedMatmulRunInfo runInfo_{};
+    bool transB_{QuantGroupedMatmulTilingConst::TRANS_B};
 
     void InitCompileInfo()
     {
@@ -80,7 +82,14 @@ private:
     void CalBasicBlock()
     {
         runInfo_.baseM = Align(std::min<uint64_t>(args_.m, 256UL), GroupedMatmulRecipe::CUBE_BLOCK);
-        runInfo_.baseN = Align(std::min<uint64_t>(args_.n, 256UL), GroupedMatmulRecipe::CUBE_BLOCK);
+        runInfo_.baseN = std::min<uint64_t>(args_.n, 256UL);
+        runInfo_.baseN = transB_ ? Align(runInfo_.baseN, GroupedMatmulRecipe::CUBE_BLOCK)
+                                 : Align(runInfo_.baseN, (dataType == gmm::DataType::DT_FLOAT4_E2M1) ? 32UL : 64UL);
+        // transA is fixed false, so K is always the reduction inner axis.
+        // When transB=false, N is also B's packed inner axis and must be 64-aligned.
+        if (!transB_ && dataType == gmm::DataType::DT_FLOAT4_E2M1) {
+            runInfo_.baseN = Align(runInfo_.baseN, 64UL);
+        }
         runInfo_.baseK = Align(std::min<uint64_t>(args_.k, (dataType == gmm::DataType::DT_FLOAT4_E2M1) ? 256UL : 128UL), GroupedMatmulRecipe::MX_DIVISOR_SIZE);
         runInfo_.dbL0C =
             (runInfo_.baseM * runInfo_.baseN * QuantGroupedMatmulTilingConst::DATA_SIZE_L0C *
@@ -151,8 +160,7 @@ private:
         if (args_.k % QuantGroupedMatmulTilingConst::BASIC_BLOCK_SIZE_128 == 0) {
             return;
         }
-        if (QuantGroupedMatmulTilingConst::TRANS_A &&
-            (!QuantGroupedMatmulTilingConst::TRANS_B || QuantGroupedMatmulTilingConst::WEIGHT_FRACTAL_NZ)) {
+        if (QuantGroupedMatmulTilingConst::TRANS_A && (!transB_ || QuantGroupedMatmulTilingConst::WEIGHT_FRACTAL_NZ)) {
             return;
         }
         if (!QuantGroupedMatmulTilingConst::TRANS_A) {
@@ -167,8 +175,7 @@ private:
                     leftL1Size) {
                     runInfo_.depthA1 = runInfo_.depthB1;
                 }
-            } else if (QuantGroupedMatmulTilingConst::TRANS_B &&
-                       !QuantGroupedMatmulTilingConst::WEIGHT_FRACTAL_NZ) {
+            } else if (transB_ && !QuantGroupedMatmulTilingConst::WEIGHT_FRACTAL_NZ) {
                 uint64_t leftBSize =
                     leftL1Size - runInfo_.depthA1 * baseASize - runInfo_.depthA1 * baseScaleABSize;
                 while (runInfo_.depthB1 * QuantGroupedMatmulTilingConst::POWER_OF_TWO * baseBSize <= leftBSize) {
@@ -351,4 +358,3 @@ private:
 
 using QuantGroupedMatmulMxfp4TilingSplitM = QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT4_E2M1>;
 using QuantGroupedMatmulMxfp8TilingSplitM = QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT8_E4M3FN>;
-
