@@ -16,6 +16,7 @@
 
 | CANN 版本 | 时间戳 | 验证结果 | 下载链接 |
 | --- | --- | --- | --- |
+| `9.0.0` | `20260422000325096` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260422000325096/Ascend-cann-toolkit_9.0.0_linux-aarch64.run) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260422000325096/Ascend-cann-toolkit_9.0.0_linux-x86_64.run) |
 | `9.0.0` | `20260325000325538` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260325000325538/aarch64/) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260325000325538/x86_64/) |
 
 请根据实际 CPU 架构，从上述链接目录中自行选择对应的 `.run` 安装包。
