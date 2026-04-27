@@ -215,7 +215,7 @@ __aicore__ inline void gelu_compute(...)
     uint32_t loopNum = (n + vectorLength - 1) / vectorLength;
     __ubuf__ float *xAddr = (__ubuf__ float *)xLocal.GetPhyAddr();
     __ubuf__ float *yAddr = (__ubuf__ float *)yLocal.GetPhyAddr();
-    gelu_vf(xAddr, yAddr, static_cast<uint32_t>(n), loopNum);
+    asc_vf_call<gelu_vf>(xAddr, yAddr, static_cast<uint32_t>(n), loopNum);
 }
 ```
 

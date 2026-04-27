@@ -69,7 +69,7 @@ __aicore__ inline void ReduceFinalRes_0(LocalTensor<T>& dstLocal, LocalTensor<T>
     const uint16_t floatRepSize = 64;
     const uint16_t dLoops = headDimAlignFp32 / floatRepSize;
 
-    ReduceFinalRes_0_VF<T>(dstUb, lseUb, accumOutUb, k, z, dealNum1Reg, repStride, floatRepSize, 
+    asc_vf_call<ReduceFinalRes_0_VF<T>>(dstUb, lseUb, accumOutUb, k, z, dealNum1Reg, repStride, floatRepSize, 
                         dLoops, dealRowCount, splitKVIndex);
 }
 
@@ -118,7 +118,7 @@ __aicore__ inline void ReduceFinalRes_Rest(LocalTensor<T>& dstLocal, LocalTensor
     const uint16_t floatRepSize = 64;
     const uint16_t dLoops = headDimAlignFp32 / floatRepSize;
 
-    ReduceFinalRes_Rest_VF<T>(dstUb, lseUb, accumOutUb, k, z, dealNum1Reg, repStride, floatRepSize, dLoops, dealRowCount, splitKVIndex);
+    asc_vf_call<ReduceFinalRes_Rest_VF<T>>(dstUb, lseUb, accumOutUb, k, z, dealNum1Reg, repStride, floatRepSize, dLoops, dealRowCount, splitKVIndex);
 }
 
 template <typename T>
@@ -235,7 +235,7 @@ __aicore__ inline void ComputeScaleValue_8(const LocalTensor<SINK_T>& tmpSinkUb,
     __ubuf__ T * lseUb = (__ubuf__ T *)lseOutputUb.GetPhyAddr();
     __ubuf__ uint16_t * lseSink = (__ubuf__ uint16_t *)tmpSinkUb.GetPhyAddr();
 
-    ComputeScaleValue_8_VF<T, SINK_T>(lseSink, lseMax, lseMaxTmp, lseSum, lseSumTmp, lseUb, dealCount, i, dealRowCount, actualCombineLoopSize, softmaxLseFlag, learnableSinkFlag);
+    asc_vf_call<ComputeScaleValue_8_VF<T, SINK_T>>(lseSink, lseMax, lseMaxTmp, lseSum, lseSumTmp, lseUb, dealCount, i, dealRowCount, actualCombineLoopSize, softmaxLseFlag, learnableSinkFlag);
 }
 
 // 处理8<g<=16的场景
@@ -379,7 +379,7 @@ __aicore__ inline void ComputeScaleValue_16(const LocalTensor<SINK_T>& tmpSinkUb
     __ubuf__ uint16_t * lseSink = (__ubuf__ uint16_t *)tmpSinkUb.GetPhyAddr();
     __ubuf__ uint16_t * lseSink2 = lseSink + 64;
 
-    ComputeScaleValue_16_VF<T, SINK_T>(lseSink, lseSink2, lseMax, lseMax2, lseMaxSrc, lseSum, lseSum2, lseSumSrc, lseUb, lseUb2, 
+    asc_vf_call<ComputeScaleValue_16_VF<T, SINK_T>>(lseSink, lseSink2, lseMax, lseMax2, lseMaxSrc, lseSum, lseSum2, lseSumSrc, lseUb, lseUb2, 
                             dealCountSum, dealCount, dealCount2, i, dealRowCount, actualCombineLoopSize, softmaxLseFlag, learnableSinkFlag);
 }
 
@@ -435,7 +435,7 @@ __aicore__ inline void ComputeLogSumExp_8(const LocalTensor<T>& dstTensor, const
     __ubuf__ T * srcMaxLocalInt = (__ubuf__ T *)softmaxMaxTensor.GetPhyAddr();
     __ubuf__ T * dstLocalInt = (__ubuf__ T *)dstTensor.GetPhyAddr();
 
-    ComputeLogSumExp_8_VF<T>(srcSumLocalInt, srcMaxLocalInt, dstLocalInt, dealCount);
+    asc_vf_call<ComputeLogSumExp_8_VF<T>>(srcSumLocalInt, srcMaxLocalInt, dstLocalInt, dealCount);
 }
 
 // 处理8<g<=16的场景
@@ -497,7 +497,7 @@ __aicore__ inline void ComputeLogSumExp_16(const LocalTensor<T>& dstTensor, cons
     uint32_t dealCount1 = 8 * 8;
     uint32_t dealCount2 = dealCount - dealCount1;
 
-    ComputeLogSumExp_16_VF<T>(srcSumUb, srcSumUb2, srcMaxUb, srcMaxUb2, dstUb, dstUb2, dealCount1, dealCount2);
+    asc_vf_call<ComputeLogSumExp_16_VF<T>>(srcSumUb, srcSumUb2, srcMaxUb, srcMaxUb2, dstUb, dstUb2, dealCount1, dealCount2);
 }
 
 template <typename T>

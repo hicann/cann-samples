@@ -280,7 +280,7 @@ __aicore__ inline void MergeBandModeMask(LocalTensor<uint8_t> &maskPre, LocalTen
     uint16_t halfS1RealSizeLoop = static_cast<uint16_t>(halfS1RealSize) + 1;
     uint16_t loopCount = (halfS1RealSizeLoop / rowNumEachLoop) * rowNumTimesEachLoop;
 
-    MergeBandVF(maskPreUb, maskNextUb, loopCount);
+    asc_vf_call<MergeBandVF>(maskPreUb, maskNextUb, loopCount);
 }
 
 __simd_vf__ inline void MergePrefixVF(const uint64_t maskPreUb, const uint64_t maskNextUb,
@@ -317,7 +317,7 @@ __aicore__ inline void MergePrefixModeMask(LocalTensor<uint8_t> &maskPre, LocalT
     uint16_t halfS1RealSizeLoop = static_cast<uint16_t>(halfS1RealSize) + 1;
     uint16_t loopCount = (halfS1RealSizeLoop / rowNumEachLoop) * rowNumTimesEachLoop;
 
-    MergePrefixVF(maskPreUb, maskNextUb, loopCount);
+    asc_vf_call<MergePrefixVF>(maskPreUb, maskNextUb, loopCount);
 }
 #else
 template <bool hasAtten>

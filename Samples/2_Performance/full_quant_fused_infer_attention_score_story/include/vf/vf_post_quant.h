@@ -135,7 +135,7 @@ __aicore__ inline void PostQuantPerChnlImpl(const LocalTensor<OUTPUT_T> &dstTens
     uint16_t dTailLoop = dTail > 0 ? 1 : 0;
     uint32_t pltTailD = dTail;
 
-    PostQuantPerChnlOffsetImplVF<T, OUTPUT_T, POSTQUANT_PARAMS_T>(dstUb, srcUb, scaleUb, offsetUb, floatRepSize, dLoops, dTailLoop, 
+    asc_vf_call<PostQuantPerChnlOffsetImplVF<T, OUTPUT_T, POSTQUANT_PARAMS_T>>(dstUb, srcUb, scaleUb, offsetUb, floatRepSize, dLoops, dTailLoop, 
                                                             pltTailD, gRowCount, s1RowCount, srcD);
 }
 
@@ -228,7 +228,7 @@ __aicore__ inline void PostQuantPerChnlImpl(const LocalTensor<OUTPUT_T> &dstTens
     uint16_t dTailLoop = dTail > 0 ? 1 : 0;
     uint32_t pltTailD = dTail;
 
-    PostQuantPerChnlNoOffsetImplVF<T, OUTPUT_T, POSTQUANT_PARAMS_T>(dstUb, srcUb, scaleUb, floatRepSize, dLoops, 
+    asc_vf_call<PostQuantPerChnlNoOffsetImplVF<T, OUTPUT_T, POSTQUANT_PARAMS_T>>(dstUb, srcUb, scaleUb, floatRepSize, dLoops, 
                                                                     dTailLoop, pltTailD, gRowCount, s1RowCount, srcD);
 }
 
@@ -328,7 +328,7 @@ __aicore__ inline void PostQuantPerTensorImpl(const LocalTensor<OUTPUT_T> &dstTe
     uint16_t dTailLoop = dTail > 0 ? 1 : 0;
     uint32_t pltTailD = dTail;
     
-    PostQuantPerTensorImplVF<T, OUTPUT_T, hasOffset>(dstUb, srcUb, floatRepSize, dLoops, dTailLoop, pltTailD, postQuantScaleValue, 
+    asc_vf_call<PostQuantPerTensorImplVF<T, OUTPUT_T, hasOffset>>(dstUb, srcUb, floatRepSize, dLoops, dTailLoop, pltTailD, postQuantScaleValue, 
                                                     postQuantOffsetValue, dealRowCount, srcD);
 }
 

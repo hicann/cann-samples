@@ -376,7 +376,7 @@ __aicore__ inline void ProcessVec1DnNoUpdate(
         repeatStride = 1;
     }
 
-    ProcessVec1DnNoUpdateVF<T, T2, hasAtten, ubN>(x_exp, input_x_local_UB, exp_max_fp32, new_global_sum, new_global_max,
+    asc_vf_call<ProcessVec1DnNoUpdateVF<T, T2, hasAtten, ubN>>(x_exp, input_x_local_UB, exp_max_fp32, new_global_sum, new_global_max,
         maskUb, indexesUb, m, n, originN, scale, deScaleQK, minValue, keepProb, needAtten, dScale, blockStride,
         repeatStride);
 }
@@ -742,7 +742,7 @@ __aicore__ inline void ProcessVec1DnUpdate(
         repeatStride = 1;
     }
 
-    ProcessVec1DnUpdateVF<T, T2, hasAtten, ubN>(x_exp, input_x_local_UB, exp_max_fp32, new_global_sum, new_global_max,
+    asc_vf_call<ProcessVec1DnUpdateVF<T, T2, hasAtten, ubN>>(x_exp, input_x_local_UB, exp_max_fp32, new_global_sum, new_global_max,
         maskUb, indexesUb, m, n, originN, scale, deScaleQK, minValue, keepProb, needAtten, dScale, blockStride,
         repeatStride);
 }
@@ -814,7 +814,7 @@ __aicore__ inline void BroadcastMaxSum(const LocalTensor<T>& outTensor, const Lo
     // Align8, broadcast one element to 8 elements, one register can store 64 elements,
     // so we can handle 64 / 8 = 8 elements per loop.
     uint16_t loopM = (vecS1RealSize + 7) >> 3;
-    BroadCastMaxSumVF<T>(out_ub, ori_ub, loopM);
+    asc_vf_call<BroadCastMaxSumVF<T>>(out_ub, ori_ub, loopM);
 }
 }
 #endif // MUL_SEL_SOFTMAXFLASHV2_CAST_NZ_DN_H_

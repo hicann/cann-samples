@@ -60,7 +60,7 @@ __aicore__ inline void ShiftW4ToW8(
     params.innerLoopNum = (params.nRealSizeAlign * C0_SIZE_B8) / static_cast<uint64_t>(AscendC::GetVecLen());
     params.loopKDstStride = params.innerLoopNum * params.innerDstStride;
 
-    ShiftW4ToW8Vf<OutType, InType>(params);
+    asc_vf_call<ShiftW4ToW8Vf<OutType, InType>>(params);
 }
 
 template <typename OutType, typename InType>
