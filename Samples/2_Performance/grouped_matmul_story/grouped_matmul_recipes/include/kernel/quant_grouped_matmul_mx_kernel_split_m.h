@@ -31,6 +31,7 @@ public:
     using AType = typename BlockMmad::AType;
     using BType = typename BlockMmad::BType;
     using CType = typename BlockMmad::CType;
+    using LayoutA = typename BlockMmad::LayoutA;
     using LayoutB = typename BlockMmad::LayoutB;
     static constexpr CubeFormat formatB = ::TagToFormat<LayoutB>::format;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
@@ -88,12 +89,28 @@ private:
                GroupedMatmulRecipe::MX_MULTI_SIZE;
     }
 
+    __aicore__ static inline void SetSchedulerTailAlign(BlockScheduler& bs)
+    {
+        constexpr uint32_t mTailAlign =
+            (AscendC::Std::is_same_v<LayoutA, AscendC::Te::NDLayoutFormat<AType>> ||
+             AscendC::Std::is_same_v<LayoutA, AscendC::Te::NzLayoutFormat<AType>>)
+                ? static_cast<uint32_t>(AscendC::BLOCK_CUBE) // (m, k) -> cube tile alignment
+                : GroupedMatmulRecipe::INNER_AXIS_ALIGN; // (k, m) -> ND2NZ cacheline alignment
+        constexpr uint32_t nTailAlign =
+            (AscendC::Std::is_same_v<LayoutB, AscendC::Te::NDLayoutFormat<BType>> ||
+             AscendC::Std::is_same_v<LayoutB, AscendC::Te::NzLayoutFormat<BType>>)
+                ? GroupedMatmulRecipe::INNER_AXIS_ALIGN // (k, n) -> ND2NZ cacheline alignment
+                : static_cast<uint32_t>(AscendC::BLOCK_CUBE); // (n, k) -> cube tile alignment
+        bs.SetTailAlign(mTailAlign, nTailAlign);
+    }
+
     __aicore__ inline void Run(const Params& params)
     {
         ResetGmAddr(params);
         Init(params);
         using SchedulerOp = BlockScheduler;
         SchedulerOp bs(params.schedulerParams);
+        SetSchedulerTailAlign(bs);
         for (uint32_t groupIdx = 0; groupIdx < groupNum_; ++groupIdx) {
             UpdateOffset(groupIdx);
             SetMNK(groupIdx);

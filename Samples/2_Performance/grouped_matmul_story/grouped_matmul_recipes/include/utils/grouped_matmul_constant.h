@@ -29,6 +29,7 @@ constexpr uint64_t MX_GROUP_SIZE = 32UL;
 constexpr uint64_t MX_DIVISOR_SIZE = 64UL;
 constexpr uint64_t MX_MULTI_SIZE = 2UL;
 constexpr uint64_t CUBE_BLOCK = 16UL;
+constexpr uint32_t INNER_AXIS_ALIGN = 128U;
 constexpr uint64_t DOUBLE_BUFFER = 2UL;
 constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM = 6;
 constexpr static uint32_t FINAL_ACCUMULATION = 3U;
