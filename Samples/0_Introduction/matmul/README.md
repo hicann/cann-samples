@@ -35,7 +35,7 @@ NPU ARCH 3510
 
 在仓库根目录下完成编译和安装后，进入当前样例目录：
 ```shell
-cmake -S . -B build
+cmake -S . -B build -DNPU_ARCH=dav-3510
 cmake --build build --parallel
 cmake --install build --prefix ./build_out
 cd ./build_out/0_Introduction/matmul

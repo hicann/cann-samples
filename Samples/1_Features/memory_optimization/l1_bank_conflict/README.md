@@ -85,7 +85,7 @@ for (uint64_t iter0 = 0; iter0 < kL1TileNum; ++iter0) {
 
 在仓库根目录下完成编译和安装后，进入当前样例目录：
 ```shell
-cmake -S . -B build
+cmake -S . -B build -DNPU_ARCH=dav-3510
 cmake --build build --parallel
 cmake --install build --prefix ./build_out
 cd ./build_out/1_Features/memory_optimization/l1_bank_conflict/

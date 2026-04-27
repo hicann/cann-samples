@@ -22,7 +22,7 @@ which bisheng
 #### 2.1 从项目根目录构建（推荐）
 ```bash
 # 1. 配置项目（首次构建需要）
-cmake -S . -B build
+cmake -S . -B build -DNPU_ARCH=dav-3510
 
 # 2. 编译
 cmake --build build --parallel

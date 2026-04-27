@@ -59,10 +59,18 @@ toolkit 安装包文件名格式如下：
 
 1. 配置项目
 
-   使用以下命令初始化构建配置，CMake 会自动创建 `build` 目录：
+   `NPU_ARCH` 为必填参数，用于指定目标 NPU 架构。当前支持的取值如下：
+
+   | NPU 平台 | NPU_ARCH |
+   | --- | --- |
+   | Ascend950 | `dav-3510` |
+   | Ascend910B/C | `dav-2201` |
+
+   以 Ascend950 为例，使用以下命令初始化构建配置，CMake 会自动创建 `build` 目录：
    ```sh
-   cmake -S . -B build
+   cmake -S . -B build -DNPU_ARCH=dav-3510
    ```
+   在 Ascend910B/C 平台构建时，请使用 `-DNPU_ARCH=dav-2201`。不支持当前架构的样例会在配置阶段跳过，因此 `target help` 和后续构建只包含当前架构生效的样例。
 
 2. 查看可用 Target（可选）
 

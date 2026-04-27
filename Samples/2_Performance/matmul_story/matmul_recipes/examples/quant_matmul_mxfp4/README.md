@@ -102,7 +102,7 @@ bash scripts/run.sh --help
 如需手动控制各步骤，可在仓库根目录下完成编译和安装后，进入当前样例目录：
 
 ```bash
-cmake -S . -B build
+cmake -S . -B build -DNPU_ARCH=dav-3510
 cmake --build build --parallel
 cmake --install build --prefix ./build_out
 cd build_out/2_Performance/matmul_story/matmul_recipes/quant_matmul_mxfp4

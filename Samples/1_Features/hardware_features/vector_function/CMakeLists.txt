@@ -9,10 +9,17 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
+set(SUPPORTED_NPU_ARCHS dav-3510)
+file(RELATIVE_PATH SAMPLE_PATH ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
+    message(STATUS "Skip sample ${SAMPLE_PATH}: NPU_ARCH=${NPU_ARCH} is not supported")
+    return()
+endif()
+
 # gelu_without_vf
 add_executable(gelu_without_vf gelu_without_vf.asc gelu_cpu.cpp)
 target_compile_options(gelu_without_vf PRIVATE
-    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
     "$<$<COMPILE_LANGUAGE:ASC>:-O1>"
 )
 target_link_libraries(gelu_without_vf
@@ -29,7 +36,7 @@ install(TARGETS gelu_without_vf
 # gelu_with_vf
 add_executable(gelu_with_vf gelu_with_vf.asc gelu_cpu.cpp)
 target_compile_options(gelu_with_vf PRIVATE
-    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
     "$<$<COMPILE_LANGUAGE:ASC>:-O1>"
 )
 target_link_libraries(gelu_with_vf

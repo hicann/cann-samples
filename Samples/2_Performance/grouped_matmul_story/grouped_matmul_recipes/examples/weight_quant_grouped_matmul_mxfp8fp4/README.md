@@ -119,7 +119,7 @@ NPU output: output/output_npu.bin
 在仓库根目录下执行全量编译与安装，并进入安装目录：
 
 ```bash
-cmake -S . -B build
+cmake -S . -B build -DNPU_ARCH=dav-3510
 cmake --build build --parallel
 cmake --install build --prefix ./build_out
 cd build_out/2_Performance/grouped_matmul_story/grouped_matmul_recipes/weight_quant_grouped_matmul_mxfp8fp4

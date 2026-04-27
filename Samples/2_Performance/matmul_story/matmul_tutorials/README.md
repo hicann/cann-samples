@@ -59,7 +59,7 @@ bash scripts/run.sh --help
 如需手动控制各步骤，在仓库根目录执行编译安装，并进入教程安装目录：
 
 ```bash
-cmake -S . -B build
+cmake -S . -B build -DNPU_ARCH=dav-3510
 cmake --build build --parallel
 cmake --install build --prefix ./build_out
 cd build_out/2_Performance/matmul_story/matmul_tutorials

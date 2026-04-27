@@ -10,6 +10,14 @@
 
 cmake_minimum_required(VERSION 3.16)
 
+set(VALID_NPU_ARCHS dav-3510 dav-2201)
+if(NOT DEFINED NPU_ARCH OR NPU_ARCH STREQUAL "")
+    message(FATAL_ERROR "NPU_ARCH is required. Example: cmake -S . -B build -DNPU_ARCH=dav-3510")
+endif()
+if(NOT "${NPU_ARCH}" IN_LIST VALID_NPU_ARCHS)
+    message(FATAL_ERROR "Unsupported NPU_ARCH: ${NPU_ARCH}. Supported values: dav-3510, dav-2201")
+endif()
+
 include(cmake/ascend.cmake)
 find_package(ASC)
 project(cann-samples LANGUAGES C CXX ASC)

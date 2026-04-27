@@ -384,14 +384,25 @@ git checkout -b <branch-name>
 根目录基础构建方式：
 
 ```bash
-cmake -S . -B build
+cmake -S . -B build -DNPU_ARCH=dav-3510
 cmake --build build --parallel
 ```
 
-如果 `cmake -S . -B build` 失败，请先检查：
+`NPU_ARCH` 为必填参数，支持 `dav-3510` 和 `dav-2201`。910B 环境请使用 `-DNPU_ARCH=dav-2201`。不支持当前架构的样例会在配置阶段跳过。
+
+CI 打包脚本可通过参数指定架构；未传参数时默认使用 `dav-3510`：
+
+```bash
+bash .ci/build.sh
+bash .ci/build.sh dav-3510
+bash .ci/build.sh dav-2201
+```
+
+如果 `cmake -S . -B build -DNPU_ARCH=dav-3510` 失败，请先检查：
 
 - `ASC` 工具链是否已被 CMake 正确发现
 - `ASCEND_HOME_PATH` 是否指向有效安装目录
+- `NPU_ARCH` 是否已传入且取值合法
 - 样例是否遗漏父级 `add_subdirectory(...)` 
 
 可选：查看可编译目标
@@ -523,7 +534,7 @@ clang-format -i --style=file <source_files>
 
 - [ ] 改动范围与仓库定位一致，没有顺手夹带无关修改。
 - [ ] 代码已经按 `.clang-format` 格式化。
-- [ ] 根工程可成功 `cmake -S . -B build`。
+- [ ] 根工程可成功 `cmake -S . -B build -DNPU_ARCH=dav-3510`。
 - [ ] 受影响目标能够成功编译。
 - [ ] 新增样例已正确接入父级 `CMakeLists.txt`，根工程能够发现目标。
 - [ ] 样例结果验证通过，且验证过程可复现。

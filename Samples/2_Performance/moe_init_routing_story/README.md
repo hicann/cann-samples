@@ -864,7 +864,7 @@ moe_init_routing_story/
 在项目根目录启动构建，执行：
 
 ```bash
-cmake -S . -B build
+cmake -S . -B build -DNPU_ARCH=dav-3510
 cmake --build build --target moe_init_routing_story
 ```
 构建完成后会在./build/Samples/2_Performance/moe_init_routing_story/目录下生成MoeInitRoutingV3算子各个版本的可执行文件，如1_multi_core、2_double_buffer。

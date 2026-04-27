@@ -12,7 +12,7 @@
 
 ## 支持架构
 
-NPU ARCH 3510
+NPU ARCH dav-2201, dav-3510
 
 ## 参数说明
 

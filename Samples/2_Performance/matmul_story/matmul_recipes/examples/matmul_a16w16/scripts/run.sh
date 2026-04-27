@@ -118,7 +118,7 @@ if [[ -z "$TRANS_B" ]]; then
 fi
 
 if [[ "$SKIP_BUILD" != true ]]; then
-    bash "${REPO_ROOT}/.ci/build.sh"
+    bash "${REPO_ROOT}/.ci/build.sh" dav-3510
 fi
 
 if [[ ! -d "$INSTALL_DIR" ]]; then

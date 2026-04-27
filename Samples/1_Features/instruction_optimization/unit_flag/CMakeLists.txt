@@ -9,11 +9,18 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
+set(SUPPORTED_NPU_ARCHS dav-3510)
+file(RELATIVE_PATH SAMPLE_PATH ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
+    message(STATUS "Skip sample ${SAMPLE_PATH}: NPU_ARCH=${NPU_ARCH} is not supported")
+    return()
+endif()
+
 # unit_flag
 add_executable(unit_flag main.asc)
 target_link_directories(unit_flag PRIVATE ${ASCEND_DIR}/lib64)
 target_compile_options(unit_flag PRIVATE
-    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
     "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
 )
 target_link_libraries(unit_flag

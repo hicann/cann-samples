@@ -9,6 +9,13 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
+set(SUPPORTED_NPU_ARCHS dav-3510)
+file(RELATIVE_PATH SAMPLE_PATH ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
+    message(STATUS "Skip sample ${SAMPLE_PATH}: NPU_ARCH=${NPU_ARCH} is not supported")
+    return()
+endif()
+
 # rms_norm_quant_story
 set(CPP_FILES
     src/0_naive.asc
@@ -28,7 +35,7 @@ foreach(CPP_FILE ${CPP_FILES})
     set(TARGET_NAME "rms_norm_quant_${TARGET_NAME}")
     add_executable(${TARGET_NAME} ${CPP_FILE})
     target_compile_options(${TARGET_NAME} PRIVATE
-        "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>"
+        "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
         "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
     )
     target_link_libraries(${TARGET_NAME}
