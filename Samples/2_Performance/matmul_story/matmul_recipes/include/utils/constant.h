@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file quant_matmul_constant.h
- * \brief Shared constants and helper types for MX quantized matmul.
+ * \file constant.h
+ * \brief Shared constants and helper types for matmul.
  */
 #pragma once
 
@@ -45,9 +45,18 @@ constexpr uint64_t B8_MIN_STEP = 2UL;
 // Event identifiers used by the copy/compute pipeline.
 constexpr uint16_t ZERO_FLAG = 0;
 constexpr uint16_t FIRST_FLAG = 1;
+constexpr uint16_t SECOND_FLAG = 2;
+constexpr uint16_t THIRD_FLAG = 3;
+constexpr uint16_t SIXTH_FLAG = 6;
+constexpr uint16_t SEVENTH_FLAG = 7;
 constexpr uint16_t SCALE_BUFFER_FLAG_0 = 4;
 constexpr uint16_t SCALE_BUFFER_FLAG_1 = 5;
-constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM = 6;
+constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM_MX = 6;
+constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM = 4;
+constexpr uint16_t AIC_SYNC_AIV_MODE_4 = 4;
+constexpr uint16_t AIV_SYNC_AIC_FLAG = 6;
+constexpr uint16_t AIC_SYNC_AIV_FLAG = 8;
+constexpr uint16_t FLAG_ID_MAX = 16;
 
 // Shared MX constants for the device-side kernel, block, tile, and utility
 // helpers. Host tiling keeps its own prefixed names to avoid collisions when
@@ -55,4 +64,42 @@ constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM = 6;
 constexpr int32_t MXFP_DIVISOR_SIZE = 64;
 constexpr int32_t MXFP_MULTI_BASE_SIZE = 2;
 constexpr int64_t DOUBLE_BUFFER_COUNT = 2LL;
+
+// Shared constants used by the host-side tiling engine.
+//
+// These values describe hardware granularity, cache-line alignment, buffering
+// policy, and the search space limits used while selecting a tiling scheme.
+constexpr uint64_t DB_SIZE = 2UL;
+constexpr uint64_t MB_SIZE = 1024 * 1024UL;
+constexpr uint64_t NUM_TWO = 2UL;
+constexpr uint64_t NUM_THREE = 3UL;
+constexpr uint64_t WINDOW_LEN = 4UL;
+constexpr uint64_t CUBE_BLOCK = 16UL;
+constexpr uint64_t FP4_C0_SIZE = 64UL;
+constexpr uint64_t FP8_C0_SIZE = 32UL;
+constexpr uint64_t BASEK_LIMIT = 4095UL;
+constexpr uint64_t DATA_SIZE_L0C = 4UL;
+constexpr uint64_t MX_GROUP_SIZE = 32UL;
+constexpr uint64_t TILING_MXFP_DIVISOR_SIZE = 64UL;
+constexpr uint64_t TILING_MXFP_MULTI_BASE_SIZE = 2UL;
+constexpr uint64_t L1_FOUR_BUFFER = 4UL;
+constexpr uint64_t STEPK_THERSHOLD = 4UL;
+constexpr uint64_t BASEM_BASEN_RATIO = 2UL;
+constexpr uint64_t SCALER_FACTOR_MIN = 1UL;
+constexpr uint64_t SCALER_FACTOR_MAX = 127UL;
+constexpr uint64_t MTE2_MIN_LOAD_SIZE = 32768UL;
+constexpr uint64_t MTE2_CACHELINE_SIZE = 128UL;
+constexpr uint64_t BASIC_BLOCK_SIZE_16 = 16UL;
+constexpr uint64_t BASIC_BLOCK_SIZE_64 = 64UL;
+constexpr uint64_t BASIC_BLOCK_SIZE_128 = 128UL;
+constexpr uint64_t BASIC_BLOCK_SIZE_256 = 256UL;
+constexpr uint64_t BASIC_BLOCK_SIZE_512 = 512UL;
+constexpr uint64_t BLOCK_BYTE_SIZE = 32UL;
+constexpr uint64_t DATA_SIZE_FP16 = 2UL;
+constexpr uint64_t DATA_SIZE_FP32 = 4UL;
+constexpr uint64_t CACHELINE = 512UL;
+constexpr uint64_t BIAS_TABLE_NUM = 256UL;
+constexpr uint64_t RPC_WORKSIZE = 20UL;
+constexpr uint16_t BLOCK_BASE_M = 256UL;
+constexpr uint16_t BLOCK_BASE_N = 256UL;
 

@@ -21,6 +21,7 @@
 #include "host_utils/common_utils.h"
 #include "quant_matmul_tiling_common.h"
 #include "quant_matmul_tiling_data.h"
+#include "utils/constant.h"
 
 template <mm::DataType aDataType, mm::DataType bDataType>
 class QuantMatmulTilingBase {

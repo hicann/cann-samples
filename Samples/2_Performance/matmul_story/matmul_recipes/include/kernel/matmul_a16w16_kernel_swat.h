@@ -28,7 +28,7 @@
 
 #include "../block/matmul_a16w16_block_mmad_swat.h"
 #include "../block/matmul_a16w16_block_scheduler_swat.h"
-#include "../utils/matmul_a16w16_constant.h"
+#include "../utils/constant.h"
 
 namespace Kernel {
 

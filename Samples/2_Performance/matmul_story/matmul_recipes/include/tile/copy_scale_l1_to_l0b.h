@@ -16,7 +16,7 @@
 #pragma once
 #include "impl/atom/cube_datamove/copy_l12l0.h"
 #include "kernel_utils/common_utils.h"
-#include "../utils/quant_matmul_constant.h"
+#include "../utils/constant.h"
 
 namespace Tile {
 struct CopyL12L0MxScaleB3510 {

@@ -18,9 +18,8 @@
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/tuple_utils.h"
 #include "include/tensor.h"
-#include "block_mmad.h"
 #include "../policy/dispatch_policy.h"
-#include "../utils/quant_matmul_constant.h"
+#include "../utils/constant.h"
 #include "../tile/tile_mmad_mx.h"
 #include "../tile/copy_scale_l1_to_l0a.h"
 #include "../tile/copy_scale_l1_to_l0b.h"
@@ -128,7 +127,7 @@ public:
         // Prime all producer/consumer events so the first iteration can enter
         // the pipelined copy-and-compute loop without special-case branches.
         #pragma unroll
-        for (uint8_t i = 0; i < MTE1_MTE2_EVENT_ID_NUM; ++i) {
+        for (uint8_t i = 0; i < MTE1_MTE2_EVENT_ID_NUM_MX; ++i) {
             AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(i);
         }
         AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(ZERO_FLAG);
@@ -141,7 +140,7 @@ public:
         // Drain every in-flight transfer before leaving so later blocks do not
         // observe stale event state from the previous pipeline instance.
         #pragma unroll
-        for (uint8_t i = 0; i < MTE1_MTE2_EVENT_ID_NUM; ++i) {
+        for (uint8_t i = 0; i < MTE1_MTE2_EVENT_ID_NUM_MX; ++i) {
             AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(i);
         }
         AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(ZERO_FLAG);

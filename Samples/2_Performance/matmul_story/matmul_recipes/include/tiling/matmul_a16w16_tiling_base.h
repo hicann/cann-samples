@@ -19,7 +19,7 @@
 #include <memory>
 #include "tiling/matmul_a16w16_tiling_data.h"
 #include "tiling/matmul_a16w16_tiling_common.h"
-#include "utils/matmul_a16w16_constant.h"
+#include "utils/constant.h"
 #include "platform/platform_ascendc.h"
 
 class MatmulA16W16TilingBase {

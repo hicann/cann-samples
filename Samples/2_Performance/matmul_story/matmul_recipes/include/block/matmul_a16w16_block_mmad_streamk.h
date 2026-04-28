@@ -17,10 +17,9 @@
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/tuple_utils.h"
-#include "block_mmad.h"
 #include "include/tensor.h"
 #include "../policy/dispatch_policy.h"
-#include "../utils/matmul_a16w16_constant.h"
+#include "../utils/constant.h"
 
 namespace Block {
 using namespace AscendC;

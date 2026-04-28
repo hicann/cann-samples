@@ -16,7 +16,7 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "utils/matmul_a16w16_constant.h"
+#include "utils/constant.h"
 #include "tiling/matmul_a16w16_tiling_data.h"
 #include "./block_scheduler_utils.h"
 
