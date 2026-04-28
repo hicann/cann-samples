@@ -72,7 +72,7 @@ for (uint64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += blockNum) {
 **关键改动点**:
 * **引入SWAT滑窗机制**：重构 mTileIdx 与 nTileIdx 的计算逻辑，实现滑动窗口效果；同时，通过在奇数行对 nTileIdx 进行反转，完成Z字形滑动访问，提升缓存局部性。
 
-## 3 性能结果对比
+## 3. 性能结果对比
 ### 3.1 case前后性能
 &ensp;&ensp;以基础MatMul算子为例，在相同输入规模（M=1024, K=1024, N=8192）下进行性能测试，通过Profiling工具采集硬件流水线执行状态。
 
@@ -89,7 +89,7 @@ for (uint64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += blockNum) {
 * **列优先访问模式受限的场景**：传统列优先搬运导致早期流水线等待严重，通过Z字形滑窗可平滑搬运负载分布。
 
 &ensp;&ensp;SWAT滑窗模板通过Z字形自适应窗口访问机制，优化多核计算中的数据排布与搬运顺序，显著提升L2缓存命中率，均衡流水负载，在数据量较大且重复访问频繁的计算场景下，可有效减少搬运等待时间，提升整体计算性能。
-## 5.编译 执行
+## 5. 编译 执行
 
 1. 编译样例
 

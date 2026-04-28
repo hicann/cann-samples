@@ -88,7 +88,7 @@ bool IsFullLoadEnabled(int m, int n, int k, uint32_t numBlocks)
 * **L1缓存容量限制**:需确保A矩阵（或B矩阵）的总大小不超过L1缓存的实际容量，否则可能导致缓存溢出或频繁换入换出。
 * **前置条件校验**：在 main 函数中调用 `IsFullLoadEnabled` 进行预先验证，确保当前矩阵维度、核数、L1容量等条件满足全载要求，若不满足则提前报错退出，避免运行时出现性能退化或功能异常。
 
-## 3 性能结果对比
+## 3. 性能结果对比
 ### 3.1 case前后性能
 
 &ensp;&ensp;以基础 MatMul 算子开启 double-buffer 为例，在相同输入规模（M=256, K=64, N=32768）下进行性能测试，并利用 Profiling 工具采集硬件流水线的执行状态。
@@ -111,7 +111,7 @@ bool IsFullLoadEnabled(int m, int n, int k, uint32_t numBlocks)
 
 &ensp;&ensp;全载机制通过将小规模矩阵一次性加载至L1缓存并常驻复用，可将MTE2搬运次数从与计算轮次成正比降低为常数级，在带宽受限场景下显著降低端到端延迟。
 
-## 5.编译 执行
+## 5. 编译 执行
 
 1. 编译样例
 

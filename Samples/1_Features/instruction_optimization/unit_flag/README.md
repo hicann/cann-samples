@@ -90,7 +90,7 @@ AscendC::Te::Copy(copyL0C2GM, gmBlockC_, tensorL0C, AscendC::Te::FixpipeParams{U
 * **mmad计算参数配置**：需注意循环边界处理，最后一块尾块的UnitFlag参数配置与中间块不同。
 * **fixpipe参数配置**：需要深入理解UnitFlag值的含义与作用顺序，根据实际场景按需配置
 
-## 3 性能结果对比
+## 3. 性能结果对比
 ### 3.1 case前后性能
 &ensp;&ensp;以基础 MatMul 算子为例，在相同输入规模（M=1024, K=2048, N=4096）下进行性能测试，通过 Profiling 工具采集硬件流水线执行状态。
 
@@ -115,7 +115,7 @@ AscendC::Te::Copy(copyL0C2GM, gmBlockC_, tensorL0C, AscendC::Te::FixpipeParams{U
 
 
 &ensp;&ensp;unitflag通过硬件流水线实现搬运与计算并行，在数据切分合理的大规模矩阵运算中可显著提升性能，是优化NPU计算效率的关键特性。
-## 5.编译 执行
+## 5. 编译 执行
 
 1. 编译样例
 
