@@ -14,7 +14,7 @@
  */
 #pragma once
 
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 #include "kernel_operator_list_tensor_intf.h"
 
 namespace Kernel {
@@ -75,7 +75,7 @@ private:
 
     __gm__ int64_t* groupListGm_;
 
-    using TensorLayoutGroupList = typename AscendC::Te::NDLayoutFormat<int64_t>;
+    using TensorLayoutGroupList = typename AscendC::Te::FrameLayoutFormat<AscendC::Te::NDExtLayoutPtn>;
 };
 
 GROUPED_MATMUL_RESPLIT_KERNEL_TEMPLATE_PARAM
@@ -98,7 +98,7 @@ __aicore__ inline void GROUPED_MATMUL_RESPLIT_KERNEL_CLASS::operator()(const Par
     const uint64_t nSize = AscendC::Std::get<2>(params.problemShape);
     const uint64_t groupNum = AscendC::Std::get<3>(params.problemShape);
     auto tensorGroupListGm =
-        AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(groupListGm_), TensorLayoutGroupList{}(1, groupNum));
+        AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(groupListGm_), TensorLayoutGroupList{}(1, groupNum));
     using TensorLayoutB = typename BlockMmad::LayoutB;
     if ASCEND_IS_AIC {
         using TensorLayoutA = typename BlockMmad::LayoutA;
@@ -111,13 +111,13 @@ __aicore__ inline void GROUPED_MATMUL_RESPLIT_KERNEL_CLASS::operator()(const Par
             uint64_t mSize = static_cast<uint64_t>(tensorGroupListGm[groupIdx]);
             if (mSize > 0 && nSize > 0) {
                 auto tensorAGm =
-                    AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(xGm_), TensorLayoutA{}(mSize, kSize));
+                    AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(xGm_), TensorLayoutA{}(mSize, kSize));
                 auto tensorScaleAGm = AscendC::Te::MakeTensor(
-                    AscendC::Te::MakeGMmemPtr(perTokenScaleGm_), TensorLayoutScaleA{}(mSize, scaleKSize));
+                    AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(perTokenScaleGm_), TensorLayoutScaleA{}(mSize, scaleKSize));
                 auto tensorScaleBGm = AscendC::Te::MakeTensor(
-                    AscendC::Te::MakeGMmemPtr(antiquantScaleGm_), TensorLayoutScaleB{}(scaleKSize, nSize));
+                    AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(antiquantScaleGm_), TensorLayoutScaleB{}(scaleKSize, nSize));
                 auto tensorCGm =
-                    AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(yGm_), TensorLayoutC{}(mSize, nSize));
+                    AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(yGm_), TensorLayoutC{}(mSize, nSize));
 
                 scheduler.UpdateNextProblem(AscendC::Te::MakeShape(mSize, nSize, kSize));
                 typename BlockScheduler::BlockCoord blockCoord;
@@ -129,13 +129,13 @@ __aicore__ inline void GROUPED_MATMUL_RESPLIT_KERNEL_CLASS::operator()(const Par
                     auto nL1Size = AscendC::Std::get<1>(blockShape);
 
                     auto tensorBlockAGm =
-                        tensorAGm(AscendC::Te::MakeCoord(mOffset, 0), AscendC::Te::MakeShape(mL1Size, kSize));
+                        tensorAGm.Slice(AscendC::Te::MakeCoord(mOffset, 0), AscendC::Te::MakeShape(mL1Size, kSize));
                     auto tensorBlockScaleAGm =
-                        tensorScaleAGm(AscendC::Te::MakeCoord(mOffset, 0), AscendC::Te::MakeShape(mL1Size, scaleKSize));
+                        tensorScaleAGm.Slice(AscendC::Te::MakeCoord(mOffset, 0), AscendC::Te::MakeShape(mL1Size, scaleKSize));
                     auto tensorBlockScaleBGm =
-                        tensorScaleBGm(AscendC::Te::MakeCoord(0, nOffset), AscendC::Te::MakeShape(scaleKSize, nL1Size));
+                        tensorScaleBGm.Slice(AscendC::Te::MakeCoord(0, nOffset), AscendC::Te::MakeShape(scaleKSize, nL1Size));
                     auto tensorBlockCGm =
-                        tensorCGm(AscendC::Te::MakeCoord(mOffset, nOffset), AscendC::Te::MakeShape(mL1Size, nL1Size));
+                        tensorCGm.Slice(AscendC::Te::MakeCoord(mOffset, nOffset), AscendC::Te::MakeShape(mL1Size, nL1Size));
                     blockMmad(tensorBlockAGm, tensorBlockScaleAGm, tensorBlockScaleBGm, tensorBlockCGm);
                 }
             }
@@ -153,7 +153,7 @@ __aicore__ inline void GROUPED_MATMUL_RESPLIT_KERNEL_CLASS::operator()(const Par
                 scheduler.UpdateNextProblem(AscendC::Te::MakeShape(mSize, nSize, kSize));
                 typename BlockScheduler::BlockCoord blockCoord;
                 auto weightGmTensor = AscendC::Te::MakeTensor(
-                    AscendC::Te::MakeGMmemPtr(weightGm_),
+                    AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(weightGm_),
                     TensorLayoutB{}(static_cast<int64_t>(kSize), static_cast<int64_t>(nAlign)));
                 while (scheduler.GetTileIdx(blockCoord)) {
                     auto blockShape = scheduler.GetBlockShape(blockCoord);

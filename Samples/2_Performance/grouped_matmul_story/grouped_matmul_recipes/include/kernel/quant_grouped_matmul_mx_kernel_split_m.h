@@ -15,7 +15,7 @@
 #pragma once
 
 #include "kernel_basic_intf.h"
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 #include "../block/quant_grouped_matmul_mx_block_mmad_split_m.h"
 #include "../block/quant_grouped_matmul_mx_block_scheduler_split_m.h"
 #include "../block/block_scheduler_utils.h"
@@ -33,11 +33,18 @@ public:
     using CType = typename BlockMmad::CType;
     using LayoutA = typename BlockMmad::LayoutA;
     using LayoutB = typename BlockMmad::LayoutB;
-    static constexpr bool transA = AscendC::IsSameType<LayoutA, AscendC::Te::DNLayoutFormat<AType>>::value;
-    static constexpr bool transB = AscendC::IsSameType<LayoutB, AscendC::Te::DNLayoutFormat<BType>>::value;
+    using LayoutAPattern = AscendC::Te::GetLayoutPattern<decltype(LayoutA{}(0L, 0L))>;
+    using LayoutBPattern = AscendC::Te::GetLayoutPattern<decltype(LayoutB{}(0L, 0L))>;
+    static constexpr bool transA =
+        AscendC::Std::is_same_v<LayoutAPattern, AscendC::Te::DNExtLayoutPtn> ||
+        AscendC::Std::is_same_v<LayoutAPattern, AscendC::Te::ZNLayoutPtn>;
+    static constexpr bool transB =
+        AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::DNExtLayoutPtn> ||
+        AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn>;
     static_assert(!transA, "QuantGroupedMatmulMxKernelSplitM only supports non-transposed A.");
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
+    static constexpr int32_t SCALE_C0 = 2;
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
     using BlockOffset = AscendC::Shape<int64_t, int64_t, int64_t, int64_t, int64_t>;
     using BlockMmadShape = typename BlockMmad::BlockShape;
@@ -94,13 +101,13 @@ private:
     __aicore__ static inline void SetSchedulerTailAlign(BlockScheduler& bs)
     {
         constexpr uint32_t mTailAlign =
-            (AscendC::Std::is_same_v<LayoutA, AscendC::Te::NDLayoutFormat<AType>> ||
-             AscendC::Std::is_same_v<LayoutA, AscendC::Te::NzLayoutFormat<AType>>)
+            (AscendC::Std::is_same_v<LayoutAPattern, AscendC::Te::NDExtLayoutPtn> ||
+             AscendC::Std::is_same_v<LayoutAPattern, AscendC::Te::NZLayoutPtn>)
                 ? static_cast<uint32_t>(AscendC::BLOCK_CUBE) // (m, k) -> cube tile alignment
                 : GroupedMatmulRecipe::INNER_AXIS_ALIGN; // (k, m) -> ND2NZ cacheline alignment
         constexpr uint32_t nTailAlign =
-            (AscendC::Std::is_same_v<LayoutB, AscendC::Te::NDLayoutFormat<BType>> ||
-             AscendC::Std::is_same_v<LayoutB, AscendC::Te::NzLayoutFormat<BType>>)
+            (AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::NDExtLayoutPtn> ||
+             AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::NZLayoutPtn>)
                 ? GroupedMatmulRecipe::INNER_AXIS_ALIGN // (k, n) -> ND2NZ cacheline alignment
                 : static_cast<uint32_t>(AscendC::BLOCK_CUBE); // (n, k) -> cube tile alignment
         bs.SetTailAlign(mTailAlign, nTailAlign);
@@ -221,13 +228,13 @@ private:
         auto layoutB = MakeLayoutB{}(groupK, groupN);
         auto layoutScaleA = MakeLayoutScaleA{}(groupM, scaleK);
         auto layoutScaleB = MakeLayoutScaleB{}(scaleK, groupN);
-        auto groupA = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(groupAPtr), layoutA);
-        auto groupB = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(groupBPtr), layoutB);
-        auto groupScaleA = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(groupScaleAPtr), layoutScaleA);
-        auto groupScaleB = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(groupScaleBPtr), layoutScaleB);
+        auto groupA = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(groupAPtr), layoutA);
+        auto groupB = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(groupBPtr), layoutB);
+        auto groupScaleA = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(groupScaleAPtr), layoutScaleA);
+        auto groupScaleB = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(groupScaleBPtr), layoutScaleB);
         auto groupC = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeGMmemPtr(groupCPtr),
-            AscendC::Te::MakeNDLayout<CType>(groupM, groupN));
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(groupCPtr),
+            AscendC::Te::MakeFrameLayout<AscendC::Te::NDExtLayoutPtn>(groupM, groupN));
         BlockCoord tileIdx;
         while (bs.GetTileIdx(tileIdx)) {
             BlockShape singleShape = bs.GetBlockShape(tileIdx);
@@ -240,20 +247,15 @@ private:
                               AscendC::Std::get<3>(singleShape);
             int64_t tileM = AscendC::Std::get<MNK_M>(singleShape);
             int64_t tileN = AscendC::Std::get<MNK_N>(singleShape);
-            auto gmBlockA = groupA(
-                AscendC::Te::MakeCoord(mOffset, 0),
+            auto gmBlockA = groupA.Slice(AscendC::Te::MakeCoord(mOffset, 0),
                 AscendC::Te::MakeShape(tileM, groupK));
-            auto gmBlockB = groupB(
-                AscendC::Te::MakeCoord(0, nOffset),
+            auto gmBlockB = groupB.Slice(AscendC::Te::MakeCoord(0, nOffset),
                 AscendC::Te::MakeShape(groupK, tileN));
-            auto gmBlockScaleA = groupScaleA(
-                AscendC::Te::MakeCoord(mOffset, 0),
+            auto gmBlockScaleA = groupScaleA.Slice(AscendC::Te::MakeCoord(mOffset, 0),
                 AscendC::Te::MakeShape(tileM, scaleK));
-            auto gmBlockScaleB = groupScaleB(
-                AscendC::Te::MakeCoord(0, nOffset),
+            auto gmBlockScaleB = groupScaleB.Slice(AscendC::Te::MakeCoord(0, nOffset),
                 AscendC::Te::MakeShape(scaleK, tileN));
-            auto gmBlockC = groupC(
-                AscendC::Te::MakeCoord(mOffset, nOffset),
+            auto gmBlockC = groupC.Slice(AscendC::Te::MakeCoord(mOffset, nOffset),
                 AscendC::Te::MakeShape(tileM, tileN));
             BlockMmadShape mmadShape{
                 tileM, tileN, static_cast<int64_t>(groupK)};

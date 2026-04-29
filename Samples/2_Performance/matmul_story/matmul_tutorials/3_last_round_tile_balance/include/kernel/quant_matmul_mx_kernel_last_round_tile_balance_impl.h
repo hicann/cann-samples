@@ -17,7 +17,7 @@
 #endif
 #include "../../../common/kernel_utils/common_utils.h"
 #include "../../../common/kernel_utils/tuple_utils.h"
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 #include "../utils/quant_matmul_constant.h"
 #include "../block/block_scheduler_mx_swat.h"
 #include "../block/block_mmad_mx_swat.h"
@@ -50,12 +50,13 @@ public:
 
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
+    static constexpr int32_t SCALE_C0 = 2;
     using BlockCoord = typename BlockSchedulerOp::BlockCoord;
     using BlockSchedulerParams = typename BlockSchedulerOp::Params;
-    using MakeLayoutA = AscendC::Te::NDLayoutFormat<AType>;
-    using MakeLayoutB = AscendC::Te::DNLayoutFormat<BType>;
-    using MakeLayoutScaleA = AscendC::Te::ScaleANDLayoutFormat<fp8_e8m0_t>;
-    using MakeLayoutScaleB = AscendC::Te::ScaleBDNLayoutFormat<fp8_e8m0_t>;
+    using MakeLayoutA = AscendC::Te::FrameLayoutFormat<AscendC::Te::NDExtLayoutPtn>;
+    using MakeLayoutB = AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>;
+    using MakeLayoutScaleA = AscendC::Te::FrameLayoutFormat<AscendC::Te::ScaleANDLayoutPtn, AscendC::Std::Int<SCALE_C0>>;
+    using MakeLayoutScaleB = AscendC::Te::FrameLayoutFormat<AscendC::Te::ScaleBDNLayoutPtn, AscendC::Std::Int<SCALE_C0>>;
 
     struct QBMMTiling {
         uint32_t baseM;
@@ -130,13 +131,13 @@ __aicore__ inline void QuantMatmulMxKernelLastRoundTileBalanceImpl<QBMM_MX_KERNE
     auto layoutB = MakeLayoutB{}(params.problemShape.k, params.problemShape.n);
     auto layoutScaleB = MakeLayoutScaleB{}(
         CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, params.problemShape.n);
-    auto layoutC = AscendC::Te::MakeNDLayout<CType>(params.problemShape.m, params.problemShape.n);
+    auto layoutC = AscendC::Te::MakeFrameLayout<AscendC::Te::NDExtLayoutPtn>(params.problemShape.m, params.problemShape.n);
 
-    auto gmA = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(aGmAddr_), layoutA);
-    auto gmScaleA = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(scaleAGmAddr_), layoutScaleA);
-    auto gmB = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(bGmAddr_), layoutB);
-    auto gmScaleB = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(scaleBGmAddr_), layoutScaleB);
-    auto gmC = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(cGmAddr_), layoutC);
+    auto gmA = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(aGmAddr_), layoutA);
+    auto gmScaleA = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(scaleAGmAddr_), layoutScaleA);
+    auto gmB = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(bGmAddr_), layoutB);
+    auto gmScaleB = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(scaleBGmAddr_), layoutScaleB);
+    auto gmC = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(cGmAddr_), layoutC);
     BlockCoord blockCoord;
     constexpr int64_t kPos = 0L;
     while (bs.GetTileIdx(blockCoord)) {
@@ -147,20 +148,15 @@ __aicore__ inline void QuantMatmulMxKernelLastRoundTileBalanceImpl<QBMM_MX_KERNE
         int64_t mPos = Get<MNK_M>(blockCoord) + Get<IDX_M_TAIL_SPLIT_TILEIDX>(singleShape);
         int64_t nPos = Get<MNK_N>(blockCoord) + Get<IDX_N_TAIL_SPLIT_TILEIDX>(singleShape);
 
-        auto gmBlockA = gmA(
-            AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), params.problemShape.k));
-        auto gmBlockScaleA = gmScaleA(
-            AscendC::Te::MakeCoord(mPos, kPos),
+        auto gmBlockA = gmA.Slice(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), params.problemShape.k));
+        auto gmBlockScaleA = gmScaleA.Slice(AscendC::Te::MakeCoord(mPos, kPos),
             AscendC::Te::MakeShape(
                 Get<MNK_M>(singleShape), CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE));
-        auto gmBlockB = gmB(
-            AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, Get<MNK_N>(singleShape)));
-        auto gmBlockScaleB = gmScaleB(
-            AscendC::Te::MakeCoord(kPos, nPos),
+        auto gmBlockB = gmB.Slice(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, Get<MNK_N>(singleShape)));
+        auto gmBlockScaleB = gmScaleB.Slice(AscendC::Te::MakeCoord(kPos, nPos),
             AscendC::Te::MakeShape(
                 CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, Get<MNK_N>(singleShape)));
-        auto gmBlockC = gmC(
-            AscendC::Te::MakeCoord(mPos, nPos),
+        auto gmBlockC = gmC.Slice(AscendC::Te::MakeCoord(mPos, nPos),
             AscendC::Te::MakeShape(Get<MNK_M>(singleShape), Get<MNK_N>(singleShape)));
         mmadOp_(gmBlockA, gmBlockB, gmBlockScaleA, gmBlockScaleB, gmBlockC, singleShape);
     }

@@ -9,7 +9,7 @@
  */
 #pragma once
 
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 
 namespace AscendC {
 namespace Te {
@@ -33,9 +33,9 @@ struct Weight4BitLayout {
             AscendC::Te::MakeShape(AscendC::Std::Int<BLOCK>{}, n1));
         // Stride: (MakeStride(1, n1 * BLOCK * C0), MakeStride(C0, BLOCK * C0))
         auto stride = AscendC::Te::MakeStride(
-            AscendC::Te::MakeStride(AscendC::Std::Int<STRIDE_UNIT>{}, 
+            AscendC::Te::MakeStride(AscendC::Std::Int<STRIDE_UNIT>{},
                                     n1 * AscendC::Std::Int<BLOCK>{} * AscendC::Std::Int<C0>{}),
-            AscendC::Te::MakeStride(AscendC::Std::Int<C0>{}, 
+            AscendC::Te::MakeStride(AscendC::Std::Int<C0>{},
                                     AscendC::Std::Int<BLOCK>{} * AscendC::Std::Int<C0>{}));
         return AscendC::Te::MakeLayout(shape, stride);
     }
@@ -56,13 +56,13 @@ struct Weight8BitUBLayout {
 
         // Shape: ((C0, k1), (N0, n1))
         auto shape = AscendC::Te::MakeShape(
-            AscendC::Te::MakeShape(AscendC::Std::Int<C0>{}, k1), 
+            AscendC::Te::MakeShape(AscendC::Std::Int<C0>{}, k1),
             AscendC::Te::MakeShape(AscendC::Std::Int<N0>{}, n1));
         // Stride: (MakeStride(1, n1 * InnerStride), MakeStride(C0, InnerStride))
         auto stride = AscendC::Te::MakeStride(
-            AscendC::Te::MakeStride(AscendC::Std::Int<STRIDE_UNIT>{}, 
+            AscendC::Te::MakeStride(AscendC::Std::Int<STRIDE_UNIT>{},
                                     n1 * AscendC::Std::Int<InnerStride>{}),
-            AscendC::Te::MakeStride(AscendC::Std::Int<C0>{}, 
+            AscendC::Te::MakeStride(AscendC::Std::Int<C0>{},
                                     AscendC::Std::Int<InnerStride>{}));
         return AscendC::Te::MakeLayout(shape, stride);
     }

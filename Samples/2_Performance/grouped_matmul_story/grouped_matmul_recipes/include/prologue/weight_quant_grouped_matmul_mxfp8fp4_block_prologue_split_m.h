@@ -369,8 +369,7 @@ __aicore__ inline void WQBMM_PROLOGUE_CLASS::CopyGmToUb(
     const GMWeightBaseTensorType& gmWeightBaseTensor, const Weight4BitTensorType& weight4BitTensor)
 {
     if (mte2RealK > 0) {
-        auto gmSliceTensor = gmWeightBaseTensor(
-            AscendC::Te::MakeCoord(kOffset, param.nOffset), AscendC::Te::MakeShape(mte2RealK, param.nL1Size));
+        auto gmSliceTensor = gmWeightBaseTensor.Slice(AscendC::Te::MakeCoord(kOffset, param.nOffset), AscendC::Te::MakeShape(mte2RealK, param.nL1Size));
         auto copyGM2UBWeight = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2UBWeight{});
         AscendC::Te::Copy(copyGM2UBWeight, weight4BitTensor, gmSliceTensor);
     }
@@ -427,7 +426,7 @@ WQBMM_PROLOGUE_TEMPLATE_PARAM
 __aicore__ inline auto WQBMM_PROLOGUE_CLASS::MakeWeight4BitTensor(uint64_t mte2RealK, uint64_t nL1Size)
 {
     return AscendC::Te::MakeTensor(
-        AscendC::Te::MakeUBmemPtr<InType>(WEIGHT_4BIT_OFFSETS[ubMte2LoopIdx_ & (kUbMte2BufferNum - 1)]),
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::UB, InType>(WEIGHT_4BIT_OFFSETS[ubMte2LoopIdx_ & (kUbMte2BufferNum - 1)]),
         AscendC::Te::Weight4BitLayout<InType>{}(static_cast<int64_t>(mte2RealK), static_cast<int64_t>(nL1Size)));
 }
 
@@ -435,7 +434,7 @@ WQBMM_PROLOGUE_TEMPLATE_PARAM
 __aicore__ inline auto WQBMM_PROLOGUE_CLASS::MakeWeight8BitTensor(uint64_t mte2RealK, uint64_t nL1Size)
 {
     return AscendC::Te::MakeTensor(
-        AscendC::Te::MakeUBmemPtr<OutType>(WEIGHT_8BIT_OFFSETS[ubComputeLoopIdx_ & (WEIGHT_8BIT_BUFFER_NUM - 1)]),
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::UB, OutType>(WEIGHT_8BIT_OFFSETS[ubComputeLoopIdx_ & (WEIGHT_8BIT_BUFFER_NUM - 1)]),
         AscendC::Te::Weight8BitUBLayout<OutType, WEIGHT_8BIT_LAYOUT_INNER_SIZE>{}(mte2RealK, nL1Size));
 }
 
@@ -443,10 +442,10 @@ WQBMM_PROLOGUE_TEMPLATE_PARAM
 __aicore__ inline auto WQBMM_PROLOGUE_CLASS::MakeL1WeightTensor(
     uint64_t mte2RealK, uint64_t nL1Size, uint64_t l1SplitOffset)
 {
-    auto l1BaseLayout = AscendC::Te::MakeZnLayout<OutType>(mte2RealK, nL1Size);
+    auto l1BaseLayout = AscendC::Te::MakeFrameLayout<AscendC::Te::ZNLayoutPtn, AscendC::Te::LayoutTraitDefault<OutType>>(mte2RealK, nL1Size);
     auto l1BaseTensor = AscendC::Te::MakeTensor(
-        AscendC::Te::MakeL1memPtr<OutType>(L1_WEIGHT_OFFSETS[cvLoopIdx_ & (DOUBLE_BUFFER - 1)]), l1BaseLayout);
-    return l1BaseTensor(AscendC::Te::MakeCoord(l1SplitOffset, 0), AscendC::Te::MakeShape(mte2RealK, nL1Size));
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, OutType>(L1_WEIGHT_OFFSETS[cvLoopIdx_ & (DOUBLE_BUFFER - 1)]), l1BaseLayout);
+    return l1BaseTensor.Slice(AscendC::Te::MakeCoord(l1SplitOffset, 0), AscendC::Te::MakeShape(mte2RealK, nL1Size));
 }
 
 #undef WQBMM_PROLOGUE_CLASS

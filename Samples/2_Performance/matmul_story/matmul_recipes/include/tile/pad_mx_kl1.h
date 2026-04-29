@@ -15,11 +15,8 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "impl/atom/copy_traits_impl.h"
-
-using AscendC::Te::AttrInfo;
+#include "include/tensor_api/tensor.h"
 using AscendC::Te::C0_SIZE;
-using AscendC::Te::GetEleFromLayout;
 
 namespace Tile {
 struct PadMxKL1Base {
@@ -52,11 +49,11 @@ struct PadMxKAL1 : public PadMxKL1Base {
         static_assert(IsMxFp4<T>() || IsMxFp8<T>(), "Only supports MXFP4/MXFP8 L1 tensors.");
         auto layoutL1 = tensorL1.Layout();
         auto layoutGm = tensorGm.Layout();
-        auto kAxis = GetEleFromLayout<decltype(layoutGm), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutGm);
-        auto kAxisL1Align = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 0>(layoutL1) *
-                            GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutL1);
+        auto kAxis = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutGm);
+        auto kAxisL1Align = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 0>(layoutL1) *
+                            AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutL1);
 
-        if constexpr (AscendC::Te::IsNDFormat<U>::value) {
+        if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::NDExtLayoutPtn>) {
             if constexpr (IsMxFp4<T>()) {
                 return;
             }
@@ -64,23 +61,21 @@ struct PadMxKAL1 : public PadMxKL1Base {
             if (kAxisL1Align - kAxis < C0_SIZE<T>) {
                 return;
             }
-
-            // ND2NZ already handles innermost-axis padding. When the remaining
-            // K tail spans a full C0 block, clear that outer tail explicitly.
-            auto mAlign = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 0>(layoutL1) *
-                          GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 1>(layoutL1);
+            auto mAlign = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 0>(layoutL1) *
+                          AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutL1);
             auto kAxisND2NZAlign = AscendC::Std::ceil_align(kAxis, C0_SIZE<T>);
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(0, kAxisND2NZAlign));
+            auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(0, kAxisND2NZAlign), AscendC::Te::MakeShape(mAlign, kAxisL1Align - kAxisND2NZAlign));
             PadMxKL1Base::PadZero(sliceTensor, 1, mAlign, 0);
-        } else if constexpr (AscendC::Te::IsDNFormat<U>::value) {
+        } else if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::DNExtLayoutPtn>) {
             if (kAxis == kAxisL1Align) {
                 return;
             }
 
             // DN2NZ can only zero-pad the innermost m0 axis. Clear the K-axis
             // tail across each outer m1 slice of the A-side NZ layout.
-            auto m1 = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 1>(layoutL1);
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(0, kAxis));
+            auto m1 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutL1);
+            auto m0 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 0>(layoutL1);
+                        auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(0, kAxis), AscendC::Te::MakeShape(m1 * m0, kAxisL1Align - kAxis));
             PadMxKL1Base::PadZero(sliceTensor, m1, kAxisL1Align - kAxis, kAxis);
         }
     }
@@ -94,21 +89,20 @@ struct PadMxKBL1 : public PadMxKL1Base {
         auto layoutL1 = tensorL1.Layout();
         auto layoutGm = tensorGm.Layout();
 
-        auto kAxis = GetEleFromLayout<decltype(layoutGm), AttrInfo::SHAPE, AttrInfo::ROW, 1>(layoutGm);
-        auto kAxisL1Align = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 0>(layoutL1) *
-                            GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 1>(layoutL1);
+        auto kAxis = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutGm);
+        auto kAxisL1Align = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 0>(layoutL1) *
+                            AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutL1);
 
-        if constexpr (AscendC::Te::IsNDFormat<U>::value) {
+        if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::NDExtLayoutPtn>) {
             if (kAxis == kAxisL1Align) {
                 return;
             }
-
-            // ND2NZ can only zero-pad the innermost n0 axis. Clear the K-axis
             // tail across each outer n1 slice of the B-side NZ layout.
-            auto n1 = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutL1);
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(kAxis, 0));
+            auto n1 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutL1);
+            auto n0 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 0>(layoutL1);
+                        auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(kAxis, 0), AscendC::Te::MakeShape(kAxisL1Align - kAxis, n1 * n0));
             PadMxKL1Base::PadZero(sliceTensor, n1, kAxisL1Align - kAxis, kAxis);
-        } else if constexpr (AscendC::Te::IsDNFormat<U>::value) {
+        } else if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::DNExtLayoutPtn>) {
             if constexpr (IsMxFp4<T>()) {
                 return;
             }
@@ -118,13 +112,12 @@ struct PadMxKBL1 : public PadMxKL1Base {
             }
 
             // For FP8 DN input, clear any full-C0 outer K tail from the
-            // ND2NZ-aligned K boundary.
-            auto nAlign = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 0>(layoutL1) *
-                          GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutL1);
+            auto nAlign = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 0>(layoutL1) *
+                          AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutL1);
             auto kAxisND2NZAlign = AscendC::Std::ceil_align(kAxis, C0_SIZE<T>);
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(kAxisND2NZAlign, 0));
+            auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(kAxisND2NZAlign, 0), AscendC::Te::MakeShape(kAxisL1Align - kAxisND2NZAlign, nAlign));
             PadMxKL1Base::PadZero(sliceTensor, 1, nAlign, 0);
-        } else if constexpr (AscendC::Te::IsNZFormat<U>::value) {
+        } else if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::NZLayoutPtn>) {
             auto kAxisND2NZAlign = AscendC::Std::ceil_align(kAxis, AscendC::BLOCK_CUBE);
             if (kAxisND2NZAlign == kAxisL1Align) {
                 return;
@@ -132,8 +125,9 @@ struct PadMxKBL1 : public PadMxKL1Base {
 
             // NZ GM slices already expose blocked K coordinates. Clear the
             // remaining K-axis tail across each outer n1 slice.
-            auto n1 = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutL1);
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(kAxis, 0));
+            auto n1 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutL1);
+            auto n0 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 0>(layoutL1);
+                        auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(kAxis, 0), AscendC::Te::MakeShape(kAxisL1Align - kAxis, n1 * n0));
             PadMxKL1Base::PadZero(sliceTensor, n1, kAxisL1Align - kAxis, kAxis);
         }
     }

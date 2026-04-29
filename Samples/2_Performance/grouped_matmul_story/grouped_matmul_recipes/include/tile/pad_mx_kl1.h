@@ -15,11 +15,8 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "include/tensor.h"
-
-using AscendC::Te::AttrInfo;
+#include "include/tensor_api/tensor.h"
 using AscendC::Te::C0_SIZE;
-using AscendC::Te::GetEleFromLayout;
 
 namespace Tile {
 struct PadMxKL1Base {
@@ -51,11 +48,11 @@ struct PadMxKAL1 : public PadMxKL1Base {
         static_assert(IsMxFp4<T>() || IsMxFp8<T>(), "Only support mxfp4/mxfp8!");
         auto layoutL1 = tensorL1.Layout();
         auto layoutGm = tensorGm.Layout();
-        auto kAxis = GetEleFromLayout<decltype(layoutGm), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutGm);
-        auto kAxisL1Align = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 0>(layoutL1) *
-                            GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutL1);
+        auto kAxis = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutGm);
+        auto kAxisL1Align = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 0>(layoutL1) *
+                            AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutL1);
 
-        if constexpr (AscendC::Te::IsNDFormat<U>::value) {
+        if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::NDExtLayoutPtn>) {
             if constexpr (IsMxFp4<T>()) {
                 return;
             }
@@ -63,19 +60,18 @@ struct PadMxKAL1 : public PadMxKL1Base {
             if (kAxisL1Align - kAxis < C0_SIZE<T>) {
                 return;
             }
-            auto mAlign = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 0>(layoutL1) *
-                          GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 1>(layoutL1);
-            auto kAxisND2NZAlign = AscendC::Std::ceil_align(kAxis, C0_SIZE<T>); // K方向的坐标是ND2NZ指令对齐后的值
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(0, kAxisND2NZAlign));
+            auto mAlign = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 0>(layoutL1) *
+                          AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutL1);
+            auto kAxisND2NZAlign = AscendC::Std::ceil_align(kAxis, C0_SIZE<T>);
+            auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(0, kAxisND2NZAlign), AscendC::Te::MakeShape(mAlign, kAxisL1Align - kAxisND2NZAlign));
             PadMxKL1Base::PadZero(sliceTensor, 1, mAlign, 0);
-        } else if constexpr (AscendC::Te::IsDNFormat<U>::value) {
-            // ND2NZ指令只支持给最内轴（m0）补零，外轴需要自己清零
+        } else if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::DNExtLayoutPtn>) {
             if (kAxis == kAxisL1Align) {
                 return;
             }
-            // shape: [m1, k1, k0, m0] 清零迭代次数为NZ最外轴大小，左矩阵就是m1
-            auto m1 = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 1>(layoutL1);
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(0, kAxis));
+            auto m1 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutL1);
+            auto m0 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 0>(layoutL1);
+                        auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(0, kAxis), AscendC::Te::MakeShape(m1 * m0, kAxisL1Align - kAxis));
             PadMxKL1Base::PadZero(sliceTensor, m1, kAxisL1Align - kAxis, kAxis);
         }
     }
@@ -89,21 +85,19 @@ struct PadMxKBL1 : public PadMxKL1Base {
         auto layoutL1 = tensorL1.Layout();
         auto layoutGm = tensorGm.Layout();
 
-        auto kAxis = GetEleFromLayout<decltype(layoutGm), AttrInfo::SHAPE, AttrInfo::ROW, 1>(layoutGm);
-        auto kAxisL1Align = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 0>(layoutL1) *
-                            GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::ROW, 1>(layoutL1);
+        auto kAxis = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutGm);
+        auto kAxisL1Align = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 0>(layoutL1) *
+                            AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutL1);
 
-        if constexpr (AscendC::Te::IsNDFormat<U>::value) {
-            // ND2NZ指令只支持给最内轴（n0）补零，外轴需要自己清零
+        if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::NDExtLayoutPtn>) {
             if (kAxis == kAxisL1Align) {
                 return;
             }
-
-            // shape: [n1, k1, k0, n0] 清零迭代次数为NZ最外轴大小，右矩阵就是n1
-            auto n1 = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutL1);
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(kAxis, 0));
+            auto n1 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutL1);
+            auto n0 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 0>(layoutL1);
+                        auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(kAxis, 0), AscendC::Te::MakeShape(kAxisL1Align - kAxis, n1 * n0));
             PadMxKL1Base::PadZero(sliceTensor, n1, kAxisL1Align - kAxis, kAxis);
-        } else if constexpr (AscendC::Te::IsDNFormat<U>::value) {
+        } else if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::DNExtLayoutPtn>) {
             if constexpr (IsMxFp4<T>()) {
                 return;
             }
@@ -111,21 +105,19 @@ struct PadMxKBL1 : public PadMxKL1Base {
             if (kAxisL1Align - kAxis < C0_SIZE<T>) {
                 return;
             }
-            auto nAlign = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 0>(layoutL1) *
-                          GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutL1);
-            auto kAxisND2NZAlign = AscendC::Std::ceil_align(kAxis, C0_SIZE<T>); // K方向的坐标是ND2NZ指令对齐后的值
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(kAxisND2NZAlign, 0));
+            auto nAlign = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 0>(layoutL1) *
+                          AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutL1);
+            auto kAxisND2NZAlign = AscendC::Std::ceil_align(kAxis, C0_SIZE<T>);
+            auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(kAxisND2NZAlign, 0), AscendC::Te::MakeShape(kAxisL1Align - kAxisND2NZAlign, nAlign));
             PadMxKL1Base::PadZero(sliceTensor, 1, nAlign, 0);
-        } else if constexpr (AscendC::Te::IsNZFormat<U>::value) {
-            // ND2NZ指令只支持给最内轴（n0）补零，外轴需要自己清零
+        } else if constexpr (AscendC::Te::IsSatisfiedPtnFormatV<U, AscendC::Te::NZLayoutPtn>) {
             auto kAxisND2NZAlign = AscendC::Std::ceil_align(kAxis, AscendC::BLOCK_CUBE);
             if (kAxisND2NZAlign == kAxisL1Align) {
                 return;
             }
-
-            // shape: [n1, k1, k0, n0] 清零迭代次数为NZ最外轴大小，右矩阵就是n1
-            auto n1 = GetEleFromLayout<decltype(layoutL1), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(layoutL1);
-            auto sliceTensor = tensorL1(AscendC::Te::MakeCoord(kAxis, 0));
+            auto n1 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(layoutL1);
+            auto n0 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 0>(layoutL1);
+                        auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(kAxis, 0), AscendC::Te::MakeShape(kAxisL1Align - kAxis, n1 * n0));
             PadMxKL1Base::PadZero(sliceTensor, n1, kAxisL1Align - kAxis, kAxis);
         }
     }

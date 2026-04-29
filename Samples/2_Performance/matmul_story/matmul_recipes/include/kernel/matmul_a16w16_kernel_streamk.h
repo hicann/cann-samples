@@ -24,7 +24,7 @@
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/tuple_utils.h"
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 
 #include "../block/matmul_a16w16_block_mmad_streamk.h"
 #include "../block/matmul_a16w16_block_scheduler_streamk.h"
@@ -138,11 +138,11 @@ __aicore__ inline void MatmulA16W16KernelStreamK<ProblemShape, BlockMmad, BlockS
         auto layoutC = MakeLayoutC{}(m, n);
 
         auto gmA =
-            MakeTensor(AscendC::Te::MakeGMmemPtr(reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)), layoutA);
+            MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)), layoutA);
         auto gmB =
-            MakeTensor(AscendC::Te::MakeGMmemPtr(reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)), layoutB);
+            MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)), layoutB);
         auto gmC =
-            MakeTensor(AscendC::Te::MakeGMmemPtr(reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)), layoutC);
+            MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)), layoutC);
 
         for (int64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += usedCoreNum_) {
             int64_t tmpTileIdx = tileIdx;
@@ -162,24 +162,16 @@ __aicore__ inline void MatmulA16W16KernelStreamK<ProblemShape, BlockMmad, BlockS
             int64_t offsetWorkspace =
                 (((tmpTileIdx % usedCoreNum_) / skKTileNum) * skKTileNum + Get<MNK_K>(singleCoreCoord)) * BLOCK_BASE_M *
                 BLOCK_BASE_N;
-            auto workspaceStrideColumn0 = Get<MNK_N>(singleCoreShape);
-            auto layoutWorkspace = AscendC::Te::MakeLayout(
-                AscendC::Te::MakeShape(
-                    AscendC::Te::MakeShape(AscendC::Std::Int<1>{}, Get<MNK_M>(singleCoreShape)),
-                    AscendC::Te::MakeShape(AscendC::Std::Int<1>{}, Get<MNK_N>(singleCoreShape))),
-                AscendC::Te::MakeStride(
-                    AscendC::Te::MakeStride(AscendC::Std::Int<0>{}, workspaceStrideColumn0),
-                    AscendC::Te::MakeStride(AscendC::Std::Int<0>{}, AscendC::Std::Int<1>{})));
+            auto layoutWorkspace = AscendC::Te::MakeFrameLayout<AscendC::Te::NDExtLayoutPtn>(
+                Get<MNK_M>(singleCoreShape), Get<MNK_N>(singleCoreShape));
             auto gmWorkSpace =
-                AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(workspaceGmAddr_ + offsetWorkspace), layoutWorkspace);
-            auto gmBlockA = gmA(
-                AscendC::Te::MakeCoord(Get<MNK_M>(singleCoreCoord) * mL1, Get<MNK_K>(singleCoreCoord) * kSingleCore),
+                AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(workspaceGmAddr_ + offsetWorkspace), layoutWorkspace);
+            auto gmBlockA = gmA.Slice(AscendC::Te::MakeCoord(Get<MNK_M>(singleCoreCoord) * mL1, Get<MNK_K>(singleCoreCoord) * kSingleCore),
                 AscendC::Te::MakeShape(Get<MNK_M>(singleCoreShape), Get<MNK_K>(singleCoreShape)));
-            auto gmBlockB = gmB(
-                AscendC::Te::MakeCoord(Get<MNK_K>(singleCoreCoord) * kSingleCore, Get<MNK_N>(singleCoreCoord) * nL1),
+            auto gmBlockB = gmB.Slice(AscendC::Te::MakeCoord(Get<MNK_K>(singleCoreCoord) * kSingleCore, Get<MNK_N>(singleCoreCoord) * nL1),
                 AscendC::Te::MakeShape(Get<MNK_K>(singleCoreShape), Get<MNK_N>(singleCoreShape)));
             auto gmBlockC =
-                gmC(AscendC::Te::MakeCoord(Get<MNK_M>(singleCoreCoord) * mL1, Get<MNK_N>(singleCoreCoord) * nL1),
+                gmC.Slice(AscendC::Te::MakeCoord(Get<MNK_M>(singleCoreCoord) * mL1, Get<MNK_N>(singleCoreCoord) * nL1),
                     AscendC::Te::MakeShape(Get<MNK_M>(singleCoreShape), Get<MNK_N>(singleCoreShape)));
             blockMmadOp(
                 gmBlockC, gmBlockA, gmBlockB, gmWorkSpace, singleCoreShape, Get<MNK_K>(singleCoreCoord),

@@ -16,7 +16,7 @@
 
 #include <type_traits>
 
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 #include "kernel_operator.h"
 
 using AscendC::BLOCK_CUBE;

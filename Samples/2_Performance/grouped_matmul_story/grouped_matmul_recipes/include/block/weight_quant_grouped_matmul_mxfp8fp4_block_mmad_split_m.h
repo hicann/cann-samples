@@ -16,12 +16,11 @@
 
 #include "block_mmad.h"
 #include "kernel_basic_intf.h"
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 #include "kernel_utils/tensor_utils.h"
 #include "../policy/dispatch_policy.h"
 #include "../utils/grouped_matmul_constant.h"
 #include "../tile/tile_mmad_mx.h"
-#include "../tile/copy_scale_gm_to_l1.h"
 #include "../tile/copy_scale_l1_to_l0a.h"
 #include "../tile/copy_scale_l1_to_l0b.h"
 
@@ -95,8 +94,13 @@ public:
     using LayoutScaleB = typename AscendC::Std::tuple_element<1, LayoutBTuple_>::type;
     using LayoutC = LayoutC_;
 
-    static_assert(AscendC::Te::IsNDFormat<decltype(AscendC::Te::MakeTensor(
-                      AscendC::Te::MakeGMmemPtr((__gm__ AType*)0), LayoutA{}(0UL, 0UL)))>::value);
+    static_assert(AscendC::Te::IsSatisfiedPtnFormatV<decltype(AscendC::Te::MakeTensor(
+                      AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>((__gm__ AType*)0), LayoutA{}(0UL, 0UL))),
+                      AscendC::Te::NDExtLayoutPtn>);
+
+    constexpr static int32_t C0_SIZE = AscendC::AuxGetC0Size<AType>();
+    constexpr static int32_t SCALE_C0 = 2;
+    constexpr static int32_t L0C_C0 = 16;
 
     // Parameters are initialized by the kernel wrapper and passed to this block-level compute unit.
     struct Params {
@@ -141,14 +145,14 @@ private:
     template <typename TensorC>
     __aicore__ inline void CopyCL0c2Gm(const TensorC& tensorC, const BlockMmadOffsetParam& param);
 
-    using MakeLayoutAL1 = AscendC::Te::NzLayoutFormat<AType>;
-    using MakeLayoutScaleAL1 = typename AscendC::Te::ZzLayoutFormat<fp8_e8m0_t>;
-    using MakeLayoutScaleBL1 = typename AscendC::Te::NnLayoutFormat<fp8_e8m0_t>;
+    using MakeLayoutAL1 = AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>;
+    using MakeLayoutScaleAL1 = typename AscendC::Te::FrameLayoutFormat<AscendC::Te::ZZLayoutPtn, AscendC::Std::Int<SCALE_C0>>;
+    using MakeLayoutScaleBL1 = typename AscendC::Te::FrameLayoutFormat<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>;
 
-    using MakeLayoutAL0 = AscendC::Te::NzLayoutFormat<AType>;
-    using MakeLayoutBL0 = AscendC::Te::ZnLayoutFormat<AType>;
-    using MakeLayoutScaleAL0 = typename AscendC::Te::ZzLayoutFormat<fp8_e8m0_t>;
-    using MakeLayoutScaleBL0 = typename AscendC::Te::NnLayoutFormat<fp8_e8m0_t>;
+    using MakeLayoutAL0 = AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>;
+    using MakeLayoutBL0 = AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>;
+    using MakeLayoutScaleAL0 = typename AscendC::Te::FrameLayoutFormat<AscendC::Te::ZZLayoutPtn, AscendC::Std::Int<SCALE_C0>>;
+    using MakeLayoutScaleBL0 = typename AscendC::Te::FrameLayoutFormat<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>;
 
     static constexpr uint64_t L1_M = 256;
     static constexpr uint64_t L1_N = 256;
@@ -220,8 +224,8 @@ __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::ProcessTileL1(
     int64_t kbOffset, uint64_t kbL1RealSize, const BlockMmadOffsetParam& param)
 {
     auto tensorBL1 = AscendC::Te::MakeTensor(
-        AscendC::Te::MakeL1memPtr<AType>(bL1BufIdx_ * L1_BUF_OFFSET),
-        AscendC::Te::ZnLayoutFormat<AType>{}(kbL1RealSize, param.nL1Size));
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, AType>(bL1BufIdx_ * L1_BUF_OFFSET),
+        AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>{}(kbL1RealSize, param.nL1Size));
     SetFlag<HardEvent::MTE2_MTE1>(eventIdMte2ToMte1_);
     WaitFlag<HardEvent::MTE2_MTE1>(eventIdMte2ToMte1_);
     // Decide the MMAD accumulation mode for this K-tile.
@@ -234,50 +238,53 @@ __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::ProcessTileL1(
         uint64_t realL0ScaleK = CeilDiv(realL0k, MX_DIVISOR_SIZE) * 2;
         WaitFlag<HardEvent::M_MTE1>(eventIdMToMte1_ + l0BufIdx_);
 
-        auto CopyL12L0 = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0{});
+        auto CopyL12L0A = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0A{});
         auto layoutAL0 = MakeLayoutAL0{}(param.mL1Size, realL0k);
         auto tensorAL0 =
-            AscendC::Te::MakeTensor(AscendC::Te::MakeL0AmemPtr<AType>(l0BufIdx_ * L0_BUF_OFFSET), layoutAL0);
-        auto tensorBlockAL1 = tensorAL1_(
-            AscendC::Te::MakeCoord(0, (l1KOffset + kbOffset) % param.kaL1Size),
+            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, AType>(l0BufIdx_ * L0_BUF_OFFSET), layoutAL0);
+        auto tensorBlockAL1 = tensorAL1_.Slice(AscendC::Te::MakeCoord(0, (l1KOffset + kbOffset) % param.kaL1Size),
             AscendC::Te::MakeShape(param.mL1Size, realL0k));
-        AscendC::Te::Copy(CopyL12L0, tensorAL0, tensorBlockAL1);
+        AscendC::Te::Copy(CopyL12L0A, tensorAL0, tensorBlockAL1);
 
         auto layoutScaleAL0 = MakeLayoutScaleAL0{}(param.mL1Size, realL0ScaleK);
         auto tensorScaleAL0 =
-            AscendC::Te::MakeTensor(AscendC::Te::MakeL0AmemPtr<fp8_e8m0_t>(l0BufIdx_ * L0_BUF_OFFSET), layoutScaleAL0);
+            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, fp8_e8m0_t>(l0BufIdx_ * L0_BUF_OFFSET), layoutScaleAL0);
         auto CopyL12L0MxScaleA3510 = AscendC::Te::MakeCopy(Tile::CopyL12L0MxScaleA3510{});
         AscendC::Te::Copy(
             CopyL12L0MxScaleA3510, tensorScaleAL0, tensorScaleAL1_,
             AscendC::Te::MakeCoord(0, ((l1KOffset + kbOffset) % MX_SCALE_K_L1_SIZE)));
 
+        auto CopyL12L0B = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0B{});
         auto layoutBL0 = MakeLayoutBL0{}(realL0k, param.nL1Size);
         auto tensorBL0 =
-            AscendC::Te::MakeTensor(AscendC::Te::MakeL0BmemPtr<AType>(l0BufIdx_ * L0_BUF_OFFSET), layoutBL0);
+            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, AType>(l0BufIdx_ * L0_BUF_OFFSET), layoutBL0);
         auto tensorBlockBL1 =
-            tensorBL1(AscendC::Te::MakeCoord(l1KOffset, 0), AscendC::Te::MakeShape(realL0k, param.nL1Size));
-        AscendC::Te::Copy(CopyL12L0, tensorBL0, tensorBlockBL1);
+            tensorBL1.Slice(AscendC::Te::MakeCoord(l1KOffset, 0), AscendC::Te::MakeShape(realL0k, param.nL1Size));
+        AscendC::Te::Copy(CopyL12L0B, tensorBL0, tensorBlockBL1);
 
         auto layoutScaleBL0 = MakeLayoutScaleBL0{}(realL0ScaleK, param.nL1Size);
         auto tensorScaleBL0 =
-            AscendC::Te::MakeTensor(AscendC::Te::MakeL0BmemPtr<fp8_e8m0_t>(l0BufIdx_ * L0_BUF_OFFSET), layoutScaleBL0);
+            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, fp8_e8m0_t>(l0BufIdx_ * L0_BUF_OFFSET), layoutScaleBL0);
         auto CopyL12L0MxScaleB3510 = AscendC::Te::MakeCopy(Tile::CopyL12L0MxScaleB3510{});
         AscendC::Te::Copy(
             CopyL12L0MxScaleB3510, tensorScaleBL0, tensorScaleBL1_,
             AscendC::Te::MakeCoord(((l1KOffset + kbOffset) % MX_SCALE_K_L1_SIZE), 0));
 
-        bool isFirstK = isFirstGmK && l1KOffset == 0;
         SetFlag<HardEvent::MTE1_M>(eventIdMte1ToM_);
         WaitFlag<HardEvent::MTE1_M>(eventIdMte1ToM_);
-        uint8_t mmadUnitFlag = (isLastGmK && isLastL1K) ? FINAL_ACCUMULATION : NON_FINAL_ACCUMULATION;
 
-        auto layoutL0C = AscendC::Te::MakeL0CLayout(param.mL1Size, param.nL1Size);
-        auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeL0CmemPtr<float>(0), layoutL0C);
-        AscendC::Te::Mad(
-            AscendC::Te::MmadAtom<AscendC::Te::MmadTraits<Tile::MmadMx>>{}.with(
-                static_cast<uint16_t>(param.mL1Size), static_cast<uint16_t>(realL0k),
-                static_cast<uint16_t>(param.nL1Size), mmadUnitFlag, false, isFirstK),
-            tensorL0C, tensorAL0, tensorBL0);
+        auto layoutL0C = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(param.mL1Size, param.nL1Size);
+        auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(0), layoutL0C);
+        AscendC::Te::MmadParams params;
+        params.m = static_cast<uint16_t>(param.mL1Size);
+        params.k = static_cast<uint16_t>(realL0k);
+        params.n = static_cast<uint16_t>(param.nL1Size);
+        params.unitFlag = (isLastGmK && isLastL1K) ? FINAL_ACCUMULATION : NON_FINAL_ACCUMULATION;
+        params.cmatrixInitVal = isFirstGmK && l1KOffset == 0;
+        AscendC::Te::Mmad(
+            AscendC::Te::MmadAtom<
+                AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, AscendC::Te::MmadTraitMX>>{}
+                .with(params), tensorL0C, tensorAL0, tensorBL0);
 
         SetFlag<HardEvent::M_MTE1>(eventIdMToMte1_ + l0BufIdx_);
         l0BufIdx_ ^= 1;
@@ -318,9 +325,9 @@ __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::CopyAGmToL1(
     int64_t kaL1RealSize = (kaGmOffset + param.kaL1Size) >= param.kSize ? param.kSize - kaGmOffset : param.kaL1Size;
     auto copyGM2L1 = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2L1{});
     auto layoutAL1 = MakeLayoutAL1{}(param.mL1Size, kaL1RealSize);
-    auto gmBlockA = tensorA(AscendC::Te::MakeCoord(0, kaGmOffset), AscendC::Te::MakeShape(param.mL1Size, kaL1RealSize));
+    auto gmBlockA = tensorA.Slice(AscendC::Te::MakeCoord(0, kaGmOffset), AscendC::Te::MakeShape(param.mL1Size, kaL1RealSize));
     tensorAL1_ = AscendC::Te::MakeTensor(
-        AscendC::Te::MakeL1memPtr<AType>(A_L1_OFFSET + aL1BufIdx_ * A_L1_BUF_OFFSET), layoutAL1);
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, AType>(A_L1_OFFSET + aL1BufIdx_ * A_L1_BUF_OFFSET), layoutAL1);
     AscendC::Te::Copy(copyGM2L1, tensorAL1_, gmBlockA);
 }
 
@@ -335,19 +342,17 @@ __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::CopyMxScaleGmToL1(
     uint64_t scaleKL1RealSize = (kbL1Offset + MX_SCALE_K_L1_SIZE) > param.kSize ?
                                     (param.kSize - kbL1Offset) / MX_GROUP_SIZE :
                                     scaleKL1StandardLen;
-    auto CopyScaleGM2L1 = AscendC::Te::MakeCopy(Tile::CopyScaleGM2L1{});
+    auto CopyScaleGM2L1 = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2L1{});
     auto layoutScaleAL1 = MakeLayoutScaleAL1{}(param.mL1Size, scaleKL1RealSize);
     tensorScaleAL1_ = AscendC::Te::MakeTensor(
-        AscendC::Te::MakeL1memPtr<fp8_e8m0_t>(SCALE_AL1_OFFSET + scaleL1BufIdx_ * L1_BUF_OFFSET), layoutScaleAL1);
-    auto gmBlockScaleA = tensorScaleA(
-        AscendC::Te::MakeCoord(0, kbL1Offset / MX_GROUP_SIZE), AscendC::Te::MakeShape(param.mL1Size, scaleKL1RealSize));
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(SCALE_AL1_OFFSET + scaleL1BufIdx_ * L1_BUF_OFFSET), layoutScaleAL1);
+    auto gmBlockScaleA = tensorScaleA.Slice(AscendC::Te::MakeCoord(0, kbL1Offset / MX_GROUP_SIZE), AscendC::Te::MakeShape(param.mL1Size, scaleKL1RealSize));
     AscendC::Te::Copy(CopyScaleGM2L1, tensorScaleAL1_, gmBlockScaleA);
 
     auto layoutScaleBL1 = MakeLayoutScaleBL1{}(scaleKL1RealSize, param.nL1Size);
     tensorScaleBL1_ = AscendC::Te::MakeTensor(
-        AscendC::Te::MakeL1memPtr<fp8_e8m0_t>(SCALE_BL1_OFFSET + scaleL1BufIdx_ * L1_BUF_OFFSET), layoutScaleBL1);
-    auto gmBlockScaleB = tensorScaleB(
-        AscendC::Te::MakeCoord(kbL1Offset / MX_GROUP_SIZE, 0), AscendC::Te::MakeShape(scaleKL1RealSize, param.nL1Size));
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(SCALE_BL1_OFFSET + scaleL1BufIdx_ * L1_BUF_OFFSET), layoutScaleBL1);
+    auto gmBlockScaleB = tensorScaleB.Slice(AscendC::Te::MakeCoord(kbL1Offset / MX_GROUP_SIZE, 0), AscendC::Te::MakeShape(scaleKL1RealSize, param.nL1Size));
     AscendC::Te::Copy(CopyScaleGM2L1, tensorScaleBL1_, gmBlockScaleB);
 }
 
@@ -356,8 +361,8 @@ template <typename TensorC>
 __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::CopyCL0c2Gm(const TensorC& tensorC, const BlockMmadOffsetParam& param)
 {
     constexpr uint64_t FP32_64_AS_UINT64 = 0x42800000;
-    auto layoutL0C = AscendC::Te::MakeL0CLayout(param.mL1Size, param.nL1Size);
-    auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeL0CmemPtr<float>(0), layoutL0C);
+    auto layoutL0C = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(param.mL1Size, param.nL1Size);
+    auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(0), layoutL0C);
     auto CopyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
     AscendC::Te::Copy(CopyL0C2GM, tensorC, tensorL0C, FP32_64_AS_UINT64, AscendC::Te::FixpipeParams{/*unitflag*/ 3});
 }
@@ -407,11 +412,11 @@ __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::operator()(
 {
     BlockMmadOffsetParam blockParam = {};
     blockParam.mL1Size =
-        GetEleFromLayout<decltype(tensorC.Layout()), AttrInfo::SHAPE, AttrInfo::ROW, 1>(tensorC.Layout());
+        AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(tensorC.Layout());
     blockParam.kSize =
-        GetEleFromLayout<decltype(tensorA.Layout()), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(tensorA.Layout());
+        AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(tensorA.Layout());
     blockParam.nL1Size =
-        GetEleFromLayout<decltype(tensorC.Layout()), AttrInfo::SHAPE, AttrInfo::COLUMN, 1>(tensorC.Layout());
+        AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Column, 1>(tensorC.Layout());
     CalcDynamicKBlock(blockParam.mL1Size, blockParam.nL1Size, blockParam.kaL1Size, blockParam.kbL1Size);
     for (uint64_t kbGmOffset = 0; kbGmOffset < blockParam.kSize; kbGmOffset += blockParam.kbL1Size, bL1BufIdx_ ^= 1) {
         uint64_t kbL1RealSize = (kbGmOffset + blockParam.kbL1Size) >= blockParam.kSize ? blockParam.kSize - kbGmOffset :

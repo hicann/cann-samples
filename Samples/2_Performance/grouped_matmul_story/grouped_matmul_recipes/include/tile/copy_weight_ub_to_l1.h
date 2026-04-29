@@ -9,8 +9,7 @@
  */
 #pragma once
 
-#include "include/tensor.h"
-#include "include/utils/utils.h"
+#include "include/tensor_api/tensor.h"
 
 namespace AscendC {
 namespace Te {
@@ -52,9 +51,8 @@ struct CopyUB2L1Custom {
         // Destination stride in 32B units (contiguous in L1)
         int64_t dstStride = 0;
 
-        // Use basic intrinsic directly
-        copy_ubuf_to_cbuf((__cbuf__ void*)dst.Data().Get(), (__ubuf__ void*)src.Data().Get(),
-                          0, blockCount, blockLen, srcStride, dstStride);
+        asc_copy_ub2l1(
+            (__cbuf__ void*)dst.Data().Get(), (__ubuf__ void*)src.Data().Get(), blockCount, blockLen, srcStride, dstStride);
     }
 };
 
@@ -65,6 +63,6 @@ struct CopyUB2L1Custom {
 template <>
 struct AscendC::Te::CopyTraits<AscendC::Te::CopyUB2L1Custom>
     : public AscendC::Te::CopyTraits<
-          AscendC::Te::CopyUB2L1Custom, AscendC::Te::DataCopyTraitDefault,
-          AscendC::Te::CopyUB2L1Custom, AscendC::Te::DataCopyTraitDefault> {};
+          AscendC::Te::CopyUB2L1Custom, AscendC::Te::CopyUB2L1TraitDefault,
+          AscendC::Te::CopyUB2L1Custom, AscendC::Te::CopyUB2L1TraitDefault> {};
 

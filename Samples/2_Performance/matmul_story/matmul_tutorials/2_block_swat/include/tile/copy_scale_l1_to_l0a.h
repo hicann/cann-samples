@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "impl/atom/cube_datamove/copy_l12l0.h"
+#include "include/tensor_api/tensor.h"
 #include "kernel_utils/common_utils.h"
 #include "../utils/quant_matmul_constant.h"
 
@@ -45,8 +45,7 @@ struct CopyL12L0MxScaleA3510 {
         auto dstStride = kStep;
         // The intrinsic takes a 16-byte unit address, hence the right shift.
         uint64_t mxDstAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(dst.Data().Get())) >> 4;
-        load_cbuf_to_ca_mx(
-            mxDstAddr, static_cast<__cbuf__ void*>(src.Data().Get()), mStartPosition, kStartPosition, mStep, kStep,
+        asc_copy_l12l0a_mx(mxDstAddr, src.Data().Get(), mStartPosition, kStartPosition, mStep, kStep,
             srcStride, dstStride);
     }
 };
@@ -57,6 +56,6 @@ struct CopyL12L0MxScaleA3510 {
 template <>
 struct AscendC::Te::CopyTraits<::Tile::CopyL12L0MxScaleA3510>
     : public CopyTraits<
-        ::Tile::CopyL12L0MxScaleA3510, LoadDataTraitDefault, ::Tile::CopyL12L0MxScaleA3510,
-        LoadDataTraitDefault> {};
+        ::Tile::CopyL12L0MxScaleA3510, CopyL12L0ATraitDefault, ::Tile::CopyL12L0MxScaleA3510,
+        CopyL12L0ATraitDefault> {};
 

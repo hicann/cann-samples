@@ -16,7 +16,7 @@
 #pragma once
 
 #include "kernel_basic_intf.h"
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 
 namespace kernel_utils {
 template <AscendC::Hardware position, typename DType>
@@ -26,7 +26,7 @@ template <typename DType>
 struct TensorMemPtrFactory<AscendC::Hardware::L1, DType> {
     __aicore__ static inline auto Make()
     {
-        return AscendC::Te::MakeL1memPtr(reinterpret_cast<__cbuf__ DType*>(0));
+        return AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1>(reinterpret_cast<__cbuf__ DType*>(0));
     }
 };
 

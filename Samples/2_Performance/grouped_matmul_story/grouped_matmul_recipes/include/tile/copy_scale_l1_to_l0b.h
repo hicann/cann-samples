@@ -14,7 +14,7 @@
  */
 #pragma once
 
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 #include "kernel_utils/common_utils.h"
 #include "../utils/grouped_matmul_constant.h"
 
@@ -33,8 +33,7 @@ struct CopyL12L0MxScaleB3510 {
         auto srcStride = AscendC::Std::get<1>(AscendC::Std::get<1>(src.Layout().Stride())) >> 5;
         auto dstStride = kStep;
         uint64_t mxDstAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(dst.Data().Get())) >> 4;
-        load_cbuf_to_cb_mx(
-            mxDstAddr, static_cast<__cbuf__ void*>(src.Data().Get()), nStartPosition, kStartPosition, nStep, kStep,
+        asc_copy_l12l0b_mx(mxDstAddr, src.Data().Get(), nStartPosition, kStartPosition, nStep, kStep,
             srcStride, dstStride);
     }
 };
@@ -44,8 +43,8 @@ struct CopyL12L0MxScaleB3510 {
 template <>
 struct AscendC::Te::CopyTraits<::Tile::CopyL12L0MxScaleB3510>
     : public CopyTraits<
-        ::Tile::CopyL12L0MxScaleB3510, LoadDataTraitDefault, ::Tile::CopyL12L0MxScaleB3510,
-        LoadDataTraitDefault> {};
+        ::Tile::CopyL12L0MxScaleB3510, CopyL12L0BTraitDefault, ::Tile::CopyL12L0MxScaleB3510,
+        CopyL12L0BTraitDefault> {};
 
 namespace AscendC::Te {
 

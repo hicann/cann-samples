@@ -14,8 +14,7 @@
  */
 #pragma once
 
-#include "include/tensor.h"
-#include "include/utils/utils.h"
+#include "include/tensor_api/tensor.h"
 
 namespace AscendC {
 namespace Te {
@@ -28,7 +27,7 @@ struct CopyGM2UBWeight {
         const auto& dstLayout = dst.Layout();
         const auto& srcLayout = src.Layout();
 
-        uint8_t cacheMode = GetCacheModeFromTensor(src);
+        uint8_t cacheMode = src.Engine().GetCacheMode();
 
         // Get shape and stride
         auto srcShape = AscendC::Te::GetShape(srcLayout);
@@ -43,10 +42,9 @@ struct CopyGM2UBWeight {
         int64_t srcStride = AscendC::Std::get<1>(AscendC::Std::get<0>(srcStrideTuple)) >> 1;
         int64_t dstStride = AscendC::Std::get<1>(AscendC::Std::get<0>(dstStrideTuple)) >> 1;
 
-        // Execute the hardware intrinsic with explicit cache/stride controls.
-        copy_gm_to_ubuf_align_v2(
-            (__ubuf__ uint8_t*)dst.Data().Get(), (__gm__ uint8_t*)src.Data().Get(), 0, blockCount, blockLen, 0, 0,
-            false, cacheMode, srcStride, dstStride);
+        asc_copy_gm2ub_align(
+            (__ubuf__ uint8_t*)dst.Data().Get(), (__gm__ uint8_t*)src.Data().Get(), blockCount, blockLen, 0, 0, false,
+            cacheMode, srcStride, dstStride);
     }
 };
 
@@ -57,5 +55,5 @@ struct CopyGM2UBWeight {
 template <>
 struct AscendC::Te::CopyTraits<AscendC::Te::CopyGM2UBWeight>
     : public AscendC::Te::CopyTraits<
-          AscendC::Te::CopyGM2UBWeight, AscendC::Te::DataCopyTraitDefault, AscendC::Te::CopyGM2UBWeight,
-          AscendC::Te::DataCopyTraitDefault> {};
+          AscendC::Te::CopyGM2UBWeight, AscendC::Te::CopyGM2UBTraitDefault, AscendC::Te::CopyGM2UBWeight,
+          AscendC::Te::CopyGM2UBTraitDefault> {};

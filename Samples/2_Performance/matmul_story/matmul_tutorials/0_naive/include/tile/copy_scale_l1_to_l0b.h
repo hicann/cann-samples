@@ -14,7 +14,7 @@
  */
 
 #pragma once
-#include "impl/atom/cube_datamove/copy_l12l0.h"
+#include "include/tensor_api/tensor.h"
 #include "kernel_utils/common_utils.h"
 #include "../utils/quant_matmul_constant.h"
 
@@ -40,8 +40,7 @@ struct CopyL12L0MxScaleB3510 {
         auto dstStride = kStep;
         // The intrinsic takes a 16-byte unit address, hence the right shift.
         uint64_t mxDstAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(dst.Data().Get())) >> 4;
-        load_cbuf_to_cb_mx(
-            mxDstAddr, static_cast<__cbuf__ void*>(src.Data().Get()), nStartPosition, kStartPosition, nStep, kStep,
+        asc_copy_l12l0b_mx(mxDstAddr, src.Data().Get(), nStartPosition, kStartPosition, nStep, kStep,
             srcStride, dstStride);
     }
 };
@@ -52,17 +51,6 @@ struct CopyL12L0MxScaleB3510 {
 template <>
 struct AscendC::Te::CopyTraits<::Tile::CopyL12L0MxScaleB3510>
     : public CopyTraits<
-        ::Tile::CopyL12L0MxScaleB3510, LoadDataTraitDefault, ::Tile::CopyL12L0MxScaleB3510,
-        LoadDataTraitDefault> {};
-
-namespace AscendC::Te {
-constexpr LoadDataTrait LOAD_DATA_B_TRAIT{true};
-
-// Reuse the standard MMAD traits but force the B-side load trait required by
-// the MX scale copy helper above.
-struct LoadData2BTrait {
-    using TraitType = LoadDataTrait;
-    static constexpr const TraitType value = LOAD_DATA_B_TRAIT;
-};
-}
+        ::Tile::CopyL12L0MxScaleB3510, CopyL12L0BTraitDefault, ::Tile::CopyL12L0MxScaleB3510,
+        CopyL12L0BTraitDefault> {};
 

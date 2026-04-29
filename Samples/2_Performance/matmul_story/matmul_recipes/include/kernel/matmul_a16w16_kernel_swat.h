@@ -24,7 +24,7 @@
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/tuple_utils.h"
-#include "include/tensor.h"
+#include "include/tensor_api/tensor.h"
 
 #include "../block/matmul_a16w16_block_mmad_swat.h"
 #include "../block/matmul_a16w16_block_scheduler_swat.h"
@@ -114,7 +114,7 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
     bool l0cDB = params.kernelParams.dbL0C > 1;
     // Instantiate mmadOp
     BlockMmad blockMmadOp(problemShape_, tileL1, tileL0, l0cDB);
-    
+
     int64_t m = Get<MNK_M>(problemShape_);
     int64_t n = Get<MNK_N>(problemShape_);
     int64_t k = Get<MNK_K>(problemShape_);
@@ -125,22 +125,22 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
 
     // A,B,C Gm Tensor
     auto gmA =
-        MakeTensor(AscendC::Te::MakeGMmemPtr(reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)), layoutA);
+        MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)), layoutA);
     auto gmB =
-        MakeTensor(AscendC::Te::MakeGMmemPtr(reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)), layoutB);
+        MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)), layoutB);
     auto gmC =
-        MakeTensor(AscendC::Te::MakeGMmemPtr(reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)), layoutC);
+        MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)), layoutC);
 
     // Process tiles in ping-pong mode
     for (int64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += blockNum) {
         auto tileShape = bs.GetBlockShape(tileIdx); // (m, n, k, b)
         auto tileCoord = bs.GetBlockCoord(tileIdx); // (m, n, k, b)
         auto gmBlockA =
-            gmA(AscendC::MakeCoord(Get<0>(tileCoord), 0), AscendC::MakeShape(Get<0>(tileShape), Get<2>(tileShape)));
+            gmA.Slice(AscendC::MakeCoord(Get<0>(tileCoord), 0), AscendC::MakeShape(Get<0>(tileShape), Get<2>(tileShape)));
         auto gmBlockB =
-            gmB(AscendC::MakeCoord(0, Get<1>(tileCoord)), AscendC::MakeShape(Get<2>(tileShape), Get<1>(tileShape)));
+            gmB.Slice(AscendC::MakeCoord(0, Get<1>(tileCoord)), AscendC::MakeShape(Get<2>(tileShape), Get<1>(tileShape)));
         auto gmBlockC =
-            gmC(AscendC::MakeCoord(Get<0>(tileCoord), Get<1>(tileCoord)),
+            gmC.Slice(AscendC::MakeCoord(Get<0>(tileCoord), Get<1>(tileCoord)),
                 AscendC::MakeShape(Get<0>(tileShape), Get<1>(tileShape)));
         blockMmadOp(gmBlockC, gmBlockA, gmBlockB, tileShape);
     }
