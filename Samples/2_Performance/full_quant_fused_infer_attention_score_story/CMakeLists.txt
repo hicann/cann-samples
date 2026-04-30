@@ -17,12 +17,12 @@ if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
 endif()
 
 add_executable(full_quant_fused_infer_attention_score
-${CMAKE_CURRENT_SOURCE_DIR}/examples/full_quant_fused_infer_attention_score_template.asc)
+${CMAKE_CURRENT_SOURCE_DIR}/src/0_naive.asc)
 
 target_include_directories(full_quant_fused_infer_attention_score PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/examples
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/block
     ${CMAKE_CURRENT_SOURCE_DIR}/include/kernel
@@ -50,7 +50,7 @@ install(TARGETS full_quant_fused_infer_attention_score
 
 install(
     FILES 
-        ${CMAKE_CURRENT_SOURCE_DIR}/common/golden/verify_result.py 
-        ${CMAKE_CURRENT_SOURCE_DIR}/common/golden/gen_data.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/verify_result.py 
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen_data.py
     DESTINATION 2_Performance/full_quant_fused_infer_attention_score_story
 )
