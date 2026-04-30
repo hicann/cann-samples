@@ -114,7 +114,7 @@ source /usr/local/Ascend/ascend-toolkit/set_env.sh
 
 ```bash
 cd ${cann_samples_path}/Samples/2_Performance/moe_dispatch_and_combine_story
-cmake -S ../../../ -B ../../../build
+cmake -S ../../../ -B ../../../build -DNPU_ARCH=dav-3510
 cmake --build ../../../build --target moe_dispatch_and_combine_story
 ```
 
