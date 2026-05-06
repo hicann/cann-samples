@@ -40,7 +40,7 @@ protected:
         OptimizeEdgeBasicBlock();
         CalcTailBasicBlock();
         CalL1Tiling();
-
+        ResetBase();
         FormulateLoadBalanceBlock();
         if (runInfo_.baseM == BASIC_BLOCK_SIZE_256 && runInfo_.baseN == BASIC_BLOCK_SIZE_256) {
             OptimizeEdgeBasicBlock();
@@ -114,7 +114,6 @@ private:
         constexpr double MAX_SINGLE_CORE_ROUND = 10.0;
         bool needReselect = singleBlockNum >= 1.0 && singleBlockNum <= MAX_SINGLE_CORE_ROUND &&
                             runInfo_.defaultBalance < LOAD_BALANCE_RATE_LIMIT;
-
         if (needReselect) {
             uint64_t higherSingleX;
             uint64_t lowerSingleX;
@@ -412,12 +411,6 @@ private:
 
     void CalcLargeSingleSide(uint64_t maxMN, uint64_t& targetBase, bool isMLarger)
     {
-        constexpr uint64_t MIN_BASE_BLOCK = 112UL;
-        constexpr uint64_t MAX_BASE_BLOCK = 336UL;
-        constexpr uint64_t NUM_NINE = 9UL;
-        constexpr uint64_t NUM_TEN = 10UL;
-        constexpr int MAX_LOOP_NUM = 20;
-
         uint64_t minCoreNum = (platformInfo_.aicNum + 1UL) * NUM_NINE / NUM_TEN;
         for (uint64_t tmpCoreNum = platformInfo_.aicNum; tmpCoreNum >= minCoreNum; tmpCoreNum--) {
             int loop = 1;
@@ -445,9 +438,6 @@ private:
 
     void HandleLargeBothSides(uint64_t higherSingleX, uint64_t lowerSingleX, uint64_t minMN, bool isMLarger)
     {
-        constexpr uint64_t MIN_BASE_BLOCK = 112UL;
-        constexpr uint64_t MAX_BASE_BLOCK = 336UL;
-
         CalcParams params1 = {
             lowerSingleX,
             MIN_BASE_BLOCK,
@@ -493,10 +483,6 @@ private:
 
     bool CalcBestBalance(CalcParams& params, bool isMLarger)
     {
-        constexpr double LOAD_BALANCING_THRESHOLD = 0.98;
-        constexpr double MIN_EQUALIZATION_COEFFICIENT = 1.02;
-        constexpr double BALANCE_REDUNDANT_THRESHOLD = 0.97;
-
         uint64_t startIndex;
         uint64_t count;
         uint64_t baseX = params.baseStart;
@@ -508,7 +494,6 @@ private:
                 condition = params.isNegativeSign ? baseX >= params.baseEnd : baseX <= params.baseEnd;
                 continue;
             }
-
             for (uint64_t i = 0; i < count; i++) {
                 if (startIndex + i >= BLOCK_TABLE.size()) {
                     break;
@@ -520,7 +505,16 @@ private:
                 }
                 uint64_t currentBaseM = isMLarger ? x2 : x1;
                 uint64_t currentBaseN = isMLarger ? x1 : x2;
-
+                // If n is the inner axis or k<=256, align n to 128B, otherwise 64B; if m is the inner axis, align to
+                // 128B, otherwise 64B
+                bool nNotAligned = !args_.isBTrans || args_.k <= BASIC_BLOCK_SIZE_256 ?
+                                       currentBaseN * DATA_SIZE_FP16 % BASIC_BLOCK_SIZE_128 != 0UL :
+                                       currentBaseN * DATA_SIZE_FP16 % BASIC_BLOCK_SIZE_64 != 0UL;
+                bool mNotAligned = args_.isATrans ? currentBaseM * DATA_SIZE_FP16 % BASIC_BLOCK_SIZE_128 != 0UL :
+                                                    currentBaseM * DATA_SIZE_FP16 % BASIC_BLOCK_SIZE_64 != 0UL;
+                if (mNotAligned || nNotAligned) {
+                    continue;
+                }
                 double balance =
                     CalcMultiCoreBalance(args_.m, args_.n, platformInfo_.aicNum, currentBaseM, currentBaseN) / x4;
                 double removeRatio = static_cast<double>(
@@ -542,9 +536,6 @@ private:
     bool UpdateBothBaseBlock(
         double balance, CalcParams& params, uint64_t currentBaseM, uint64_t currentBaseN, uint64_t baseK)
     {
-        constexpr double LOAD_BALANCING_THRESHOLD = 0.98;
-        constexpr double MIN_EQUALIZATION_COEFFICIENT = 1.02;
-
         if (balance > LOAD_BALANCING_THRESHOLD) {
             runInfo_.baseM = currentBaseM;
             runInfo_.baseN = currentBaseN;
@@ -646,5 +637,15 @@ private:
         tilingData.l1BufferNum = static_cast<uint8_t>(runInfo_.l1BufferNum);
         tilingData.l0cDB = static_cast<uint8_t>(runInfo_.dbL0c);
     }
+
+private:
+    static constexpr double BALANCE_REDUNDANT_THRESHOLD = 0.97;
+    static constexpr double LOAD_BALANCING_THRESHOLD = 0.98;
+    static constexpr double MIN_EQUALIZATION_COEFFICIENT = 1.02;
+    static constexpr uint64_t MIN_BASE_BLOCK = 112UL;
+    static constexpr uint64_t MAX_BASE_BLOCK = 336UL;
+    static constexpr uint64_t NUM_NINE = 9UL;
+    static constexpr uint64_t NUM_TEN = 10UL;
+    static constexpr int MAX_LOOP_NUM = 20;
 };
 

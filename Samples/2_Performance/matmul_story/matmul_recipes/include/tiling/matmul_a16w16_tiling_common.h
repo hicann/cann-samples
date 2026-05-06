@@ -72,6 +72,6 @@ struct MatmulA16W16RunInfo {
     uint64_t l1BufferNum{2};
     MatMulV3TailInfo tailInfo;
     double defaultBalance{0.0};
-    uint64_t redundantData{0};
+    double redundantData{0.0};
 };
 
