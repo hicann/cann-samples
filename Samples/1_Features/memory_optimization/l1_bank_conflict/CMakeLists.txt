@@ -32,15 +32,11 @@ target_link_libraries(l1_bank_conflict
     cann_samples::tensor_api
 )
 
-set(DIST_PATH
-    1_Features/memory_optimization/l1_bank_conflict
-)
-
 install(TARGETS l1_bank_conflict
-    RUNTIME DESTINATION ${DIST_PATH}
+    RUNTIME DESTINATION 1_Features/memory_optimization/l1_bank_conflict
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
-    DESTINATION ${DIST_PATH}
+    DESTINATION 1_Features/memory_optimization/l1_bank_conflict
     FILES_MATCHING PATTERN "*"
 )

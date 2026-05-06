@@ -32,15 +32,11 @@ target_link_libraries(n_buffer
     cann_samples::tensor_api
 )
 
-set(DIST_PATH
-    1_Features/instruction_optimization/n_buffer
-)
-
 install(TARGETS n_buffer
-    RUNTIME DESTINATION ${DIST_PATH}
+    RUNTIME DESTINATION 1_Features/instruction_optimization/n_buffer
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
-    DESTINATION ${DIST_PATH}
+    DESTINATION 1_Features/instruction_optimization/n_buffer
     FILES_MATCHING PATTERN "*"
 )

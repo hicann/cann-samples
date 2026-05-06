@@ -31,15 +31,11 @@ target_link_libraries(matmul PRIVATE
     cann_samples::tensor_api
 )
 
-set(DIST_PATH
-    0_Introduction/matmul
-)
-
 install(TARGETS matmul
-    RUNTIME DESTINATION ${DIST_PATH}
+    RUNTIME DESTINATION 0_Introduction/matmul
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
-    DESTINATION ${DIST_PATH}
+    DESTINATION 0_Introduction/matmul
     FILES_MATCHING PATTERN "*"
 )

@@ -38,15 +38,11 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-set(DIST_PATH
-    1_Features/instruction_optimization/unit_flag
-)
-
 install(TARGETS unit_flag
-    RUNTIME DESTINATION ${DIST_PATH}
+    RUNTIME DESTINATION 1_Features/instruction_optimization/unit_flag
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
-    DESTINATION ${DIST_PATH}
+    DESTINATION 1_Features/instruction_optimization/unit_flag
     FILES_MATCHING PATTERN "*"
 )

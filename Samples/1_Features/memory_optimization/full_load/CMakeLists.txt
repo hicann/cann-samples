@@ -32,15 +32,11 @@ target_link_libraries(full_load
     cann_samples::tensor_api
 )
 
-set(DIST_PATH
-    1_Features/memory_optimization/full_load
-)
-
 install(TARGETS full_load
-    RUNTIME DESTINATION ${DIST_PATH}
+    RUNTIME DESTINATION 1_Features/memory_optimization/full_load
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
-    DESTINATION ${DIST_PATH}
+    DESTINATION 1_Features/memory_optimization/full_load
     FILES_MATCHING PATTERN "*"
 )
