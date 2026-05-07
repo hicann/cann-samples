@@ -453,11 +453,11 @@ $$
   - UnitFlag：提升计算与搬出流水并行度
 
 - **模板实现（非A全载）**：
-  - MXFP4: [quant_matmul_mxfp4_swat.cpp](../matmul_recipes/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_swat.cpp)
-  - MXFP8: [quant_matmul_mxfp8_swat.cpp](../matmul_recipes/examples/quant_matmul_mxfp8/quant_matmul_mxfp8_swat.cpp)
+  - MXFP4: [quant_matmul_mxfp4_swat.asc](../matmul_recipes/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_swat.asc)
+  - MXFP8: [quant_matmul_mxfp8_swat.asc](../matmul_recipes/examples/quant_matmul_mxfp8/quant_matmul_mxfp8_swat.asc)
 - **模板实现（A全载）**：
-  - MXFP4: [quant_matmul_mxfp4_a_full_load.cpp](../matmul_recipes/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_a_full_load.cpp)
-  - MXFP8: [quant_matmul_mxfp8_a_full_load.cpp](../matmul_recipes/examples/quant_matmul_mxfp8/quant_matmul_mxfp8_a_full_load.cpp)
+  - MXFP4: [quant_matmul_mxfp4_a_full_load.asc](../matmul_recipes/examples/quant_matmul_mxfp4/quant_matmul_mxfp4_a_full_load.asc)
+  - MXFP8: [quant_matmul_mxfp8_a_full_load.asc](../matmul_recipes/examples/quant_matmul_mxfp8/quant_matmul_mxfp8_a_full_load.asc)
 
 ### FullLoad模板
 
