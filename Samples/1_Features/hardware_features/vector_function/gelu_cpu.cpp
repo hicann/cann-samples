@@ -16,8 +16,6 @@
 
 #include "gelu_cpu.h"
 #include <cmath>
-#include <algorithm>
-#include <iostream>
 
 
 void gelu_cpu(const std::vector<float>& input, std::vector<float>& output)
