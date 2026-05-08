@@ -39,23 +39,10 @@ static constexpr uint16_t SCALE_BUFFER_MTE1_MTE2_BASE = 4;
 } // namespace
 
 template <
-    class DispatchPolicy_,
-    class ATypeTuple_,
-    class LayoutATuple_,
-    class BTypeTuple_,
-    class LayoutBTuple_,
-    class CType_,
-    class LayoutC_,
-    class BiasType_>
+    class DispatchPolicy_, class ATypeTuple_, class LayoutATuple_, class BTypeTuple_, class LayoutBTuple_, class CType_,
+    class LayoutC_, class BiasType_>
 class BlockMmad<
-    DispatchPolicy_,
-    ATypeTuple_,
-    LayoutATuple_,
-    BTypeTuple_,
-    LayoutBTuple_,
-    CType_,
-    LayoutC_,
-    BiasType_,
+    DispatchPolicy_, ATypeTuple_, LayoutATuple_, BTypeTuple_, LayoutBTuple_, CType_, LayoutC_, BiasType_,
     AscendC::Std::enable_if_t<AscendC::Std::is_base_of_v<QuantMatmulMxMultiBlockMmad, DispatchPolicy_>>> {
 public:
     template <typename T>
@@ -97,26 +84,25 @@ public:
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t>;
-    static constexpr bool transA =
-        AscendC::IsSameType<LayoutA, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
-    static constexpr bool transB =
-        AscendC::IsSameType<LayoutB, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
-    static_assert(!transA, "QuantGroupedMatmulMxBlockMmadSplitM only supports non-transposed A.");
-    // MXFP8: zero-pad L1 K tail to match NZ layout / ND2NZ path (see Tile::PadMxK*L1);
-    // MXFP4 keeps unpadded L1 views.
-    static constexpr bool kUseMxFp8L1KPad_ =
-        AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> &&
-        AscendC::Std::is_one_of_v<BType, fp8_e5m2_t, fp8_e4m3fn_t>;
     static constexpr uint64_t HALF_L0_SIZE = L0A_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(AType);
     constexpr static int32_t C0_SIZE = AscendC::AuxGetC0Size<AType>();
     constexpr static int32_t SCALE_C0 = 2;
     constexpr static int32_t L0C_C0 = 16;
+    static constexpr bool transA =
+        AscendC::IsSameType<LayoutA, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
+    using LayoutBPattern = AscendC::Te::GetLayoutPattern<decltype(LayoutB{}(0L, 0L))>;
+    static constexpr bool transB = AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::DNExtLayoutPtn> ||
+                                   AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn>;
+    static_assert(!transA, "QuantGroupedMatmulMxBlockMmadSplitM only supports non-transposed A.");
+    // MXFP8: zero-pad L1 K tail to match NZ layout / ND2NZ path (see Tile::PadMxK*L1);
+    // MXFP4 keeps unpadded L1 views.
+    static constexpr bool needASetL1KZero = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t>;
+    static constexpr bool needBSetL1KZero = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> ||
+                                            (AscendC::Std::is_one_of_v<AType, fp4x2_e2m1_t, fp4x2_e1m2_t> && !transB);
     using MakeLayoutAL1 = AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>;
-    using MakeLayoutBL1 =
-        AscendC::Std::conditional_t<
-            transB,
-            AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>,
-            AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>>;
+    using MakeLayoutBL1 = AscendC::Std::conditional_t<
+        transB, AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>,
+        AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>>;
 
     struct Params {
         GM_ADDR aGmAddr{nullptr};
@@ -175,7 +161,7 @@ public:
         // Prefer outer-K loops on the operand with the larger L1 K-tile to hide memory latency.
         orderAL1BL1_ = l1Params.kAL1 >= l1Params.kBL1;
         enableL0cPingPong_ = enableL0cPingPong;
-        constexpr bool isFp4Type = AscendC::IsSameType<AType, fp4x2_e2m1_t>::value;
+        constexpr bool isFp4Type = AscendC::Std::is_one_of_v<AType, fp4x2_e2m1_t, fp4x2_e1m2_t>;
         constexpr uint64_t sizeShift = isFp4Type ? 1UL : 0UL;
         bL1OneBuffer_ = baseN_ * Align(kBL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE) >> sizeShift;
         auto mxScaleKL1B16 = CeilDiv(scaleKL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
@@ -186,8 +172,7 @@ public:
         for (int32_t bufferId = 0; bufferId < static_cast<int32_t>(l1BufNum); bufferId++) {
             uint64_t l1Offset = (L1_SIZE >> 1) * (bufferId & 1);
             l1BufferAOffset_[bufferId] = l1Offset + aL1OneBuffer_ * (bufferId >> 1);
-            l1BufferBOffset_[bufferId] =
-                l1Offset + aL1OneBuffer_ * (l1BufNum >> 1) + bL1OneBuffer_ * (bufferId >> 1);
+            l1BufferBOffset_[bufferId] = l1Offset + aL1OneBuffer_ * (l1BufNum >> 1) + bL1OneBuffer_ * (bufferId >> 1);
         }
         for (int32_t bufferId = 0; bufferId < SCALE_BUFFER_NUM; bufferId++) {
             l1BufferScaleAOffset_[bufferId] = l1BufferBOffset_[bufferId] + bL1OneBuffer_ * (l1BufNum >> 1);
@@ -242,16 +227,20 @@ private:
         auto layoutScaleAL1 = AscendC::Te::MakeFrameLayout<AscendC::Te::ZZLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
             curM, CeilDiv(scaleKL1_, GroupedMatmulRecipe::MX_GROUP_SIZE));
         auto tensorScaleAL1 = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(l1BufferScaleAOffset_[scaleL1BufId]), layoutScaleAL1);
-        auto gmBlockScaleA = gmScaleA.Slice(AscendC::Te::MakeCoord(0, kL1Offset / GroupedMatmulRecipe::MX_GROUP_SIZE),
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(l1BufferScaleAOffset_[scaleL1BufId]),
+            layoutScaleAL1);
+        auto gmBlockScaleA = gmScaleA.Slice(
+            AscendC::Te::MakeCoord(0, kL1Offset / GroupedMatmulRecipe::MX_GROUP_SIZE),
             AscendC::Te::MakeShape(curM, GetScaleSpan(curScaleKL1)));
         AscendC::Te::Copy(CopyScaleGM2L1, tensorScaleAL1, gmBlockScaleA);
 
         auto layoutScaleBL1 = AscendC::Te::MakeFrameLayout<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
             CeilDiv(scaleKL1_, GroupedMatmulRecipe::MX_GROUP_SIZE), curN);
         auto tensorScaleBL1 = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(l1BufferScaleBOffset_[scaleL1BufId]), layoutScaleBL1);
-        auto gmBlockScaleB = gmScaleB.Slice(AscendC::Te::MakeCoord(kL1Offset / GroupedMatmulRecipe::MX_GROUP_SIZE, 0),
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(l1BufferScaleBOffset_[scaleL1BufId]),
+            layoutScaleBL1);
+        auto gmBlockScaleB = gmScaleB.Slice(
+            AscendC::Te::MakeCoord(kL1Offset / GroupedMatmulRecipe::MX_GROUP_SIZE, 0),
             AscendC::Te::MakeShape(GetScaleSpan(curScaleKL1), curN));
         AscendC::Te::Copy(CopyScaleGM2L1, tensorScaleBL1, gmBlockScaleB);
     }
@@ -262,14 +251,14 @@ private:
     {
         auto copyGM2L1 = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2L1{});
         uint64_t l1K = curGmAKL1;
-        if constexpr (kUseMxFp8L1KPad_) {
+        if constexpr (needASetL1KZero) {
             l1K = CeilAlign(curGmAKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
         }
         auto layoutAL1 = MakeLayoutAL1{}(curM, l1K);
-        auto tensorAL1 =
-            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, AType>(l1BufferAOffset_[aL1BufId]), layoutAL1);
+        auto tensorAL1 = AscendC::Te::MakeTensor(
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, AType>(l1BufferAOffset_[aL1BufId]), layoutAL1);
         auto gmBlockA = gmA.Slice(AscendC::Te::MakeCoord(0, kL1Offset), AscendC::Te::MakeShape(curM, curGmAKL1));
-        if constexpr (kUseMxFp8L1KPad_) {
+        if constexpr (needASetL1KZero) {
             ::Tile::PadMxKAL1::PadZero(tensorAL1, gmBlockA);
         }
         AscendC::Te::Copy(copyGM2L1, tensorAL1, gmBlockA);
@@ -281,14 +270,14 @@ private:
     {
         auto copyGM2L1 = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2L1{});
         uint64_t l1K = curGmBKL1;
-        if constexpr (kUseMxFp8L1KPad_) {
+        if constexpr (needBSetL1KZero) {
             l1K = CeilAlign(curGmBKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
         }
         auto layoutBL1 = MakeLayoutBL1{}(l1K, curN);
-        auto tensorBL1 =
-            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, BType>(l1BufferBOffset_[bL1BufId]), layoutBL1);
+        auto tensorBL1 = AscendC::Te::MakeTensor(
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, BType>(l1BufferBOffset_[bL1BufId]), layoutBL1);
         auto gmBlockB = gmB.Slice(AscendC::Te::MakeCoord(kL1Offset, 0), AscendC::Te::MakeShape(curGmBKL1, curN));
-        if constexpr (kUseMxFp8L1KPad_) {
+        if constexpr (needBSetL1KZero) {
             ::Tile::PadMxKBL1::PadZero(tensorBL1, gmBlockB);
         }
         AscendC::Te::Copy(copyGM2L1, tensorBL1, gmBlockB);
@@ -301,24 +290,24 @@ private:
         uint64_t kbL1Offset)
     {
         // Inner K loop: slice A/B and matching scale windows from L1, stage to L0, then Mad into L0C.
-        uint64_t l1Ka = curGmAKL1;
-        uint64_t l1Kb = curGmBKL1;
-        if constexpr (kUseMxFp8L1KPad_) {
-            l1Ka = CeilAlign(curGmAKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
-            l1Kb = CeilAlign(curGmBKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
-        }
+        uint64_t l1Ka = CeilAlign(curGmAKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
+        uint64_t l1Kb = CeilAlign(curGmBKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
         auto tensorAL1 = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, AType>(l1BufferAOffset_[aL1BufId]), MakeLayoutAL1{}(curM, l1Ka));
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, AType>(l1BufferAOffset_[aL1BufId]),
+            MakeLayoutAL1{}(curM, l1Ka));
         auto tensorBL1 = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, BType>(l1BufferBOffset_[bL1BufId]), MakeLayoutBL1{}(l1Kb, curN));
-        auto layoutScaleAL1 =
-            AscendC::Te::MakeFrameLayout<AscendC::Te::ZZLayoutPtn, AscendC::Std::Int<SCALE_C0>>(curM, GetScaleSpan(scaleKL1_));
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, BType>(l1BufferBOffset_[bL1BufId]),
+            MakeLayoutBL1{}(l1Kb, curN));
+        auto layoutScaleAL1 = AscendC::Te::MakeFrameLayout<AscendC::Te::ZZLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
+            curM, GetScaleSpan(scaleKL1_));
         auto tensorScaleAL1 = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(l1BufferScaleAOffset_[scaleL1BufId]), layoutScaleAL1);
-        auto layoutScaleBL1 =
-            AscendC::Te::MakeFrameLayout<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>(GetScaleSpan(scaleKL1_), curN);
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(l1BufferScaleAOffset_[scaleL1BufId]),
+            layoutScaleAL1);
+        auto layoutScaleBL1 = AscendC::Te::MakeFrameLayout<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
+            GetScaleSpan(scaleKL1_), curN);
         auto tensorScaleBL1 = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(l1BufferScaleBOffset_[scaleL1BufId]), layoutScaleBL1);
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, fp8_e8m0_t>(l1BufferScaleBOffset_[scaleL1BufId]),
+            layoutScaleBL1);
 
         uint64_t minPadKL1 =
             Min(CeilAlign(curGmAKL1, GroupedMatmulRecipe::MX_DIVISOR_SIZE),
@@ -326,9 +315,10 @@ private:
         uint64_t minGmKL1 = Min(curGmAKL1, curGmBKL1);
         uint64_t scaleBaseA = GetScaleOffset(absKStartA % scaleKL1_);
         uint64_t scaleBaseB = GetScaleOffset(absKStartB % scaleKL1_);
-        auto tensorBlockScaleAL1 = tensorScaleAL1.Slice(AscendC::Te::MakeCoord(0, scaleBaseA),
-            AscendC::Te::MakeShape(curM, GetScaleSpan(curGmAKL1)));
-        auto tensorBlockScaleBL1 = tensorScaleBL1.Slice(AscendC::Te::MakeCoord(scaleBaseB, 0), AscendC::Te::MakeShape(GetScaleSpan(curGmBKL1), curN));
+        auto tensorBlockScaleAL1 = tensorScaleAL1.Slice(
+            AscendC::Te::MakeCoord(0, scaleBaseA), AscendC::Te::MakeShape(curM, GetScaleSpan(curGmAKL1)));
+        auto tensorBlockScaleBL1 = tensorScaleBL1.Slice(
+            AscendC::Te::MakeCoord(scaleBaseB, 0), AscendC::Te::MakeShape(GetScaleSpan(curGmBKL1), curN));
 
         auto CopyL12L0A = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0A{});
         auto CopyL12L0B = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0B{});
@@ -342,20 +332,23 @@ private:
             AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(l0PingPong_ & 0x1);
 
             auto tensorAL0 = AscendC::Te::MakeTensor(
-                AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, AType>(l0Offset), AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>(curM, curKL0));
-            auto tensorBlockAL1 = tensorAL1.Slice(AscendC::Te::MakeCoord(0, kaL1Offset + kL0Offset), AscendC::Te::MakeShape(curM, curKL0));
+                AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, AType>(l0Offset),
+                AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>(curM, curKL0));
+            auto tensorBlockAL1 = tensorAL1.Slice(
+                AscendC::Te::MakeCoord(0, kaL1Offset + kL0Offset), AscendC::Te::MakeShape(curM, curKL0));
             AscendC::Te::Copy(CopyL12L0A, tensorAL0, tensorBlockAL1);
 
             auto tensorBL0 = AscendC::Te::MakeTensor(
-                AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, BType>(l0Offset), AscendC::Te::MakeFrameLayout<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>(curKL0, curN));
-            auto tensorBlockBL1 = tensorBL1.Slice(AscendC::Te::MakeCoord(kbL1Offset + kL0Offset, 0), AscendC::Te::MakeShape(curKL0, curN));
+                AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, BType>(l0Offset),
+                AscendC::Te::MakeFrameLayout<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>(curKL0, curN));
+            auto tensorBlockBL1 = tensorBL1.Slice(
+                AscendC::Te::MakeCoord(kbL1Offset + kL0Offset, 0), AscendC::Te::MakeShape(curKL0, curN));
             AscendC::Te::Copy(CopyL12L0B, tensorBL0, tensorBlockBL1);
 
             auto tensorScaleAL0 = AscendC::Te::MakeTensor(
                 AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, fp8_e8m0_t>(l0Offset),
                 AscendC::Te::MakeFrameLayout<AscendC::Te::ZZLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
-                    curM,
-                    CeilDiv(curKL0, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE));
+                    curM, CeilDiv(curKL0, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE));
             AscendC::Te::Copy(
                 CopyL12L0MxScaleA3510, tensorScaleAL0, tensorBlockScaleAL1,
                 AscendC::Te::MakeCoord(0, kaL1Offset + kL0Offset));
@@ -363,8 +356,7 @@ private:
             auto tensorScaleBL0 = AscendC::Te::MakeTensor(
                 AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, fp8_e8m0_t>(l0Offset),
                 AscendC::Te::MakeFrameLayout<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
-                    CeilDiv(curKL0, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE,
-                    curN));
+                    CeilDiv(curKL0, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE, curN));
             AscendC::Te::Copy(
                 CopyL12L0MxScaleB3510, tensorScaleBL0, tensorBlockScaleBL1,
                 AscendC::Te::MakeCoord(kbL1Offset + kL0Offset, 0));
@@ -373,10 +365,9 @@ private:
             AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(l0PingPong_ & 0x1);
 
             // Last K micro-tile uses final accumulation; first micro-tile initializes C in the Mad unit.
-            uint8_t mmadUnitFlag =
-                (absKStartA + kaL1Offset + kL0Offset + baseK_ >= k_)
-                    ? GroupedMatmulRecipe::FINAL_ACCUMULATION
-                    : GroupedMatmulRecipe::NON_FINAL_ACCUMULATION;
+            uint8_t mmadUnitFlag = (absKStartA + kaL1Offset + kL0Offset + baseK_ >= k_) ?
+                                       GroupedMatmulRecipe::FINAL_ACCUMULATION :
+                                       GroupedMatmulRecipe::NON_FINAL_ACCUMULATION;
             bool mmadCmatrixInitVal = (absKStartA + kaL1Offset + kL0Offset == 0);
             AscendC::Te::MmadParams mmadParams;
             mmadParams.m = static_cast<uint16_t>(curM);
@@ -385,8 +376,7 @@ private:
             mmadParams.unitFlag = mmadUnitFlag;
             mmadParams.cmatrixInitVal = mmadCmatrixInitVal;
             AscendC::Te::Mmad(
-                AscendC::Te::MmadAtom<
-                    AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, AscendC::Te::MmadTraitMX>>{}
+                AscendC::Te::MmadAtom<AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, AscendC::Te::MmadTraitMX>>{}
                     .with(mmadParams),
                 tensorL0C, tensorAL0, tensorBL0);
             AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(l0PingPong_ & 0x1);
@@ -404,7 +394,8 @@ private:
         uint64_t curN = Get<GroupedMatmulRecipe::MNK_N>(singleShape);
         uint64_t l0cOffset = (l0cPingPong_ & 1) * HALF_L0C_SIZE;
         auto tensorL0C = AscendC::Te::MakeTensor(
-            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(l0cOffset), AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(curM, curN));
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(l0cOffset),
+            AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(curM, curN));
 
         if (orderAL1BL1_) {
             // A-major: kAl1 >= kBl1, A outer loop, B inner loop
@@ -478,8 +469,8 @@ private:
 
         // Single fixpipe for this block's C tile (bf16 out); L0C ping-pong only when enabled by tiling.
         auto CopyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
-        AscendC::Te::Copy(CopyL0C2GM, gmC, tensorL0C,
-                          AscendC::Te::FixpipeParams{GroupedMatmulRecipe::FINAL_ACCUMULATION});
+        AscendC::Te::Copy(
+            CopyL0C2GM, gmC, tensorL0C, AscendC::Te::FixpipeParams{GroupedMatmulRecipe::FINAL_ACCUMULATION});
         if (enableL0cPingPong_) {
             l0cPingPong_++;
         }
