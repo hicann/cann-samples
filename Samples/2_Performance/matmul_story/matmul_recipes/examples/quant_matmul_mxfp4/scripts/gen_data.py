@@ -15,6 +15,8 @@ import math
 import os
 import sys
 
+os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
+
 import numpy as np
 import torch
 from en_dtypes import float8_e8m0

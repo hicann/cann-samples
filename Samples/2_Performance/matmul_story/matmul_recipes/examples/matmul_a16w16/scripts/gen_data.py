@@ -14,6 +14,8 @@
 import os
 import sys
 
+os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
+
 import numpy as np
 import torch
 from ml_dtypes import bfloat16

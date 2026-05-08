@@ -17,6 +17,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Tuple
 
+os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
+
 import numpy as np
 from en_dtypes import float8_e8m0
 from ml_dtypes import float4_e2m1fn, float8_e4m3fn

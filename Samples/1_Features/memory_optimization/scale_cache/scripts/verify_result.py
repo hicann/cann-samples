@@ -8,7 +8,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
+import os
 import sys
+
+os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
 
 import numpy as np
 import torch
