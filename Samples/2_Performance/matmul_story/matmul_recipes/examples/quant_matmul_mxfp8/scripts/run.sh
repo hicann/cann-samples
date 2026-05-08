@@ -30,7 +30,7 @@ if [[ -z "$REPO_ROOT" ]]; then
     exit 1
 fi
 
-INSTALL_DIR="${REPO_ROOT}/build_out/2_Performance/matmul_story/matmul_recipes/quant_matmul_mxfp4"
+INSTALL_DIR="${REPO_ROOT}/build_out/2_Performance/matmul_story/matmul_recipes/quant_matmul_mxfp8"
 TARGET=""
 SKIP_BUILD=false
 M=""
@@ -49,12 +49,10 @@ Options:
   -h, --help         Show this help.
 
 When --target is omitted, run.sh auto-selects target via:
-  python3 quant_matmul_mxfp4_algorithm_recommend.py m k n [transA transB] --print-target
+  python3 quant_matmul_mxfp8_algorithm_recommend.py m k n [transA transB] --print-target
 
 Defaults:
   transA=false (0), transB=true (1)
-  Install dir contains quant_matmul_mxfp4_swat (2-buffer), quant_matmul_mxfp4_swat_4_buffer (4-buffer),
-  and quant_matmul_mxfp4_a_full_load.
 EOF
 }
 
@@ -135,7 +133,7 @@ else
 fi
 
 if [[ "$SKIP_BUILD" != true ]]; then
-    bash "${REPO_ROOT}/.ci/build.sh" dav-3510
+    bash "${REPO_ROOT}/.ci/build.sh"
 fi
 
 if [[ ! -d "$INSTALL_DIR" ]]; then
@@ -149,7 +147,7 @@ cd "$INSTALL_DIR"
 python3 gen_data.py "$M" "$K" "$N" "$TRANSA" "$TRANSB"
 
 if [[ -z "$TARGET" ]]; then
-    TARGET="$(python3 quant_matmul_mxfp4_algorithm_recommend.py "$M" "$K" "$N" "$TRANSA" "$TRANSB" --print-target)"
+    TARGET="$(python3 quant_matmul_mxfp8_algorithm_recommend.py "$M" "$K" "$N" "$TRANSA" "$TRANSB" --print-target)"
 fi
 
 if [[ -z "$TARGET" ]]; then

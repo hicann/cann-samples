@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <cctype>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
@@ -97,66 +98,70 @@ inline void CheckUint32Shape(uint64_t value, const char* name)
 
 inline void PrintUsage(const std::string& programName)
 {
-    if (programName == "./matmul_a16w16_swat") {
-        std::cerr << "Usage: " << programName << " m k n transA transB" << std::endl;
-    } else {
-        std::cerr << "Usage: " << programName << " m k n" << std::endl;
-    }
+    std::cerr << "Usage: " << programName << " m k n [transA transB]" << std::endl;
     std::cerr << "Args: " << std::endl;
     std::cerr << "  m: row of matrix A" << std::endl;
     std::cerr << "  k: col of matrix A" << std::endl;
     std::cerr << "  n: col of matrix B" << std::endl;
-    if (programName == "./matmul_a16w16_swat") {
-        std::cerr << "  transA: transdata of matrix A" << std::endl;
-        std::cerr << "  transB: transdata of matrix B" << std::endl;
-    }
+    std::cerr << "  transA (optional): transpose of matrix A" << std::endl;
+    std::cerr << "  transB (optional): transpose of matrix B" << std::endl;
     std::cerr << "Example: " << programName << " 100 50 200" << std::endl;
-    if (programName == "./matmul_a16w16_swat") {
-        std::cerr << "Example: " << programName << " 100 50 200 false true"<< std::endl;
-    }
+    std::cerr << "Example: " << programName << " 257 258 259 0 1" << std::endl;
 }
 
-inline void ParseArguments(int argc, char* argv[], uint64_t& m, uint64_t& k, uint64_t& n)
+inline bool ParseBoolArg(const char* arg, const char* name)
 {
-    if (argc >= 2 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
-        PrintUsage(argv[0]);
-        std::exit(1);
+    std::string value(arg ? arg : "");
+    for (char& c : value) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
-    if (argc != 4) {
-        throw std::invalid_argument("ERROR: Invalid number of arguments, expected exactly 3 arguments: m k n");
+
+    if (value == "1" || value == "true" || value == "t") {
+        return true;
     }
-    m = ParsePositiveUint64(argv[1], "m");
-    k = ParsePositiveUint64(argv[2], "k");
-    n = ParsePositiveUint64(argv[3], "n");
-    CheckUint32Shape(m, "m");
-    CheckUint32Shape(k, "k");
-    CheckUint32Shape(n, "n");
+    if (value == "0" || value == "false" || value == "f") {
+        return false;
+    }
+    throw std::invalid_argument(std::string("ERROR: ") + name + " must be 0/1/true/false/t/f");
 }
 
-inline void ParseArguments(int argc, char* argv[], uint64_t& m, uint64_t& k, uint64_t& n, bool& transA, bool& transB)
+inline void ParseArguments(
+    int argc,
+    char* argv[],
+    uint64_t& m,
+    uint64_t& k,
+    uint64_t& n,
+    bool& transA,
+    bool& transB)
 {
     if (argc >= 2 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
         PrintUsage(argv[0]);
         std::exit(1);
     }
     if (argc != 4 && argc != 6) {
-        throw std::invalid_argument(
-            "ERROR: Invalid number of arguments, expected least 4 arguments: m k n, or 6 arguments: m k n transA "
-            "transB");
+        throw std::invalid_argument("ERROR: Invalid number of arguments, expected: m k n [transA transB]");
     }
     m = ParsePositiveUint64(argv[1], "m");
     k = ParsePositiveUint64(argv[2], "k");
     n = ParsePositiveUint64(argv[3], "n");
-    if (argc == 6) {
-        transA = (std::string(argv[4]) == "true");
-        transB = (std::string(argv[5]) == "true");
-    } else {
-        transA = false;
-        transB = true;
-    }
     CheckUint32Shape(m, "m");
     CheckUint32Shape(k, "k");
     CheckUint32Shape(n, "n");
+
+    // Keep existing sample behavior as default: A RowMajor (false), B ColumnMajor (true).
+    transA = false;
+    transB = true;
+    if (argc >= 6) {
+        transA = ParseBoolArg(argv[4], "transA");
+        transB = ParseBoolArg(argv[5], "transB");
+    }
+}
+
+inline void ParseArguments(int argc, char* argv[], uint64_t& m, uint64_t& k, uint64_t& n)
+{
+    bool unusedTransA = false;
+    bool unusedTransB = true;
+    ParseArguments(argc, argv, m, k, n, unusedTransA, unusedTransB);
 }
 
 template <mm::DataType dataType, typename T>

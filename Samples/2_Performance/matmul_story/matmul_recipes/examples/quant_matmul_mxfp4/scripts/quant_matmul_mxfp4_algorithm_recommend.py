@@ -73,14 +73,16 @@ class CandidateResult:
 
 
 def print_usage(program_name: str) -> None:
-    print(f"Usage: {program_name} m k n [--print-target]")
+    print(f"Usage: {program_name} m k n [transA transB] [--print-target]")
     print("Args:")
     print("  m: row of matrix A")
     print("  k: shared dimension of A and B")
     print("  n: col of matrix B")
+    print("  transA: whether matrix A is transposed (0/1/true/false/t/f), default false")
+    print("  transB: whether matrix B is transposed (0/1/true/false/t/f), default true")
     print("Options:")
     print("  --print-target: print only the recommended executable name")
-    print(f"Example: {program_name} 1024 4096 2048")
+    print(f"Example: {program_name} 16 2048 16384 0 1")
 
 
 def parse_positive_uint64(arg: str, name: str) -> int:
@@ -92,7 +94,35 @@ def parse_positive_uint64(arg: str, name: str) -> int:
     return value
 
 
-def parse_arguments(argv: List[str]) -> Tuple[int, int, int, bool]:
+def parse_binary_flag(arg: str, name: str) -> int:
+    normalized_arg = arg.lower()
+    if normalized_arg in ("0", "false", "f"):
+        return 0
+    if normalized_arg in ("1", "true", "t"):
+        return 1
+    raise ValueError(f"{name} must be one of: 0/1/true/false/t/f")
+
+
+def validate_fp4_pack_shapes(m: int, k: int, n: int, trans_a: int, trans_b: int) -> None:
+    # FP4 packs two values per byte along each tensor's inner axis.
+    # A inner axis: K when transA=0, M when transA=1.
+    # B inner axis: K when transB=1, N when transB=0.
+    if trans_a == 0:
+        if k % 2 != 0:
+            raise ValueError("transA=0 requires k even (A inner axis is K).")
+    else:
+        if m % 2 != 0:
+            raise ValueError("transA=1 requires m even (A inner axis is M).")
+
+    if trans_b == 1:
+        if k % 2 != 0:
+            raise ValueError("transB=1 requires k even (B inner axis is K).")
+    else:
+        if n % 2 != 0:
+            raise ValueError("transB=0 requires n even (B inner axis is N).")
+
+
+def parse_arguments(argv: List[str]) -> Tuple[int, int, int, int, int, bool]:
     if len(argv) >= 2 and argv[1] in ("-h", "--help"):
         print_usage(Path(argv[0]).name)
         raise SystemExit(0)
@@ -107,15 +137,19 @@ def parse_arguments(argv: List[str]) -> Tuple[int, int, int, bool]:
             raise ValueError(f"Unknown option: {arg}")
         positional.append(arg)
 
-    if len(positional) != 3:
-        raise ValueError("Expected exactly 3 arguments: m k n")
+    if len(positional) not in (3, 5):
+        raise ValueError("Expected arguments: m k n [transA transB]")
 
     m = parse_positive_uint64(positional[0], "m")
     k = parse_positive_uint64(positional[1], "k")
     n = parse_positive_uint64(positional[2], "n")
-    if k % 2 != 0:
-        raise ValueError("k must be an even number")
-    return m, k, n, print_target_only
+    trans_a = 0
+    trans_b = 1
+    if len(positional) == 5:
+        trans_a = parse_binary_flag(positional[3], "transA")
+        trans_b = parse_binary_flag(positional[4], "transB")
+    validate_fp4_pack_shapes(m, k, n, trans_a, trans_b)
+    return m, k, n, trans_a, trans_b, print_target_only
 
 
 def get_ranked_results(results: List[CandidateResult]) -> List[CandidateResult]:
@@ -189,13 +223,13 @@ def resolve_gen_data_script(script_dir: Path) -> Path:
     raise FileNotFoundError(f"gen_data.py was not found in {script_dir}")
 
 
-def generate_input(script_dir: Path, m: int, k: int, n: int) -> None:
+def generate_input(script_dir: Path, m: int, k: int, n: int, trans_a: int, trans_b: int) -> None:
     # The recommendation must compare all candidates on the same generated
     # dataset, so input generation is centralized here.
     script_path = resolve_gen_data_script(script_dir)
     with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as log_file:
         result = subprocess.run(
-            [sys.executable, str(script_path), str(m), str(k), str(n)],
+            [sys.executable, str(script_path), str(m), str(k), str(n), str(trans_a), str(trans_b)],
             cwd=script_path.parent,
             text=True,
             stdout=log_file,
@@ -292,14 +326,25 @@ def resolve_candidate_msprof_output_dir(script_dir: Path, executable_path: Path)
     return script_dir / MSPROF_OUTPUT_DIR_NAME / executable_path.stem
 
 
-def run_candidate_with_msprof(script_dir: Path, executable_path: Path, m: int, k: int, n: int) -> ProfileMetrics:
+def run_candidate_with_msprof(
+    script_dir: Path, executable_path: Path, m: int, k: int, n: int, trans_a: int, trans_b: int
+) -> ProfileMetrics:
     msprof_output_dir = resolve_candidate_msprof_output_dir(script_dir, executable_path)
     cleanup_msprof_output_dir(msprof_output_dir)
     msprof_output_dir.parent.mkdir(parents=True, exist_ok=True)
     application = f"./{executable_path.name}"
     with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as log_file:
         result = subprocess.run(
-            ["msprof", f"--output={msprof_output_dir}", f"{application}", f"{m}", f"{k}", f"{n}"],
+            [
+                "msprof",
+                f"--output={msprof_output_dir}",
+                f"{application}",
+                f"{m}",
+                f"{k}",
+                f"{n}",
+                f"{trans_a}",
+                f"{trans_b}",
+            ],
             cwd=script_dir,
             text=True,
             stdout=log_file,
@@ -318,12 +363,14 @@ def run_candidate_with_msprof(script_dir: Path, executable_path: Path, m: int, k
             raise RuntimeError(f"{command_output}\n[msprof parse error]\n{error}") from error
 
 
-def run_candidate(script_dir: Path, candidate: Candidate, m: int, k: int, n: int) -> CandidateResult:
+def run_candidate(
+    script_dir: Path, candidate: Candidate, m: int, k: int, n: int, trans_a: int, trans_b: int
+) -> CandidateResult:
     # Each candidate executable is profiled against the same generated input so
     # the ranking compares kernel time under identical data and shape conditions.
     executable_path = resolve_executable(script_dir, candidate.executable_name)
     try:
-        profile_metrics = run_candidate_with_msprof(script_dir, executable_path, m, k, n)
+        profile_metrics = run_candidate_with_msprof(script_dir, executable_path, m, k, n, trans_a, trans_b)
         kernel_time_us = profile_metrics.kernel_time_us
         output = ""
         return_code = 0
@@ -411,7 +458,7 @@ def print_ranking(results: List[CandidateResult]) -> None:
 
 def main(argv: List[str]) -> int:
     try:
-        m, k, n, print_target_only = parse_arguments(argv)
+        m, k, n, trans_a, trans_b, print_target_only = parse_arguments(argv)
     except ValueError as error:
         print(f"ERROR: {error}")
         print_usage(Path(argv[0]).name)
@@ -426,7 +473,7 @@ def main(argv: List[str]) -> int:
 
     try:
         try:
-            generate_input(script_dir, m, k, n)
+            generate_input(script_dir, m, k, n, trans_a, trans_b)
         except Exception as error:
             print(f"ERROR: {error}")
             return 1
@@ -435,7 +482,7 @@ def main(argv: List[str]) -> int:
         for candidate in candidates:
             # Preserve per-candidate outputs so failures can still be inspected if
             # no compatible implementation is found.
-            candidate_result = run_candidate(script_dir, candidate, m, k, n)
+            candidate_result = run_candidate(script_dir, candidate, m, k, n, trans_a, trans_b)
             results.append(candidate_result)
 
         ranked_results = get_ranked_results(results)

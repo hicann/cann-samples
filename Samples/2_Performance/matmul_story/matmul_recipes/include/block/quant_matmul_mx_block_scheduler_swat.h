@@ -21,7 +21,7 @@
 
 namespace Block {
 
-template <class ProblemShape_, bool TransA_, bool TransB_>
+template <class ProblemShape_, bool TransA_, bool TransB_, class AType_>
 class BlockSchedulerQuantMatmulMxSwat {
 public:
     int64_t m_{0};
@@ -54,6 +54,7 @@ public:
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
     using ProblemShape = ProblemShape_;
+    using AType = AType_;
 
     static constexpr int64_t WINDOW_LEN = 4;
 
@@ -111,31 +112,57 @@ public:
             endBlockIdx_ = newEndBlockIdx;
         }
 
-        mBaseNormCnt_ = mCnt_ - params.mBaseTailSplitCnt;
-        int64_t mMergeSize = m_ - mBaseNormCnt_ * baseM_;
-        mBaseTailMain_ = params.mBaseTailSplitCnt == 1 ? mMergeSize : params.mTailMain;
-        mBaseTailLast_ = mMergeSize - (params.mBaseTailSplitCnt - 1) * mBaseTailMain_;
+        if constexpr (!TransA_) {
+            mBaseNormCnt_ = mCnt_ - params.mBaseTailSplitCnt;
+            int64_t mMergeSize = m_ - mBaseNormCnt_ * baseM_;
+            mBaseTailMain_ = params.mBaseTailSplitCnt == 1 ? mMergeSize : params.mTailMain;
+            mBaseTailLast_ = mMergeSize - (params.mBaseTailSplitCnt - 1) * mBaseTailMain_;
+        } else {
+            mBaseTailMain_ = m_ - (mCnt_ - 1) * baseM_;
+        }
+        if constexpr (TransB_) {
+            nBaseNormCnt_ = nCnt_ - params.nBaseTailSplitCnt;
+            int64_t nMergeSize = n_ - nBaseNormCnt_ * baseN_;
+            nBaseTailMain_ = params.nBaseTailSplitCnt == 1 ? nMergeSize : params.nTailMain;
+            nBaseTailLast_ = nMergeSize - (params.nBaseTailSplitCnt - 1) * nBaseTailMain_;
+        } else {
+            nBaseTailMain_ = n_ - (nCnt_ - 1) * baseN_;
+        }
+    }
 
-        nBaseNormCnt_ = nCnt_ - params.nBaseTailSplitCnt;
-        int64_t nMergeSize = n_ - nBaseNormCnt_ * baseN_;
-        nBaseTailMain_ = params.nBaseTailSplitCnt == 1 ? nMergeSize : params.nTailMain;
-        nBaseTailLast_ = nMergeSize - (params.nBaseTailSplitCnt - 1) * nBaseTailMain_;
+    __aicore__ inline void CalSingleCoreShapeByCoord(
+        int64_t& singleCoreM, int64_t& singleCoreN, const BlockCoord& blockCoord)
+    {
+        // `blockCoord` carries GM coordinates in M/N and keeps the logical
+        // tile indices in K/B. Shape reconstruction must therefore read K/B.
+        int64_t mTileIdx = Get<MNK_K>(blockCoord);
+        int64_t nTileIdx = Get<MNK_B>(blockCoord);
+        if constexpr (!TransA_) {
+            if (mTileIdx >= mBaseNormCnt_) {
+                singleCoreM = mTileIdx < mCnt_ - 1 ? mBaseTailMain_ : mBaseTailLast_;
+            }
+        } else {
+            if (mTileIdx == mCnt_ - 1) {
+                singleCoreM = mBaseTailMain_;
+            }
+        }
+        if constexpr (TransB_) {
+            if (nTileIdx >= nBaseNormCnt_) {
+                singleCoreN = nTileIdx < nCnt_ - 1 ? nBaseTailMain_ : nBaseTailLast_;
+            }
+        } else {
+            if (nTileIdx == nCnt_ - 1) {
+                singleCoreN = nBaseTailMain_;
+            }
+        }
     }
 
     __aicore__ inline BlockShape GetBlockShape(BlockCoord blockCoord)
     {
-        // `blockCoord` carries GM coordinates in M/N and keeps the logical
-        // tile indices in K/B. Shape reconstruction must therefore read K/B.
         int64_t singleCoreM = baseM_;
         int64_t singleCoreN = baseN_;
-        int64_t mTileIdx = Get<MNK_K>(blockCoord);
-        int64_t nTileIdx = Get<MNK_B>(blockCoord);
-        if (mTileIdx >= mBaseNormCnt_) {
-            singleCoreM = mTileIdx < mCnt_ - 1 ? mBaseTailMain_ : mBaseTailLast_;
-        }
-        if (nTileIdx >= nBaseNormCnt_) {
-            singleCoreN = nTileIdx < nCnt_ - 1 ? nBaseTailMain_ : nBaseTailLast_;
-        }
+
+        CalSingleCoreShapeByCoord(singleCoreM, singleCoreN, blockCoord);
 
         // `GetTileIdx` advances `roundIdx_` before the kernel asks for shape,
         // so equality here means "the tile that was just issued belongs to the
@@ -147,6 +174,12 @@ public:
 
         int64_t singleCoreMSplit = CeilDiv(singleCoreM, mTailTile_);
         int64_t singleCoreNSplit = CeilDiv(singleCoreN, nTailTile_);
+        if constexpr (AscendC::IsSameType<AType, fp4x2_e2m1_t>::value && TransA_) {
+            singleCoreMSplit = (singleCoreMSplit + 1) & ~1;
+        }
+        if constexpr (AscendC::IsSameType<AType, fp4x2_e2m1_t>::value && !TransB_) {
+            singleCoreNSplit = (singleCoreNSplit + 1) & ~1;
+        }
         int64_t mSplitIdx = (blockIdx_ % totalTailTile_) % mTailTile_;
         int64_t nSplitIdx = (blockIdx_ % totalTailTile_) / mTailTile_;
         int64_t mSplitAddrOffset = mSplitIdx * singleCoreMSplit;
@@ -198,15 +231,25 @@ public:
             nTileIdx = nCnt_ - 1 - nTileIdx;
         }
 
-        int64_t singleCoreM = mTileIdx >= mBaseNormCnt_ ? (mTileIdx < mCnt_ - 1 ? mBaseTailMain_ : mBaseTailLast_)
-                                                        : baseM_;
-        int64_t singleCoreN = nTileIdx >= nBaseNormCnt_ ? (nTileIdx < nCnt_ - 1 ? nBaseTailMain_ : nBaseTailLast_)
-                                                        : baseN_;
+        BlockCoord shapeCoord{};
+        Get<MNK_K>(shapeCoord) = mTileIdx;
+        Get<MNK_B>(shapeCoord) = nTileIdx;
+        int64_t singleCoreM = baseM_;
+        int64_t singleCoreN = baseN_;
+        CalSingleCoreShapeByCoord(singleCoreM, singleCoreN, shapeCoord);
         int64_t mSplitAddrOffset = 0;
         int64_t nSplitAddrOffset = 0;
         if (totalTailTile_ > 1 && curRoundIdx == round_ - 1) {
             int64_t singleCoreMSplit = CeilDiv(singleCoreM, mTailTile_);
             int64_t singleCoreNSplit = CeilDiv(singleCoreN, nTailTile_);
+            // Keep split offset calculation consistent with GetBlockShape:
+            // FP4 path may round the split granularity up to even sizes.
+            if constexpr (AscendC::IsSameType<AType, fp4x2_e2m1_t>::value && TransA_) {
+                singleCoreMSplit = (singleCoreMSplit + 1) & ~1;
+            }
+            if constexpr (AscendC::IsSameType<AType, fp4x2_e2m1_t>::value && !TransB_) {
+                singleCoreNSplit = (singleCoreNSplit + 1) & ~1;
+            }
             int64_t mSplitIdx = (blockIdx_ % totalTailTile_) % mTailTile_;
             int64_t nSplitIdx = (blockIdx_ % totalTailTile_) / mTailTile_;
             mSplitAddrOffset = mSplitIdx * singleCoreMSplit;
@@ -215,11 +258,15 @@ public:
 
         int64_t mPos = mTileIdx * baseM_ + mSplitAddrOffset;
         int64_t nPos = nTileIdx * baseN_ + nSplitAddrOffset;
-        if (mTileIdx > mBaseNormCnt_) {
-            mPos -= (mTileIdx - mBaseNormCnt_) * (baseM_ - mBaseTailMain_);
+        if constexpr (!TransA_) {
+            if (mTileIdx > mBaseNormCnt_) {
+                mPos -= (mTileIdx - mBaseNormCnt_) * (baseM_ - mBaseTailMain_);
+            }
         }
-        if (nTileIdx > nBaseNormCnt_) {
-            nPos -= (nTileIdx - nBaseNormCnt_) * (baseN_ - nBaseTailMain_);
+        if constexpr (TransB_) {
+            if (nTileIdx > nBaseNormCnt_) {
+                nPos -= (nTileIdx - nBaseNormCnt_) * (baseN_ - nBaseTailMain_);
+            }
         }
 
         // Pack one scheduler result into `blockCoord`:
@@ -234,9 +281,9 @@ public:
     }
 };
 
-template <class ProblemShape_, bool TransA_, bool TransB_>
-struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<NO_FULL_LOAD_MODE>, TransA_, TransB_> {
-    using SchedulerOp = BlockSchedulerQuantMatmulMxSwat<ProblemShape_, TransA_, TransB_>;
+template <class ProblemShape_, bool TransA_, bool TransB_, class AType_>
+struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<NO_FULL_LOAD_MODE>, TransA_, TransB_, AType_> {
+    using SchedulerOp = BlockSchedulerQuantMatmulMxSwat<ProblemShape_, TransA_, TransB_, AType_>;
 };
 
 } // namespace Block

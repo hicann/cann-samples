@@ -48,8 +48,7 @@ protected:
         CalcPathSpecificL1();
 
         uint32_t scaleKL1 = CalcScaleKL1();
-        uint8_t nBufferNum = CalculateNBufferNum(scaleKL1);
-        BuildTilingData(tilingData, scaleKL1, nBufferNum);
+        BuildTilingData(tilingData, scaleKL1, static_cast<uint8_t>(DB_SIZE));
     }
 
 private:
@@ -124,72 +123,70 @@ private:
             GetScaleFactorBAFullLoad(args_, runInfo_, leftL1Size - runInfo_.stepKb * DB_SIZE * bL0Size);
     }
 
-    uint8_t CalculateNBufferNum(uint32_t scaleKL1) const
-    {
-        // In this path the full A tensor already occupies a fixed L1 region, so
-        // only the remaining capacity can be traded between B ping-pong buffers.
-        uint64_t stepK = std::min(runInfo_.stepKa, runInfo_.stepKb);
-        uint64_t kL1 = stepK * runInfo_.baseK;
-        uint64_t usedL1Size = GetSizeWithDataType<bDataType>(runInfo_.baseN * kL1) * L1_FOUR_BUFFER;
-        usedL1Size += runInfo_.baseN * CeilDiv(static_cast<uint64_t>(scaleKL1), MX_GROUP_SIZE) * DB_SIZE;
-        uint64_t scaleK = CeilDiv(args_.k, TILING_MXFP_DIVISOR_SIZE) * TILING_MXFP_MULTI_BASE_SIZE;
-        uint64_t kAligned = Align(args_.k, TILING_MXFP_DIVISOR_SIZE);
-        usedL1Size += GetSizeWithDataType<aDataType>(runInfo_.baseM * kAligned) + runInfo_.baseM * scaleK;
-        return static_cast<uint8_t>(usedL1Size < platformInfo_.l1Size ? L1_FOUR_BUFFER : DB_SIZE);
-    }
-
     void AdjustBasicBlock()
     {
         // Re-balance the initial M/N split when the first guess underutilizes
-        // cores or produces a highly skewed tile.
-        uint64_t mMaxtile = CeilDiv(args_.m, CUBE_BLOCK);
-        uint64_t nMaxtile = CeilDiv(args_.n, CUBE_BLOCK);
+        // cores or produces a highly skewed tile. Transpose flags follow the
+        // same heuristics as the non-full-load SWAT path.
+        uint64_t baseMAlignNum = args_.transA ? GetShapeWithDataType<aDataType>(L2_ALIGN_SIZE) : CUBE_BLOCK;
+        uint64_t baseNAlignNum = args_.transB ? CUBE_BLOCK : GetShapeWithDataType<bDataType>(L2_ALIGN_SIZE);
+        uint64_t baseKAlignNum = (args_.transA && !args_.transB) ? GetShapeWithDataType<aDataType>(FP8_C0_SIZE) :
+                                                                   GetShapeWithDataType<aDataType>(L2_ALIGN_SIZE);
+        if (args_.transA || !args_.transB) {
+            baseKAlignNum = GetShapeWithDataType<aDataType>(TILING_MXFP_DIVISOR_SIZE);
+        }
+        uint64_t mMaxtile = CeilDiv(args_.m, baseMAlignNum);
+        uint64_t nMaxtile = CeilDiv(args_.n, baseNAlignNum);
         uint64_t tempBaseM = runInfo_.baseM;
         uint64_t tempBaseN = runInfo_.baseN;
+        uint64_t coreNumMN = platformInfo_.aicNum;
 
-        uint64_t mCnt = CeilDiv(args_.m, runInfo_.baseM);
-        uint64_t nCnt = CeilDiv(args_.n, runInfo_.baseN);
+        if (mMaxtile * nMaxtile >= coreNumMN || (!args_.transA && args_.transB)) {
+            uint64_t mCnt = CeilDiv(args_.m, runInfo_.baseM);
+            uint64_t nCnt = CeilDiv(args_.n, runInfo_.baseN);
 
-        if (mMaxtile > nMaxtile) {
-            tempBaseN = Align(CeilDiv(args_.n, nCnt), CUBE_BLOCK);
-            nCnt = CeilDiv(args_.n, tempBaseN);
-            mCnt = platformInfo_.aicNum / nCnt;
-            tempBaseM = Align(CeilDiv(args_.m, mCnt), CUBE_BLOCK);
-        } else {
-            tempBaseM = Align(CeilDiv(args_.m, mCnt), CUBE_BLOCK);
-            mCnt = CeilDiv(args_.m, tempBaseM);
-            nCnt = platformInfo_.aicNum / mCnt;
-            tempBaseN = Align(CeilDiv(args_.n, nCnt), CUBE_BLOCK);
-        }
+            if (mMaxtile > nMaxtile) {
+                tempBaseN = Align(CeilDiv(args_.n, nCnt), baseNAlignNum);
+                nCnt = CeilDiv(args_.n, tempBaseN);
+                mCnt = platformInfo_.aicNum / nCnt;
+                tempBaseM = Align(CeilDiv(args_.m, mCnt), baseMAlignNum);
+            } else {
+                tempBaseM = Align(CeilDiv(args_.m, mCnt), baseMAlignNum);
+                mCnt = CeilDiv(args_.m, tempBaseM);
+                nCnt = platformInfo_.aicNum / mCnt;
+                tempBaseN = Align(CeilDiv(args_.n, nCnt), baseNAlignNum);
+            }
 
-        while (tempBaseN > tempBaseM * BASEM_BASEN_RATIO && nCnt < platformInfo_.aicNum / NUM_TWO &&
-               tempBaseN != CUBE_BLOCK) {
-            nCnt = nCnt * NUM_TWO;
-            mCnt = platformInfo_.aicNum / nCnt;
-            tempBaseM = Align(CeilDiv(args_.m, mCnt), CUBE_BLOCK);
-            tempBaseN = Align(CeilDiv(args_.n, nCnt), CUBE_BLOCK);
-            mCnt = CeilDiv(args_.m, tempBaseM);
-            nCnt = CeilDiv(args_.n, tempBaseN);
-        }
-        while (tempBaseM >= tempBaseN * BASEM_BASEN_RATIO && mCnt < platformInfo_.aicNum / NUM_TWO &&
-               tempBaseM != CUBE_BLOCK) {
-            mCnt = mCnt * NUM_TWO;
-            nCnt = platformInfo_.aicNum / mCnt;
-            tempBaseM = Align(CeilDiv(args_.m, mCnt), CUBE_BLOCK);
-            tempBaseN = Align(CeilDiv(args_.n, nCnt), CUBE_BLOCK);
-            mCnt = CeilDiv(args_.m, tempBaseM);
-            nCnt = CeilDiv(args_.n, tempBaseN);
-        }
+            while (tempBaseN > tempBaseM * BASEM_BASEN_RATIO && nCnt < platformInfo_.aicNum / NUM_TWO &&
+                   tempBaseN != baseNAlignNum) {
+                nCnt = nCnt * NUM_TWO;
+                mCnt = platformInfo_.aicNum / nCnt;
+                tempBaseM = Align(CeilDiv(args_.m, mCnt), baseMAlignNum);
+                tempBaseN = Align(CeilDiv(args_.n, nCnt), baseNAlignNum);
+                mCnt = CeilDiv(args_.m, tempBaseM);
+                nCnt = CeilDiv(args_.n, tempBaseN);
+            }
+            while (tempBaseM >= tempBaseN * BASEM_BASEN_RATIO && mCnt < platformInfo_.aicNum / NUM_TWO &&
+                   tempBaseM != baseMAlignNum) {
+                mCnt = mCnt * NUM_TWO;
+                nCnt = platformInfo_.aicNum / mCnt;
+                tempBaseM = Align(CeilDiv(args_.m, mCnt), baseMAlignNum);
+                tempBaseN = Align(CeilDiv(args_.n, nCnt), baseNAlignNum);
+                mCnt = CeilDiv(args_.m, tempBaseM);
+                nCnt = CeilDiv(args_.n, tempBaseN);
+            }
 
-        uint64_t kAlignValue = Align(args_.k, BASIC_BLOCK_SIZE_256);
-        uint64_t kMaxValue = GetShapeWithDataType<aDataType>(platformInfo_.l0aSize / DB_SIZE) / std::max(tempBaseM, tempBaseN);
-        kMaxValue = FloorAlign(kMaxValue, BASIC_BLOCK_SIZE_256);
-        if (kMaxValue >= BASIC_BLOCK_SIZE_256) {
-            runInfo_.baseM = tempBaseM;
-            runInfo_.baseN = tempBaseN;
-            runInfo_.baseK = std::min(kAlignValue, kMaxValue);
-            runInfo_.baseK = runInfo_.baseK > BASEK_LIMIT ? Align(runInfo_.baseK / NUM_TWO, BASIC_BLOCK_SIZE_256)
-                                                          : runInfo_.baseK;
+            uint64_t kAlignValue = Align(args_.k, baseKAlignNum);
+            uint64_t kMaxValue =
+                GetShapeWithDataType<aDataType>(platformInfo_.l0aSize / DB_SIZE) / std::max(tempBaseM, tempBaseN);
+            kMaxValue = FloorAlign(kMaxValue, baseKAlignNum);
+            if (kMaxValue >= baseKAlignNum) {
+                runInfo_.baseM = tempBaseM;
+                runInfo_.baseN = tempBaseN;
+                runInfo_.baseK = std::min(kAlignValue, kMaxValue);
+                runInfo_.baseK = runInfo_.baseK > BASEK_LIMIT ? Align(runInfo_.baseK / NUM_TWO, BASIC_BLOCK_SIZE_256) :
+                                                                runInfo_.baseK;
+            }
         }
     }
 
@@ -197,9 +194,15 @@ private:
     {
         // Start from a 256-sized candidate tile, then refine it and capture
         // the tail statistics used by later scheduling decisions.
-        runInfo_.baseM = Align(std::min(args_.m, BASIC_BLOCK_SIZE_256), CUBE_BLOCK);
-        runInfo_.baseN = Align(std::min(args_.n, BASIC_BLOCK_SIZE_256), CUBE_BLOCK);
-        runInfo_.baseK = Align(std::min(args_.k, aDataType == mm::DataType::DT_FLOAT4_E2M1 ? BASIC_BLOCK_SIZE_256 : BASIC_BLOCK_SIZE_128), TILING_MXFP_DIVISOR_SIZE);
+        runInfo_.baseM = std::min(args_.m, BASIC_BLOCK_SIZE_256);
+        runInfo_.baseM = !args_.transA ? Align(runInfo_.baseM, CUBE_BLOCK) :
+                                         Align(runInfo_.baseM, GetShapeWithDataType<aDataType>(L1_ALIGN_SIZE));
+        runInfo_.baseN = std::min(args_.n, BASIC_BLOCK_SIZE_256);
+        runInfo_.baseN = args_.transB ? Align(runInfo_.baseN, CUBE_BLOCK) :
+                                        Align(runInfo_.baseN, GetShapeWithDataType<bDataType>(L1_ALIGN_SIZE));
+        runInfo_.baseK = Align(
+            std::min(args_.k, aDataType == mm::DataType::DT_FLOAT4_E2M1 ? BASIC_BLOCK_SIZE_256 : BASIC_BLOCK_SIZE_128),
+            TILING_MXFP_DIVISOR_SIZE);
 
         uint64_t blockNum = CeilDiv(args_.m, runInfo_.baseM) * CeilDiv(args_.n, runInfo_.baseN);
         if (blockNum < platformInfo_.aicNum) {
@@ -219,14 +222,16 @@ private:
 
     void OptimizeEdgeBasicBlock()
     {
-        // Merge tiny M-edge tiles when K is cache-line aligned so the tail
-        // block behaves more like the steady-state region.
-        if (runInfo_.mBlockCnt == 1UL) {
+        // Merge tiny edge tiles when K is cache-line aligned so the tail block
+        // behaves more like the steady-state region on both M/N directions.
+        if (runInfo_.mBlockCnt == 1UL && runInfo_.nBlockCnt == 1UL) {
             return;
         }
-        uint64_t mTailSize = args_.m % runInfo_.baseM;
+
         bool isInnerAxisAlign = GetSizeWithDataType<aDataType>(args_.k) % MTE2_CACHELINE_SIZE == 0UL;
-        if (mTailSize > 0UL && isInnerAxisAlign) {
+
+        uint64_t mTailSize = args_.m % runInfo_.baseM;
+        if (runInfo_.mBlockCnt > 1UL && mTailSize > 0UL && !args_.transA && isInnerAxisAlign) {
             uint64_t baseTailCntMax = std::min((runInfo_.baseM - mTailSize) / BASIC_BLOCK_SIZE_16, runInfo_.mBlockCnt);
             uint64_t windowSize = std::min(WINDOW_LEN, runInfo_.mBlockCnt);
             uint64_t mainWindowNum = runInfo_.mBlockCnt / windowSize - 1UL;
@@ -234,8 +239,8 @@ private:
             uint64_t perfRes = (mainWindowNum + 1UL) * runInfo_.baseM;
             uint64_t mergeWindowNum = 1UL;
 
-            for (uint64_t mergeLen = tailWindowSize - 1UL; mergeLen < baseTailCntMax; mergeLen += windowSize,
-                          ++mergeWindowNum) {
+            for (uint64_t mergeLen = tailWindowSize - 1UL; mergeLen < baseTailCntMax;
+                 mergeLen += windowSize, ++mergeWindowNum) {
                 uint64_t newTailMain =
                     Align(CeilDiv((mergeLen * runInfo_.baseM + mTailSize), mergeLen + 1UL), BASIC_BLOCK_SIZE_16);
                 uint64_t curPerf =
@@ -244,6 +249,29 @@ private:
                     perfRes = curPerf;
                     runInfo_.mTailMain = newTailMain;
                     runInfo_.mBaseTailSplitCnt = mergeLen + 1UL;
+                }
+            }
+        }
+
+        uint64_t nTailSize = args_.n % runInfo_.baseN;
+        if (runInfo_.nBlockCnt > 1UL && nTailSize > 0UL && args_.transB && isInnerAxisAlign) {
+            uint64_t baseTailCntMax = std::min((runInfo_.baseN - nTailSize) / BASIC_BLOCK_SIZE_16, runInfo_.nBlockCnt);
+            uint64_t windowSize = std::min(WINDOW_LEN, runInfo_.nBlockCnt);
+            uint64_t mainWindowNum = runInfo_.nBlockCnt / windowSize - 1UL;
+            uint64_t tailWindowSize = runInfo_.nBlockCnt - mainWindowNum * windowSize;
+            uint64_t perfRes = (mainWindowNum + 1UL) * runInfo_.baseN;
+            uint64_t mergeWindowNum = 1UL;
+
+            for (uint64_t mergeLen = tailWindowSize - 1UL; mergeLen < baseTailCntMax;
+                 mergeLen += windowSize, ++mergeWindowNum) {
+                uint64_t newTailMain =
+                    Align(CeilDiv((mergeLen * runInfo_.baseN + nTailSize), mergeLen + 1UL), BASIC_BLOCK_SIZE_16);
+                uint64_t curPerf =
+                    (mainWindowNum + 1UL - mergeWindowNum) * runInfo_.baseN + mergeWindowNum * newTailMain;
+                if (curPerf <= perfRes) {
+                    perfRes = curPerf;
+                    runInfo_.nTailMain = newTailMain;
+                    runInfo_.nBaseTailSplitCnt = mergeLen + 1UL;
                 }
             }
         }

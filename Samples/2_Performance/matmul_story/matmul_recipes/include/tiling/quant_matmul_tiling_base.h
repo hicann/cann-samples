@@ -29,7 +29,7 @@ public:
     QuantMatmulTilingBase() = default;
     virtual ~QuantMatmulTilingBase() = default;
 
-    void GetTilingData(uint64_t m, uint64_t n, uint64_t k, QuantMatmulTilingData& tilingData)
+    void GetTilingData(uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, QuantMatmulTilingData& tilingData)
     {
         // Clear the cached state so one tiling object can safely be reused for
         // multiple shapes without leaking the previous decision.
@@ -41,9 +41,16 @@ public:
         // is delegated to one virtual operation so the derived class owns the
         // complete strategy-specific decision flow.
         InitCompileInfo();
-        InitShapeArgs(m, n, k);
+        InitShapeArgs(m, n, k, transA, transB);
         DoOpTiling(tilingData);
         PrintTilingData(tilingData);
+    }
+
+    void GetTilingData(uint64_t m, uint64_t n, uint64_t k, QuantMatmulTilingData& tilingData)
+    {
+        // Keep compatibility with the common sample default:
+        // A is not transposed and B is transposed.
+        GetTilingData(m, n, k, false, true, tilingData);
     }
 
 protected:
@@ -97,11 +104,13 @@ private:
         ascendcPlatform->GetCoreMemSize(platform_ascendc::CoreMemType::BT, platformInfo_.btSize);
     }
 
-    void InitShapeArgs(uint64_t m, uint64_t n, uint64_t k)
+    void InitShapeArgs(uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB)
     {
         args_.m = m;
         args_.n = n;
         args_.k = k;
+        args_.transA = transA;
+        args_.transB = transB;
     }
 };
 

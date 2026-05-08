@@ -34,9 +34,7 @@ template <
 class BlockMmad<
     DispatchPolicy_, ATypeTuple_, LayoutATuple_, BTypeTuple_, LayoutBTuple_, CType_, LayoutC_,
     AscendC::Std::enable_if_t<
-        AscendC::Std::is_base_of_v<
-            QuantMatmulMxMultiBlockWithSwat<NO_FULL_LOAD_MODE, DispatchPolicy_::stages>,
-            DispatchPolicy_>>> {
+        AscendC::Std::is_same_v<DispatchPolicy_, QuantMatmulMxMultiBlockWithSwat<NO_FULL_LOAD_MODE, 2UL>>>> {
 public:
     template <typename T>
     struct TypeUnpack {
@@ -107,8 +105,12 @@ public:
     uint64_t l0cPingPong_{0UL};
     bool enableL0cPingPong_{false};
 
-    using MakeLayoutAL1 = AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>;
-    using MakeLayoutBL1 = AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>;
+    using MakeLayoutAL1 = AscendC::Te::FrameLayoutFormat<
+        AscendC::Std::conditional_t<transA, AscendC::Te::ZNLayoutPtn, AscendC::Te::NZLayoutPtn>,
+        AscendC::Std::Int<C0_SIZE>>;
+    using MakeLayoutBL1 = AscendC::Te::FrameLayoutFormat<
+        AscendC::Std::conditional_t<transB, AscendC::Te::ZNLayoutPtn, AscendC::Te::NZLayoutPtn>,
+        AscendC::Std::Int<C0_SIZE>>;
 
     struct Params {
         GM_ADDR aGmAddr{nullptr};
@@ -250,19 +252,15 @@ public:
                 AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, AType>(l1BufferAOffset_[l1BufId]), layoutAL1);
             auto gmBlockA = gmA.Slice(AscendC::Te::MakeCoord(0, kL1Offset),
                                 AscendC::Te::MakeShape(curM, curGmAKL1));
-            if constexpr (!isDTypeFp4) {
-                ::Tile::PadMxKAL1::PadZero(tensorAL1, gmBlockA);
-            }
+            ::Tile::PadMxKAL1::PadZero(tensorAL1, gmBlockA);
             AscendC::Te::Copy(copyGM2L1, tensorAL1, gmBlockA);
 
-            auto layoutBL1 = MakeLayoutBL1{}(curGmBKL1, curN);
+            auto layoutBL1 = MakeLayoutBL1{}(curPadKL1, curN);
             auto tensorBL1 =
                 AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, BType>(l1BufferBOffset_[l1BufId]), layoutBL1);
             auto gmBlockB = gmB.Slice(AscendC::Te::MakeCoord(kL1Offset, 0),
                                 AscendC::Te::MakeShape(curGmBKL1, curN));
-            if constexpr (!isDTypeFp4) {
-                ::Tile::PadMxKBL1::PadZero(tensorBL1, gmBlockB);
-            }
+            ::Tile::PadMxKBL1::PadZero(tensorBL1, gmBlockB);
             AscendC::Te::Copy(copyGM2L1, tensorBL1, gmBlockB);
 
             AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>(l1BufId);

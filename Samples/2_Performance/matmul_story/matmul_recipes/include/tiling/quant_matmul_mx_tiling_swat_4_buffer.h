@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file quant_matmul_mx_tiling_swat.h
- * \brief SWAT tiling specialization for the MX non-full-load path.
+ * \file quant_matmul_mx_tiling_swat_4_buffer.h
+ * \brief SWAT tiling for the MX non-full-load path with four L1 A/B buffers.
  */
 
 #pragma once
@@ -20,10 +20,10 @@
 #include "quant_matmul_tiling_base.h"
 
 template <mm::DataType aDataType, mm::DataType bDataType>
-class QuantMatmulTilingSwat : public QuantMatmulTilingBase<aDataType, bDataType> {
+class QuantMatmulTilingSwat4Buffer : public QuantMatmulTilingBase<aDataType, bDataType> {
 public:
-    QuantMatmulTilingSwat() = default;
-    ~QuantMatmulTilingSwat() override = default;
+    QuantMatmulTilingSwat4Buffer() = default;
+    ~QuantMatmulTilingSwat4Buffer() override = default;
 
 private:
     using Base = QuantMatmulTilingBase<aDataType, bDataType>;
@@ -34,7 +34,7 @@ private:
 protected:
     const char* TilingName() const override
     {
-        return "swat";
+        return "swat_4_buffer";
     }
 
     void DoOpTiling(QuantMatmulTilingData& tilingData) override
@@ -47,10 +47,27 @@ protected:
         CalcPathSpecificL1();
 
         uint32_t scaleKL1 = CalcScaleKL1();
-        BuildTilingData(tilingData, scaleKL1, static_cast<uint8_t>(DB_SIZE));
+        CHECK_COND(
+            IsFourBufferL1Feasible(scaleKL1),
+            "The 4-buffer SWAT template is not viable for this shape: projected L1 footprint for four A/B buffer "
+            "slots plus paired scale regions exceeds device L1 capacity.");
+        BuildTilingData(tilingData, scaleKL1, static_cast<uint8_t>(L1_FOUR_BUFFER));
     }
 
 private:
+    bool IsFourBufferL1Feasible(uint32_t scaleKL1) const
+    {
+        // Identical feasibility test to the former `CalculateDefaultNBufferNum` path when it would have
+        // selected four L1 buffers (four A/B slots plus scaleB/scaleA double-buffering alongside).
+        uint64_t stepK = std::min(runInfo_.stepKa, runInfo_.stepKb);
+        uint64_t kL1 = stepK * runInfo_.baseK;
+        uint64_t usedL1Size = GetSizeWithDataType<bDataType>(runInfo_.baseN * kL1) * L1_FOUR_BUFFER;
+        usedL1Size += runInfo_.baseN * CeilDiv(static_cast<uint64_t>(scaleKL1), MX_GROUP_SIZE) * DB_SIZE;
+        usedL1Size += GetSizeWithDataType<aDataType>(runInfo_.baseM * kL1) * L1_FOUR_BUFFER;
+        usedL1Size += runInfo_.baseM * CeilDiv(static_cast<uint64_t>(scaleKL1), MX_GROUP_SIZE) * DB_SIZE;
+        return usedL1Size < platformInfo_.l1Size;
+    }
+
     uint32_t CalcScaleKL1() const
     {
         // Scale reuse is bounded by the smaller reusable K window on the A and

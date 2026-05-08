@@ -75,8 +75,10 @@ struct PadMxKAL1 : public PadMxKL1Base {
             // tail across each outer m1 slice of the A-side NZ layout.
             auto m1 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 1>(layoutL1);
             auto m0 = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Shape, AscendC::Te::AttrInfo::Row, 0>(layoutL1);
-                        auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(0, kAxis), AscendC::Te::MakeShape(m1 * m0, kAxisL1Align - kAxis));
-            PadMxKL1Base::PadZero(sliceTensor, m1, kAxisL1Align - kAxis, kAxis);
+            auto dstRowStride = AscendC::Te::GetElement<AscendC::Te::AttrInfo::Stride, AscendC::Te::AttrInfo::Row, 1>(layoutL1);
+ 	        auto dstGap = (dstRowStride / C0_SIZE<T>) - kAxisL1Align + kAxis;
+            auto sliceTensor = tensorL1.Slice(AscendC::Te::MakeCoord(0, kAxis), AscendC::Te::MakeShape(m1 * m0, kAxisL1Align - kAxis));
+            PadMxKL1Base::PadZero(sliceTensor, m1, kAxisL1Align - kAxis, dstGap);
         }
     }
 };

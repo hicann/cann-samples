@@ -21,7 +21,7 @@ namespace Block {
 //
 // The concrete MX scheduler is selected later from problem shape, tile
 // shape, transpose flags, and the SWAT mode encoded in the policy tag.
-template <class ProblemShape, class BlockScheduler = void, bool TransA = false, bool TransB = false>
+template <class ProblemShape, class BlockScheduler = void, bool TransA = false, bool TransB = false, class AType = void>
 struct BlockSchedulerSelector;
 
 } // namespace Block

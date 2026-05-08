@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file quant_matmul_mx_kernel_swat.h
- * \brief Kernel-side SWAT MX implementation for the non-full-load path.
+ * \file quant_matmul_mx_kernel_swat_4_buffer.h
+ * \brief Kernel-side SWAT MX implementation for the four-L1-buffer non-full-load path.
  */
 
 #pragma once
@@ -26,25 +26,25 @@
 #include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 
-#include "../block/quant_matmul_mx_block_mmad_swat.h"
-#include "../block/quant_matmul_mx_block_scheduler_swat.h"
+#include "../block/block_mmad.h"
+#include "../block/quant_matmul_mx_block_scheduler_swat_4_buffer.h"
 #include "../utils/constant.h"
 
 namespace Kernel {
 // Keep the class template parameter list in one place so the declaration and
 // out-of-line member definitions stay perfectly aligned.
-#define QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS \
+#define QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS \
     template <class ProblemShape, class BlockMmad, class BlockScheduler>
-#define QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_TEM_PARAMS ProblemShape, BlockMmad, BlockScheduler
+#define QBMM_MX_KERNEL_SWAT_4BUF_FUN_TEM_PARAMS ProblemShape, BlockMmad, BlockScheduler
 
 using namespace AscendC;
 
-QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS
-class QuantMatmulMxKernelSwat {
+QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS
+class QuantMatmulMxKernelSwat4Buffer {
 public:
-    __aicore__ inline QuantMatmulMxKernelSwat()
+    __aicore__ inline QuantMatmulMxKernelSwat4Buffer()
     {}
-    __aicore__ inline ~QuantMatmulMxKernelSwat()
+    __aicore__ inline ~QuantMatmulMxKernelSwat4Buffer()
     {}
 
     static constexpr bool transA = BlockMmad::transA;
@@ -124,8 +124,8 @@ private:
     __gm__ ScaleBType* scaleBGmAddr_;
 };
 
-QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS
-__aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_TEM_PARAMS>::operator()(
+QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS
+__aicore__ inline void QuantMatmulMxKernelSwat4Buffer<QBMM_MX_KERNEL_SWAT_4BUF_FUN_TEM_PARAMS>::operator()(
     const Params& params)
 {
     // The quantized matmul compute path runs on AIC only. AIV blocks exit
@@ -145,8 +145,8 @@ __aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_T
     Process(params, bs);
 }
 
-QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS
-__aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_TEM_PARAMS>::ResetGmAddr(
+QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS
+__aicore__ inline void QuantMatmulMxKernelSwat4Buffer<QBMM_MX_KERNEL_SWAT_4BUF_FUN_TEM_PARAMS>::ResetGmAddr(
     const Params& params)
 {
     // The sample launcher passes raw GM addresses through `Params`; convert
@@ -158,9 +158,9 @@ __aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_T
     scaleBGmAddr_ = reinterpret_cast<__gm__ ScaleBType*>(params.mmadParams.scaleBGmAddr);
 }
 
-QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS
+QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS
 template <typename TensorB, typename TensorScaleB>
-__aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_TEM_PARAMS>::SetL2Cache(
+__aicore__ inline void QuantMatmulMxKernelSwat4Buffer<QBMM_MX_KERNEL_SWAT_4BUF_FUN_TEM_PARAMS>::SetL2Cache(
     const ProblemShape& problemShape, uint64_t curBaseM, uint64_t baseN, TensorB& gmB, TensorScaleB& gmScaleB)
 {
     if constexpr (transB) {
@@ -182,8 +182,8 @@ __aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_T
     }
 }
 
-QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS
-__aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_TEM_PARAMS>::Process(
+QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS
+__aicore__ inline void QuantMatmulMxKernelSwat4Buffer<QBMM_MX_KERNEL_SWAT_4BUF_FUN_TEM_PARAMS>::Process(
     const Params& params, BlockSchedulerOp& bs)
 {
     // Build full-GM tensor views once, then slice them per scheduled block.
@@ -238,6 +238,6 @@ __aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_T
 
 } // namespace Kernel
 
-#undef QBMM_MX_KERNEL_NO_FULL_LOAD_CLASS_TEM_PARAMS
-#undef QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_TEM_PARAMS
+#undef QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS
+#undef QBMM_MX_KERNEL_SWAT_4BUF_FUN_TEM_PARAMS
 

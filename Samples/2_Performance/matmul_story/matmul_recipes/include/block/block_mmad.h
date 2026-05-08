@@ -30,4 +30,5 @@ class BlockMmad {
 #include "matmul_a16w16_block_mmad_swat.h"
 #include "matmul_a16w16_block_mmad_streamk.h"
 #include "quant_matmul_mx_block_mmad_swat.h"
+#include "quant_matmul_mx_block_mmad_swat_4_buffer.h"
 #include "quant_matmul_mx_block_mmad_a_full_load.h"

@@ -102,4 +102,5 @@ constexpr uint64_t BIAS_TABLE_NUM = 256UL;
 constexpr uint64_t RPC_WORKSIZE = 20UL;
 constexpr uint16_t BLOCK_BASE_M = 256UL;
 constexpr uint16_t BLOCK_BASE_N = 256UL;
-
+constexpr uint64_t L1_ALIGN_SIZE = 32UL;
+constexpr uint64_t L2_ALIGN_SIZE = 128UL;

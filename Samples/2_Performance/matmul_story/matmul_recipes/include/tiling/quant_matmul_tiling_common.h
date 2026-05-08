@@ -39,6 +39,8 @@ struct QuantMatmulArgs {
     uint64_t m = 0UL;
     uint64_t k = 0UL;
     uint64_t n = 0UL;
+    bool transA = false;
+    bool transB = true;
 };
 
 // Intermediate tiling state built step by step by the tiling engine.

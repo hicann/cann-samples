@@ -48,19 +48,19 @@ public:
 
     static constexpr bool transA = BlockMmad::transA;
     static constexpr bool transB = BlockMmad::transB;
-
-    // The kernel layer does not own a scheduling policy itself; it selects the
-    // concrete scheduler from the block pipeline traits.
-    using BlockSchedulerOp =
-        typename Block::BlockSchedulerSelector<ProblemShape, BlockScheduler, transA, transB>::SchedulerOp;
-
-    using BlockMmadParams = typename BlockMmad::Params;
-    using L1Params = typename BlockMmad::L1Params;
     using AType = typename BlockMmad::AType;
     using BType = typename BlockMmad::BType;
     using ScaleAType = typename BlockMmad::ScaleAType;
     using ScaleBType = typename BlockMmad::ScaleBType;
     using CType = typename BlockMmad::CType;
+
+    // The kernel layer does not own a scheduling policy itself; it selects the
+    // concrete scheduler from the block pipeline traits.
+    using BlockSchedulerOp =
+        typename Block::BlockSchedulerSelector<ProblemShape, BlockScheduler, transA, transB, AType>::SchedulerOp;
+
+    using BlockMmadParams = typename BlockMmad::Params;
+    using L1Params = typename BlockMmad::L1Params;
 
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
@@ -103,6 +103,10 @@ private:
     // according to the scheduler output.
     __aicore__ inline void Process(const Params& params, BlockSchedulerOp& bs);
 
+    template <typename TensorB, typename TensorScaleB>
+    __aicore__ inline void SetL2Cache(
+        const ProblemShape& problemShape, uint64_t curBaseM, uint64_t baseN, TensorB& gmB, TensorScaleB& gmScaleB);
+
     // `ProblemShape` stays generic at the template boundary, but the block
     // MMAD operator consumes a fixed 3D tuple internally.
     __aicore__ inline TupleShape ToShapeTuple(const ProblemShape& problemShape)
@@ -141,6 +145,30 @@ __aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_F
 }
 
 QBMM_MX_KERNEL_A_FULL_LOAD_CLASS_TEM_PARAMS
+template <typename TensorB, typename TensorScaleB>
+__aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_FUN_TEM_PARAMS>::SetL2Cache(
+    const ProblemShape& problemShape, uint64_t curBaseM, uint64_t baseN, TensorB& gmB, TensorScaleB& gmScaleB)
+{
+    if constexpr (transB) {
+        if (curBaseM >= problemShape.m && (problemShape.k & 0xff) == 0) {
+            gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+            gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+        } else {
+            gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+            gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+        }
+    } else {
+        if (curBaseM >= problemShape.m && (problemShape.n & 0xff) == 0 && (baseN & 0xff) == 0) {
+            gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+            gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+        } else {
+            gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+            gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+        }
+    }
+}
+
+QBMM_MX_KERNEL_A_FULL_LOAD_CLASS_TEM_PARAMS
 __aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_FUN_TEM_PARAMS>::ResetGmAddr(
     const Params& params)
 {
@@ -175,14 +203,7 @@ __aicore__ inline void QuantMatmulMxKernelAFullLoad<QBMM_MX_KERNEL_A_FULL_LOAD_F
 
     BlockCoord blockIdx;
     constexpr int64_t kPos = 0L;
-    bool isBMatrixOnlyNeedLoadOnce = params.problemShape.m <= params.qbmmParams.baseM && (params.problemShape.k & 0xff) == 0;
-    if (isBMatrixOnlyNeedLoadOnce) {
-        gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
-        gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
-    } else {
-        gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
-        gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
-    }
+    SetL2Cache(params.problemShape, params.qbmmParams.baseM, params.qbmmParams.baseN, gmB, gmScaleB);
     while (bs.GetTileIdx(blockIdx)) {
         // The scheduler packs GM origin into M/N and retains logical tile
         // indices in K/B so shape reconstruction still works.
