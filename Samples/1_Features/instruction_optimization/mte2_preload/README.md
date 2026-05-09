@@ -58,45 +58,96 @@ if (tileIdx / blockNum == 0 && iter0 == 0) {
 接下来，在非首轮迭代或首轮迭代的后续分片时，利用双缓冲机制预取下一分片数据到另一块 L1 缓冲区，实现数据加载与计算的重叠:
 
 ```C++
-// 第二段：预取下一个分片（用于双缓冲）
-if (tileIdx / blockNum > 0 || (tileIdx / blockNum == 0 && kL1TileNum > 1 && iter0 + 1 < kL1TileNum)) {
-    // 对于第一个 block 内的后续迭代，更新偏移量和缓冲区 ID
-    if(tileIdx / blockNum == 0) {
-        curOffsetL1 = (iter0 + 1) * kL1;
-        curGmAKL1 = NextCurGmAKL1;
-        curGmBKL1 = NextCurGmBKL1;
-        curL1BufId = 1 - l1BufId;   // 在两个 L1 缓冲区之间切换
-    }
+// 第二块：双缓冲预取下一个tile
+if (iter0 + 1 < kL1TileNum) {     
+    // 等待目标缓冲区空闲
+    AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(1 - l1BufId);
     
-    // 等待目标缓冲区上之前的 MTE1_MTE2 操作完成
-    AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(curL1BufId);
+    // 重新计算下一块的数据布局
+    layoutAL1 = AscendC::Te::MakeLayoutAL1<T>{}(curM, NextCurGmAKL1);
+    layoutBL1 = AscendC::Te::MakeLayoutBL1<T>{}(NextCurGmBKL1, curN);
     
-    // 重新计算下一个分片的布局
-    layoutAL1 = AscendC::Te::MakeLayoutAL1<T>{}(curM, curGmAKL1);
-    layoutBL1 = AscendC::Te::MakeLayoutBL1<T>{}(curGmBKL1, curN);
-    
-    // 将下一个 A 分片从全局内存拷贝到 L1 缓冲区（辅助缓冲区）
+    // 预取A矩阵的下一块到备用L1缓冲区
     auto tensorAL1Sec =
-        AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<T>(l1BufferAOffset[curL1BufId]), layoutAL1);
-    auto tensorAGmTileSec = tensorAGmBlock(
-        AscendC::Te::MakeCoord(0, curOffsetL1), AscendC::Te::MakeShape(curM, curGmAKL1));
+        AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, T>(l1BufferAOffset[1 - l1BufId]), layoutAL1);
+    auto tensorAGmTileSec = tensorAGmBlock.Slice(
+        AscendC::Te::MakeCoord(0, (iter0 + 1) * kL1), AscendC::Te::MakeShape(curM, NextCurGmAKL1));
     AscendC::Te::Copy(copyGM2L1, tensorAL1Sec, tensorAGmTileSec);
 
-    // 将下一个 B 分片从全局内存拷贝到 L1 缓冲区（辅助缓冲区）
+    // 预取B矩阵的下一块到备用L1缓冲区
     auto tensorBL1Sec =
-        AscendC::Te::MakeTensor(AscendC::Te::MakeL1memPtr<T>(l1BufferBOffset[curL1BufId]), layoutBL1);
-    auto tensorBGmTileSec = tensorBGmBlock(
-        AscendC::Te::MakeCoord(curOffsetL1, 0), AscendC::Te::MakeShape(curGmBKL1, curN));
+        AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, T>(l1BufferBOffset[1 - l1BufId]), layoutBL1);
+    auto tensorBGmTileSec = tensorBGmBlock.Slice(
+        AscendC::Te::MakeCoord((iter0 + 1) * kL1, 0), AscendC::Te::MakeShape(NextCurGmBKL1, curN));
     AscendC::Te::Copy(copyGM2L1, tensorBL1Sec, tensorBGmTileSec);
-    
-    // 拷贝完成后设置标志位
-    AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>(curL1BufId);
+
+    // 标记数据已准备好
+    AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>(1 - l1BufId);
 }
 ```
+
+最后处理轮次边界：当完成当前K维度的最后一个分片时，提前预取下一轮区域的第一个K分片，实现跨轮次的双缓冲无缝衔接。
+```C++
+// 第三块：完成当前轮次最后一个tile时，预取下一轮的第一个tile（实现轮间无缝衔接）
+// 触发条件：
+//   1. iter0 + 1 == kL1TileNum：当前K维度的tile是最后一轮（没有下一个tile了）
+//   2. tileIdx + blockNum < tileNum：还有未处理的tile块（不是全局最后一个块）
+if (iter0 + 1 == kL1TileNum && tileIdx + blockNum < tileNum) {
+    // 等待备用缓冲区上的异步操作完成，确保可以安全写入下一轮的数据
+    AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(1 - l1BufId);
+    
+    // 计算下一轮要处理的tile索引（将一维索引转换为二维(M,N)坐标）
+    // blockNum：每个tile包含的K维子块数量，用于跨轮次索引跳转
+    uint64_t nextMTileIdx = (tileIdx + blockNum) / nTileNum;
+    uint64_t nextNTileIdx = (tileIdx + blockNum) % nTileNum;
+
+    // 处理M/N维度的边界情况：最后一行的tile可能高度或宽度不完整（tail）
+    int64_t nextRoundM = nextMTileIdx == (mTileNum - 1) ? tailBaseM : baseM;
+    int64_t nextRoundN = nextNTileIdx == (nTileNum - 1) ? tailBaseN : baseN;
+
+    // 处理K维度的边界：当前轮次的K维度tile数量不一时，下一轮的第一个K分片大小需要重新计算
+    // 注意：这里kL1TileNum表示当前轮次有多少个K分片，当只有一个分片时直接取剩余长度
+    int64_t nextRoundAKL1 = kL1TileNum == 1 ? (k - (kL1TileNum - 1) * kL1) : kL1;
+    int64_t nextRoundBKL1 = nextRoundAKL1;  // A和B在K维度大小必须一致
+
+    // 根据新的tile尺寸重新计算L1缓冲区布局（适应可能的边界形状变化）
+    layoutAL1 = AscendC::Te::MakeLayoutAL1<T>{}(nextRoundM, nextRoundAKL1);
+    layoutBL1 = AscendC::Te::MakeLayoutBL1<T>{}(nextRoundBKL1, nextRoundN);
+
+    // 从全局张量中切出下一轮要处理的完整块（包含所有K维度数据）
+    auto nextTensorAGmBlock = tensorAgm.Slice(
+        AscendC::Te::MakeCoord(nextMTileIdx * baseM, 0L), 
+        AscendC::Te::MakeShape(nextRoundM, k));
+    auto nextTensorBGmBlock = tensorBgm.Slice(
+        AscendC::Te::MakeCoord(0L, nextNTileIdx * baseN), 
+        AscendC::Te::MakeShape(k, nextRoundN));
+
+    // 预取下一轮的A矩阵第一个K分片（从新GM块中取起始位置）
+    auto tensorAL1Sec =
+        AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, T>(l1BufferAOffset[1 - l1BufId]), layoutAL1);
+    auto tensorAGmTileSec = nextTensorAGmBlock.Slice(
+        AscendC::Te::MakeCoord(0, 0),  // 从新块的开头开始取
+        AscendC::Te::MakeShape(nextRoundM, nextRoundAKL1));
+    AscendC::Te::Copy(copyGM2L1, tensorAL1Sec, tensorAGmTileSec);
+
+    // 预取下一轮的B矩阵第一个K分片
+    auto tensorBL1Sec =
+        AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, T>(l1BufferBOffset[1 - l1BufId]), layoutBL1);
+    auto tensorBGmTileSec = nextTensorBGmBlock.Slice(
+        AscendC::Te::MakeCoord(0, 0),  // 从新块的开头开始取
+        AscendC::Te::MakeShape(nextRoundBKL1, nextRoundN));
+    AscendC::Te::Copy(copyGM2L1, tensorBL1Sec, tensorBGmTileSec);
+
+    // 标记数据准备就绪，下一轮计算开始时可以直接使用
+    AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>(1 - l1BufId);
+}
+```
+
 **关键改动点**：
 
 * **初始预加载双份数据**: 在首轮（iter0 == 0）时，一次性搬运两份 A 矩阵数据到 L1 缓存，使得 MTE2_PONG 提前发射。
 * **缓冲区切换**：在首轮块内，每次预取前更新curL1BufId = 1 - l1BufId，切换到另一块缓冲区；同时更新全局内存偏移量（curOffsetL1）和分片尺寸（curGmAKL1, curGmBKL1）。
+* **轮次边界处理**：当完成当前区域的最后一个 K 分片（iter0 + 1 == kL1TileNum）且还有下一个区域待处理时，提前预取下一轮区域的第一个 K 分片到备用缓冲区，实现轮间无缝切换，避免计算单元空闲。
 
 ### 2.2 修改注意点
 
@@ -107,6 +158,7 @@ if (tileIdx / blockNum > 0 || (tileIdx / blockNum == 0 && kL1TileNum > 1 && iter
 
 ## 3. 性能结果对比
 ### 3.1 case前后性能
+&ensp;&ensp;以基础 MatMul 算子开启 DB 为例，在相同输入规模（M=1024, K=2048, N=4096）下，将 basek 设为 32 以增加指令深度并进行性能测试，通过 Profiling 工具采集硬件流水线的执行状态。
 
 <div align="center">
   <img src="./images/image-3.png" alt="计算流水图1" style="width: 80%; height: auto;">
@@ -169,7 +221,7 @@ python3 profile_matmul.py 1024 2048 4096
 +--------------+------------+---------+------------+----------+----------+-------------+----------------+
 | candidate    | kernel(us) | mac(us) | scalar(us) | mte1(us) | mte2(us) | fixpipe(us) | icache_miss(%) |
 +==============+============+=========+============+==========+==========+=============+================+
-| mte2_preload |     63.288 |  41.880 |      5.924 |   14.299 |   32.722 |       2.543 |          0.500 |
+| mte2_preload |     53.328 |  40.791 |      3.166 |   13.191 |   38.916 |       2.110 |          0.300 |
 +--------------+------------+---------+------------+----------+----------+-------------+----------------+
 ```
 与相同规模下的基础 MatMul 算子开启 double-buffer对比：
