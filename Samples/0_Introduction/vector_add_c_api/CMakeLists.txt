@@ -9,6 +9,26 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(vector_add)
-add_subdirectory(vector_add_c_api)
-add_subdirectory(matmul)
+set(SUPPORTED_NPU_ARCHS dav-2201)
+file(RELATIVE_PATH SAMPLE_PATH ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
+    message(STATUS "Skip sample ${SAMPLE_PATH}: NPU_ARCH=${NPU_ARCH} is not supported")
+    return()
+endif()
+
+add_executable(vector_add_c_api main.asc)
+
+target_compile_options(vector_add_c_api PRIVATE
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
+)
+
+target_link_libraries(vector_add_c_api
+    PRIVATE
+    m
+    dl
+)
+
+install(TARGETS vector_add_c_api
+    RUNTIME DESTINATION 0_Introduction/vector_add_c_api
+)
