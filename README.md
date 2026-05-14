@@ -1,6 +1,11 @@
 # cann-samples
 
 ## 🔥Latest News
+
+- [2026/05] ops-samples在matmul_story新增[matmul_a16w16](Samples/2_Performance/matmul_story/matmul_recipes/examples/matmul_a16w16/README.md) streamK等高性能example，并在既有quant_matmul_mxfp4、quant_matmul_mxfp8 MX量化矩阵乘中支持Weight NZ。
+- [2026/05] ops-samples在grouped_matmul_story新增[weight_quant_grouped_matmul_mxfp8fp4](Samples/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/weight_quant_grouped_matmul_mxfp8fp4/README.md) MXA8W4量化example，并在既有quant_grouped_matmul_mxfp4、quant_grouped_matmul_mxfp8分组矩阵乘中支持Weight NZ。
+- [2026/04] ops-samples新增[matmul_story](Samples/2_Performance/matmul_story/README.md)、[grouped_matmul_story](Samples/2_Performance/grouped_matmul_story/README.md)：matmul_story提供MX矩阵乘分步教程（matmul_tutorials）与matmul_recipes高性能算子样例（MXFP4/MXFP8/A16W16等）；grouped_matmul_story提供分组矩阵乘grouped_matmul_recipes样例（MXFP4/MXFP8）及配套性能文档。
+- [2026/04] ops-samples中矩阵乘类example更新，引入ops-tensor子模块，涉及兼容性，详见[兼容性声明](#兼容性声明)。
 - [2026/03] ops-samples更名为cann-samples。
 - [2026/02] ops-samples项目上线，提供算子领域高性能实战演进样例与体系化调优知识库。
 
@@ -17,9 +22,12 @@
 | CANN 版本 | 时间戳 | 验证结果 | 下载链接 |
 | --- | --- | --- | --- |
 | `9.0.0` | `20260422000325096` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260422000325096/Ascend-cann-toolkit_9.0.0_linux-aarch64.run) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260422000325096/Ascend-cann-toolkit_9.0.0_linux-x86_64.run) |
-| `9.0.0` | `20260325000325538` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260325000325538/aarch64/) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260325000325538/x86_64/) |
 
 请根据实际 CPU 架构，从上述链接目录中自行选择对应的 `.run` 安装包。
+
+### 兼容性声明
+
+ops-samples中矩阵乘类example更新，引入ops-tensor子模块。涉及Tensor API的样例需使用上表中的`20260422000325096`及之后的`9.0.0`Toolkit构建，并按下文[ops-tensor子模块与Toolkit约束](#ops-tensor子模块与toolkit约束)初始化子模块、配置环境变量。
 
 toolkit 安装包文件名格式如下：
 
@@ -55,6 +63,18 @@ toolkit 安装包文件名格式如下：
    - cmake >= 3.16.0
    - python >= 3.8.0
    - zip
+   - git
+
+4. **ops-tensor子模块与Toolkit约束**
+
+   - **仓库与路径**：子模块路径为`third_party/tensor_api`，对应上游仓库[ops-tensor](https://gitcode.com/cann/ops-tensor)（默认跟踪`master`，见仓库根目录`.gitmodules`）。
+   - **获取源码**：克隆本仓库时建议执行 `git clone --recurse-submodules <仓库 URL>`；若已克隆未带子模块，在仓库根目录执行：
+     ```bash
+     git submodule update --init --recursive third_party/tensor_api
+     ```
+     若未提前初始化子模块，CMake在构建依赖`cann_samples::tensor_api`的目标时也会尝试执行上述子模块更新命令。
+   - **Toolkit要求**：Tensor API相关样例会使用`third_party/tensor_api/include/tensor_api`以及Toolkit中的Ascend C头文件，因此必须安装完整的CANN Toolkit并先执行`source ${install_path}/ascend-toolkit/set_env.sh`。当前请使用上表中已验证的`20260422000325096`版本构建；Toolkit版本过旧、仅安装Run包或环境变量未生效时，可能出现头文件缺失、符号未定义或编译选项报错。
+   - **NPU架构**：`matmul_story`、`grouped_matmul_story`额外要求`NPU_ARCH=dav-3510`（Ascend 950）；使用`dav-2201`全量配置工程时，这两项样例会被跳过，属预期行为。
 
 ## ⚡️快速入门
 
@@ -137,7 +157,14 @@ toolkit 安装包文件名格式如下：
 │   │   ├── system_optimization              # 系统优化方法
 │   │   └── hardware_features                # 芯片特性样例
 │   ├── 2_Performance                        # 性能调优样例
+│   │   ├── matmul_story                     # 矩阵乘性能优化实践
+│   │   ├── grouped_matmul_story             # 分组矩阵乘性能优化实践
+│   │   └── ...                              # 其它性能调优样例
 │   └── CMakeLists.txt
+├── third_party                              # 外部依赖（Git 子模块）
+│   ├── tensor_api                           # ops-tensor：Ascend C Tensor API 头文件
+│   ├── shmem                                # 共享内存相关组件
+│   └── ...                                  # 其它第三方依赖
 ├── cmake                                    # 工程编译配置
 ├── .clang-format                            # 代码格式配置
 ├── CMakeLists.txt                           # 根 CMake 配置
