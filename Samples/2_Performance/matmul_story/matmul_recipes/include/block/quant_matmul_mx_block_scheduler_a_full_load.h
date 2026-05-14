@@ -52,6 +52,9 @@ public:
     using ProblemShape = ProblemShape_;
     using AType = AType_;
 
+    static constexpr int32_t C0_SIZE = AscendC::AuxGetC0Size<AType>();
+    static constexpr uint64_t BLOCK_CUBE = 16UL;
+
     struct Params {
         // Host tiling passes the steady-state tile shape plus the merged-tail
         // description that the runtime scheduler must reconstruct on device.
@@ -146,6 +149,7 @@ public:
         }
     }
 
+    template <bool weightNz = false>
     __aicore__ inline BlockShape GetBlockShape(BlockCoord blockCoord)
     {
         // `blockCoord` carries GM coordinates in M/N and keeps the logical
@@ -170,6 +174,7 @@ public:
         if constexpr (AscendC::IsSameType<AType, fp4x2_e2m1_t>::value && !TransB_) {
             singleCoreNSplit = (singleCoreNSplit + 1) & ~1;
         }
+        ApplyWeightNzTailNSplitAlign<weightNz>(singleCoreNSplit);
         int64_t mSplitIdx = (blockIdx_ % totalTailTile_) % mTailTile_;
         int64_t nSplitIdx = blockIdx_ / mCnt_ % nTailTile_;
         int64_t mSplitAddrOffset = mSplitIdx * singleCoreMSplit;
@@ -184,6 +189,7 @@ public:
         return {singleCoreM, singleCoreN, mSplitAddrOffset, nSplitAddrOffset};
     }
 
+    template <bool weightNz = false>
     __aicore__ inline bool GetTileIdx(BlockCoord& blockCoord)
     {
         if (roundIdx_ >= round_) {
@@ -214,6 +220,7 @@ public:
             if constexpr (AscendC::IsSameType<AType, fp4x2_e2m1_t>::value && !TransB_) {
                 singleCoreNSplit = (singleCoreNSplit + 1) & ~1;
             }
+            ApplyWeightNzTailNSplitAlign<weightNz>(singleCoreNSplit);
             int64_t mSplitIdx = (blockIdx_ % totalTailTile_) % mTailTile_;
             int64_t nSplitIdx = blockIdx_ / mCnt_ % nTailTile_;
             mSplitAddrOffset = mSplitIdx * singleCoreMSplit;
@@ -242,6 +249,19 @@ public:
         Get<MNK_B>(blockCoord) = nTileIdx;
         roundIdx_++;
         return true;
+    }
+
+private:
+    template <bool weightNz>
+    __aicore__ inline static void ApplyWeightNzTailNSplitAlign(int64_t& singleCoreNSplit)
+    {
+        if constexpr (weightNz) {
+            if constexpr (!TransB_) {
+                singleCoreNSplit = CeilAlign(singleCoreNSplit, static_cast<int64_t>(C0_SIZE));
+            } else {
+                singleCoreNSplit = CeilAlign(singleCoreNSplit, static_cast<int64_t>(BLOCK_CUBE));
+            }
+        }
     }
 };
 

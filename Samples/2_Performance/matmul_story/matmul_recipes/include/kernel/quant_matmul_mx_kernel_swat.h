@@ -47,6 +47,7 @@ public:
     __aicore__ inline ~QuantMatmulMxKernelSwat()
     {}
 
+    static constexpr bool weightNz = BlockMmad::weightNz;
     static constexpr bool transA = BlockMmad::transA;
     static constexpr bool transB = BlockMmad::transB;
     using AType = typename BlockMmad::AType;
@@ -163,8 +164,8 @@ template <typename TensorB, typename TensorScaleB>
 __aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_TEM_PARAMS>::SetL2Cache(
     const ProblemShape& problemShape, uint64_t curBaseM, uint64_t baseN, TensorB& gmB, TensorScaleB& gmScaleB)
 {
-    if constexpr (transB) {
-        if (curBaseM >= problemShape.m && (problemShape.k & 0xff) == 0) {
+    if constexpr (weightNz) {
+        if (curBaseM >= problemShape.m) {
             gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
             gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
         } else {
@@ -172,12 +173,22 @@ __aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_T
             gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
         }
     } else {
-        if (curBaseM >= problemShape.m && (problemShape.n & 0xff) == 0 && (baseN & 0xff) == 0) {
-            gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
-            gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+        if constexpr (transB) {
+            if (curBaseM >= problemShape.m && (problemShape.k & 0xff) == 0) {
+                gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+                gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+            } else {
+                gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+                gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+            }
         } else {
-            gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
-            gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+            if (curBaseM >= problemShape.m && (problemShape.n & 0xff) == 0 && (baseN & 0xff) == 0) {
+                gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+                gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+            } else {
+                gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+                gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+            }
         }
     }
 }
@@ -205,12 +216,12 @@ __aicore__ inline void QuantMatmulMxKernelSwat<QBMM_MX_KERNEL_NO_FULL_LOAD_FUN_T
     BlockCoord blockIdx;
     constexpr int64_t kPos = 0L;
     SetL2Cache(params.problemShape, params.qbmmParams.baseM, params.qbmmParams.baseN, gmB, gmScaleB);
-    while (bs.GetTileIdx(blockIdx)) {
+    while (bs.template GetTileIdx<weightNz>(blockIdx)) {
         // The scheduler packs GM origin into M/N and retains logical tile
         // indices in K/B so shape reconstruction still works.
         int64_t mPos = Get<MNK_M>(blockIdx);
         int64_t nPos = Get<MNK_N>(blockIdx);
-        BlockShape singleShape = bs.GetBlockShape(blockIdx);
+        BlockShape singleShape = bs.template GetBlockShape<weightNz>(blockIdx);
         if (Get<MNK_M>(singleShape) <= 0 || Get<MNK_N>(singleShape) <= 0) {
             // Tail splitting can create empty logical slices; ignore them and
             // stop the current block once no useful work remains.

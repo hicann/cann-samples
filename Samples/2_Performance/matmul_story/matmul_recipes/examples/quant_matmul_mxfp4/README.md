@@ -6,21 +6,35 @@
 
 当前目录提供以下能力：
 
+**样例（可执行目标）**
+
+权重`ND`排布（包括`NDExtLayout`/`DNExtLayout`）
+
 - `quant_matmul_mxfp4_swat`：基于SWAT模板、双L1缓冲（2-buffer）的实现。
-- `quant_matmul_mxfp4_swat_4_buffer`：四L1缓冲（4-buffer）的实现。
+- `quant_matmul_mxfp4_swat_4_buffer`：基于SWAT模板、四L1缓冲（4-buffer）的实现。
 - `quant_matmul_mxfp4_a_full_load`：A矩阵full load方案的实现。
-- `gen_data.py`：生成输入数据和CPU golden结果。
+
+权重`NZ`排布（权重矩阵B为`NZLayout`/`ZNLayout`，矩阵A数据排布与`ND`保持一致）
+
+- `quant_matmul_mxfp4_swat_weight_nz`：基于SWAT模板、双L1缓冲（2-buffer）的实现。
+
+**辅助脚本（`scripts/` 目录）**
+
+- `gen_data.py`：生成`ND`权重输入数据和CPU golden结果。
+- `gen_data_weight_nz.py`：生成`NZ`权重输入数据和CPU golden结果。
 - `verify_result.py`：校验NPU输出与CPU golden是否一致。
 - `quant_matmul_mxfp4_algorithm_recommend.py`：对当前目录下可执行算法进行兼容性筛选和耗时排序。
+- `run.sh`：一键串联构建、数据生成、算子执行与校验（详见下文「一键运行」。
 
 ## 使用约束
 
 当前样例支持以下场景：
 
 - 支持通过命令行参数`transA`/`transB`选择A/B矩阵转置。
+- 支持权重矩阵B数据排布`ND`/`NZ`输入。
 - FP4打包沿输入矩阵内轴进行，内轴长度必须为偶数：
   - A：`transA=0`时内轴为`K`（要求`k`为偶数）；`transA=1`时内轴为`M`（要求`m`为偶数）。
-  - B：`transB=1`时内轴为`K`（要求`k`为偶数）；`transB=0`时内轴为`N`（要求`n`为偶数）。
+  - B：当权重矩阵B为`NZ`排布时，内轴天然满足偶数条件，当B矩阵为`ND`排布时，存在以下限制：`transB=1`时内轴为`K`（要求`k`为偶数）；`transB=0`时内轴为`N`（要求`n`为偶数）。
 
 ## 支持架构
 
@@ -46,13 +60,13 @@ NPU ARCH 3510
 - `k`：矩阵A的列数，同时也是矩阵B的归约维。
 - `n`：矩阵B的行数，对应输出矩阵的列数。
 - `transA`（可选）：A矩阵转置信息（`0/1/true/false/t/f`）。`0`/`false`/`f`表示非转置，shape为`[M, K]`；`1`/`true`/`t`表示转置，shape为`[K, M]`。默认为非转置。
-- `transB`（可选）：B矩阵转置信息（`0/1/true/false/t/f`）。`0`/`false`/`f`表示非转置，shape为`[K, N]`；`1`/`true`/`t`表示转置，shape为`[N, K]`。默认为转置。
+- `transB`（可选）：B矩阵转置信息（`0/1/true/false/t/f`）。`0`/`false`/`f`表示非转置，shape为`[K, N]（ND）`/`[N1, K1, K0, N0]（NZ）`；`1`/`true`/`t`表示转置，shape为`[N, K]（ND）`/`[K1, N1, N0, K0]（NZ）`。其中`K0=64`、`N0=16`，`K1=ceil(K/K0)`，`N1=ceil(N/N0)`。默认为转置。
 
 输出矩阵C的逻辑形状为`[M, N]`。
 
 ## 数据与校验
 
-`gen_data.py`会在当前目录下生成以下文件：
+`gen_data.py`与`gen_data_weight_nz.py`会在**运行时的当前工作目录**（通常为安装目录`build_out/.../quant_matmul_mxfp4`）下生成以下文件（二者输出文件名相同，仅B矩阵GM排布不同，请勿混用与可执行目标不匹配的数据）：
 
 - `input/input_a.bin`
 - `input/input_b.bin`
@@ -109,26 +123,36 @@ cd build_out/2_Performance/matmul_story/matmul_recipes/quant_matmul_mxfp4
 
 ### 1. 生成测试数据
 
+`ND`权重：
+
 ```bash
 python3 gen_data.py 16 128 16384 0 1
 ```
 
+`NZ`权重：
+
+```bash
+python3 gen_data_weight_nz.py 16 128 16384 0 1
+```
+
 ### 2. 运行单个算法样例
 
+`ND`权重：
+
 ```bash
+# 2-buffer SWAT
 ./quant_matmul_mxfp4_swat 16 128 16384 0 1
-```
-
-或：
-
-```bash
+# 或：4-buffer SWAT
 ./quant_matmul_mxfp4_swat_4_buffer 16 128 16384 0 1
+# 或：A 矩阵 full load
+./quant_matmul_mxfp4_a_full_load 16 128 16384 0 1
 ```
 
-或：
+`NZ`权重：
 
 ```bash
-./quant_matmul_mxfp4_a_full_load 16 128 16384 0 1
+# 2-buffer SWAT
+./quant_matmul_mxfp4_swat_weight_nz 16 128 16384 0 1
 ```
 
 ### 3. 运行算法推荐脚本
@@ -144,8 +168,9 @@ python3 quant_matmul_mxfp4_algorithm_recommend.py 16 128 16384 0 1
 +------------------------------------+----------+---------+----------+---------+---------+------------+--------------+
 | candidate                          |kernel(us)| mac(us) |scalar(us)| mte1(us)| mte2(us)|fixpipe(us) |icache_miss(%)|
 +====================================+==========+=========+==========+=========+=========+============+==============+
-| quant_matmul_mxfp4_swat            |    12.345|   1.234 |     0.567|   0.123 |   0.456 |     0.789 |        0.100 |
-| quant_matmul_mxfp4_swat_4_buffer   |    11.900|   1.200 |     0.550|   0.110 |   0.440 |     0.770 |        0.095 |
-| quant_matmul_mxfp4_a_full_load     |    15.678|   2.100 |     0.800|   0.200 |   0.300 |     0.500 |        0.250 |
+| quant_matmul_mxfp4_swat_weight_nz  |    10.100|   1.150 |     0.520|   0.100 |   0.280 |     0.720 |        0.082  |
+| quant_matmul_mxfp4_swat_4_buffer   |    11.900|   1.200 |     0.550|   0.110 |   0.440 |     0.770 |        0.095  |
+| quant_matmul_mxfp4_swat            |    12.345|   1.234 |     0.567|   0.123 |   0.456 |     0.789 |        0.100  |
+| quant_matmul_mxfp4_a_full_load     |    15.678|   2.100 |     0.800|   0.200 |   0.300 |     0.500 |        0.250  |
 +------------------------------------+----------+---------+----------+---------+---------+------------+--------------+
 ```

@@ -32,6 +32,8 @@ add_matmul_recipe(quant_matmul_mxfp4_swat
     quant_matmul_mxfp4/quant_matmul_mxfp4_swat.asc quant_matmul_mxfp4)
 add_matmul_recipe(quant_matmul_mxfp4_swat_4_buffer
     quant_matmul_mxfp4/quant_matmul_mxfp4_swat_4_buffer.asc quant_matmul_mxfp4)
+add_matmul_recipe(quant_matmul_mxfp4_swat_weight_nz
+    quant_matmul_mxfp4/quant_matmul_mxfp4_swat_weight_nz.asc quant_matmul_mxfp4)
 add_matmul_recipe(quant_matmul_mxfp4_a_full_load
     quant_matmul_mxfp4/quant_matmul_mxfp4_a_full_load.asc quant_matmul_mxfp4)
 add_matmul_recipe(matmul_a16w16_swat
@@ -43,6 +45,8 @@ add_matmul_recipe(quant_matmul_mxfp8_swat
     quant_matmul_mxfp8/quant_matmul_mxfp8_swat.asc quant_matmul_mxfp8)
 add_matmul_recipe(quant_matmul_mxfp8_swat_4_buffer
     quant_matmul_mxfp8/quant_matmul_mxfp8_swat_4_buffer.asc quant_matmul_mxfp8)
+add_matmul_recipe(quant_matmul_mxfp8_swat_weight_nz
+    quant_matmul_mxfp8/quant_matmul_mxfp8_swat_weight_nz.asc quant_matmul_mxfp8)
 add_matmul_recipe(quant_matmul_mxfp8_a_full_load
     quant_matmul_mxfp8/quant_matmul_mxfp8_a_full_load.asc quant_matmul_mxfp8)
 

@@ -32,6 +32,7 @@ fi
 
 INSTALL_DIR="${REPO_ROOT}/build_out/2_Performance/matmul_story/matmul_recipes/quant_matmul_mxfp8"
 TARGET=""
+TARGET_FROM_CLI=false
 SKIP_BUILD=false
 M=""
 K=""
@@ -76,6 +77,7 @@ while [[ $# -gt 0 ]]; do
         --target)
             [[ -z "${2:-}" ]] && { echo "ERROR: --target needs a value"; exit 1; }
             TARGET="$2"
+            TARGET_FROM_CLI=true
             shift 2
             ;;
         --skip-build)
@@ -144,8 +146,6 @@ fi
 
 cd "$INSTALL_DIR"
 
-python3 gen_data.py "$M" "$K" "$N" "$TRANSA" "$TRANSB"
-
 if [[ -z "$TARGET" ]]; then
     TARGET="$(python3 quant_matmul_mxfp8_algorithm_recommend.py "$M" "$K" "$N" "$TRANSA" "$TRANSB" --print-target)"
 fi
@@ -158,6 +158,20 @@ fi
 if [[ ! -x "./$TARGET" ]]; then
     echo "ERROR: executable not found: $INSTALL_DIR/$TARGET"
     exit 1
+fi
+
+echo ""
+if [[ "${TARGET_FROM_CLI}" == true ]]; then
+    echo "[run.sh] Running user-specified executable (--target): ${TARGET}"
+else
+    echo "[run.sh] Running auto-recommended executable (shortest msprof kernel time for this shape): ${TARGET}"
+fi
+echo ""
+
+if [[ "$TARGET" == *_weight_nz ]]; then
+    python3 gen_data_weight_nz.py "$M" "$K" "$N" "$TRANSA" "$TRANSB"
+else
+    python3 gen_data.py "$M" "$K" "$N" "$TRANSA" "$TRANSB"
 fi
 
 "./$TARGET" "$M" "$K" "$N" "$TRANSA" "$TRANSB"

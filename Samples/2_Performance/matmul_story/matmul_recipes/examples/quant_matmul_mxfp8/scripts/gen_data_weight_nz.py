@@ -15,12 +15,30 @@ import math
 import os
 import sys
 
-os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
-
 import numpy as np
 import torch
 from en_dtypes import float8_e8m0
 from ml_dtypes import float8_e4m3fn
+
+TILING_MXFP_DIVISOR_SIZE = 64
+MX_GROUP_SIZE = 32
+CUBE_BLOCK = 16
+FP8_C0_SIZE = 32
+
+
+def to_weight_nz_layout(fp8_input):
+    """Convert 2D [row, col] to weight-NZ GM bytes layout [ceil(col/32), ceil(row/16), 16, 32]."""
+    row, col = fp8_input.shape
+    row_tiles = math.ceil(row / CUBE_BLOCK)
+    col_tiles = math.ceil(col / FP8_C0_SIZE)
+    padded_row = row_tiles * CUBE_BLOCK
+    padded_col = col_tiles * FP8_C0_SIZE
+
+    padded = np.zeros((padded_row, padded_col), dtype=fp8_input.dtype)
+    padded[:row, :col] = fp8_input
+
+    blocked = padded.reshape(row_tiles, CUBE_BLOCK, col_tiles, FP8_C0_SIZE)
+    return blocked.transpose(2, 0, 1, 3)
 
 
 def write_artifacts(base_dir, a_fp8, b_fp8, a_scale, b_scale, out):
@@ -29,18 +47,18 @@ def write_artifacts(base_dir, a_fp8, b_fp8, a_scale, b_scale, out):
     os.makedirs(input_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
 
-    # MXFP8 keeps one value per byte.
+    b_to_write = to_weight_nz_layout(b_fp8)
+
     a_fp8.view(np.uint8).tofile(os.path.join(input_dir, "input_a.bin"))
-    b_fp8.view(np.uint8).tofile(os.path.join(input_dir, "input_b.bin"))
+    b_to_write.view(np.uint8).tofile(os.path.join(input_dir, "input_b.bin"))
     a_scale.tofile(os.path.join(input_dir, "input_scaleA.bin"))
     b_scale.tofile(os.path.join(input_dir, "input_scaleB.bin"))
     out.view(torch.uint16).numpy().tofile(os.path.join(output_dir, "cpu_output.bin"))
 
 
 def build_scale_broadcast(scale, target_shape, chunk_axis):
-    # Repeat always on the last dim (size=2), then unfold with ceil(dim/64) dim.
-    # This keeps the requested expansion order stable for all layouts.
-    scale_repeat = np.repeat(scale.astype(np.float32), 32, axis=-1)
+    # Repeat on the last dim (size=2), then unfold along ceil(dim/64).
+    scale_repeat = np.repeat(scale.astype(np.float32), MX_GROUP_SIZE, axis=-1)
 
     if chunk_axis == 1:
         # scale: [row, ceil(col/64), 2] -> [row, col]
@@ -60,32 +78,18 @@ def dequant_mxfp8(fp8_input, scale, chunk_axis):
 
 
 def gen_golden_data_simple(m, k, n, trans_a=False, trans_b=True):
-    # Generate MXFP8 quantized inputs.
-    # A input tensor shape follows transA:
-    # - transA=False: A is [m, k]
-    # - transA=True : A is [k, m]
     a_shape = (k, m) if trans_a else (m, k)
     a_ori = np.random.uniform(1, 8, a_shape).astype(float8_e4m3fn)
 
-    # B input tensor shape follows transB:
-    # - transB=False: B is [k, n]
-    # - transB=True : B is [n, k]
     b_shape = (n, k) if trans_b else (k, n)
     b_ori = np.random.uniform(1, 8, b_shape).astype(float8_e4m3fn)
 
-    # a_ori and a_scale must keep consistent transpose layout.
-    # b_ori and b_scale must keep consistent transpose layout.
-    a_scale_shape = (math.ceil(k / 64), m, 2) if trans_a else (m, math.ceil(k / 64), 2)
-    b_scale_shape = (n, math.ceil(k / 64), 2) if trans_b else (math.ceil(k / 64), n, 2)
+    div = TILING_MXFP_DIVISOR_SIZE
+    a_scale_shape = (math.ceil(k / div), m, 2) if trans_a else (m, math.ceil(k / div), 2)
+    b_scale_shape = (n, math.ceil(k / div), 2) if trans_b else (math.ceil(k / div), n, 2)
     a_scale = np.random.uniform(1, 8, size=a_scale_shape).astype(float8_e8m0)
     b_scale = np.random.uniform(1, 8, size=b_scale_shape).astype(float8_e8m0)
 
-    # Dequantize input layout first, then apply transposition attributes for matmul.
-    # chunk_axis indicates which dim is ceil(x/64) in scale:
-    # - transA=False: a_scale=[m, ceil(k/64), 2]   => chunk_axis=1
-    # - transA=True : a_scale=[ceil(k/64), m, 2]   => chunk_axis=0
-    # - transB=True : b_scale=[n, ceil(k/64), 2]   => chunk_axis=1
-    # - transB=False: b_scale=[ceil(k/64), n, 2]   => chunk_axis=0
     a_chunk_axis = 0 if trans_a else 1
     b_chunk_axis = 1 if trans_b else 0
 
@@ -120,11 +124,11 @@ def parse_bool_arg(value, name):
 
 if __name__ == "__main__":
     if len(sys.argv) not in (4, 6):
-        print("Usage: python3 gen_data.py m k n [transA transB]")
-        print("Example: python3 gen_data.py 257 258 259 0 1")
+        print("Usage: python3 gen_data_weight_nz.py m k n [transA transB]")
+        print("Example: python3 gen_data_weight_nz.py 257 258 259 0 1")
+        print("MXFP8: one byte per element; layout matches gen_data.py / sample README.")
         sys.exit(1)
 
-    # Parse command-line arguments.
     m = int(sys.argv[1])
     k = int(sys.argv[2])
     n = int(sys.argv[3])
@@ -133,8 +137,11 @@ if __name__ == "__main__":
         trans_a = parse_bool_arg(sys.argv[4], "transA")
         trans_b = parse_bool_arg(sys.argv[5], "transB")
     else:
-        # Keep original behavior: A not transposed, B transposed.
         trans_a = False
         trans_b = True
 
-    gen_golden_data_simple(m, k, n, trans_a, trans_b)
+    try:
+        gen_golden_data_simple(m, k, n, trans_a, trans_b)
+    except ValueError as e:
+        print(str(e))
+        sys.exit(1)

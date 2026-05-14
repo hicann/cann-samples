@@ -202,6 +202,29 @@ def resolve_gen_data_script(script_dir: Path) -> Path:
     raise FileNotFoundError(f"gen_data.py was not found in {script_dir}")
 
 
+def resolve_gen_data_weight_nz_script(script_dir: Path) -> Path:
+    script_path = script_dir / "gen_data_weight_nz.py"
+    if script_path.exists():
+        return script_path
+
+    raise FileNotFoundError(f"gen_data_weight_nz.py was not found in {script_dir}")
+
+
+def candidate_uses_weight_nz_layout(executable_name: str) -> bool:
+    return executable_name.endswith("_weight_nz")
+
+
+def partition_candidates(candidates: List[Candidate]) -> Tuple[List[Candidate], List[Candidate]]:
+    nd_weight: List[Candidate] = []
+    nz_weight: List[Candidate] = []
+    for candidate in candidates:
+        if candidate_uses_weight_nz_layout(candidate.executable_name):
+            nz_weight.append(candidate)
+        else:
+            nd_weight.append(candidate)
+    return nd_weight, nz_weight
+
+
 def generate_input(script_dir: Path, m: int, k: int, n: int, trans_a: int, trans_b: int) -> None:
     # The recommendation must compare all candidates on the same generated
     # dataset, so input generation is centralized here.
@@ -218,6 +241,22 @@ def generate_input(script_dir: Path, m: int, k: int, n: int, trans_a: int, trans
         if result.returncode != 0:
             output = read_command_log(log_file)
             raise RuntimeError(f"Failed to generate input data.\n{output}")
+
+
+def generate_input_weight_nz(script_dir: Path, m: int, k: int, n: int, trans_a: int, trans_b: int) -> None:
+    script_path = resolve_gen_data_weight_nz_script(script_dir)
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as log_file:
+        result = subprocess.run(
+            [sys.executable, str(script_path), str(m), str(k), str(n), str(trans_a), str(trans_b)],
+            cwd=script_path.parent,
+            text=True,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        if result.returncode != 0:
+            output = read_command_log(log_file)
+            raise RuntimeError(f"Failed to generate NZ-weight input data.\n{output}")
 
 
 def cleanup_msprof_output_dir(msprof_output_dir: Path) -> None:
@@ -429,7 +468,35 @@ def print_ranking(results: List[CandidateResult]) -> None:
         print(f"  {index}. {result.label}")
 
     print_profile_table(ranked_results)
-    print("Note: Only algorithms that support the current shape are listed.\n")
+    print(
+        "Note: Only algorithms that support the current shape are listed. "
+        "ND-weight and NZ-weight (*_weight_nz) rows each used golden inputs from "
+        "gen_data.py / gen_data_weight_nz.py respectively; kernel times are merged for comparison.\n"
+    )
+
+
+def collect_benchmark_results(
+    script_dir: Path,
+    m: int,
+    k: int,
+    n: int,
+    trans_a: bool,
+    trans_b: bool,
+    nd_candidates: List[Candidate],
+    nz_candidates: List[Candidate],
+) -> List[CandidateResult]:
+    results: List[CandidateResult] = []
+    if nd_candidates:
+        generate_input(script_dir, m, k, n, trans_a, trans_b)
+        results.extend(
+            run_candidate(script_dir, candidate, m, k, n, trans_a, trans_b) for candidate in nd_candidates
+        )
+    if nz_candidates:
+        generate_input_weight_nz(script_dir, m, k, n, trans_a, trans_b)
+        results.extend(
+            run_candidate(script_dir, candidate, m, k, n, trans_a, trans_b) for candidate in nz_candidates
+        )
+    return results
 
 
 def main(argv: List[str]) -> int:
@@ -447,26 +514,34 @@ def main(argv: List[str]) -> int:
         print(f"ERROR: No executable files were found in {script_dir}")
         return 1
 
+    nd_candidates, nz_candidates = partition_candidates(candidates)
+    if nz_candidates and not (script_dir / "gen_data_weight_nz.py").exists():
+        print(f"ERROR: gen_data_weight_nz.py is required for *_weight_nz executables (missing in {script_dir}).")
+        return 1
+
     try:
         try:
-            generate_input(script_dir, m, k, n, trans_a, trans_b)
+            results = collect_benchmark_results(
+                script_dir, m, k, n, trans_a, trans_b, nd_candidates, nz_candidates
+            )
         except Exception as error:
             print(f"ERROR: {error}")
             return 1
 
-        results: List[CandidateResult] = []
-        for candidate in candidates:
-            # Preserve per-candidate outputs so failures can still be inspected if
-            # no compatible implementation is found.
-            candidate_result = run_candidate(script_dir, candidate, m, k, n, trans_a, trans_b)
-            results.append(candidate_result)
-
         ranked_results = get_ranked_results(results)
         if print_target_only:
             if not ranked_results:
-                print("ERROR: No compatible algorithm found for the current shape.")
+                print(
+                    "ERROR: No compatible algorithm found for the current shape.",
+                    file=sys.stderr,
+                )
                 return 1
-            print(ranked_results[0].label)
+            best = ranked_results[0]
+            print(
+                f"[recommend] Best algorithm for this shape (shortest msprof kernel time): {best.label}",
+                file=sys.stderr,
+            )
+            print(best.label)
             return 0
 
         print_ranking(results)

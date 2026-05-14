@@ -20,6 +20,7 @@
 #include "include/tensor_api/tensor.h"
 #include "../policy/dispatch_policy.h"
 #include "../utils/constant.h"
+#include "../utils/layout_utils.h"
 #include "../tile/tile_mmad_mx.h"
 #include "../tile/copy_scale_l1_to_l0a.h"
 #include "../tile/copy_scale_l1_to_l0b.h"
@@ -73,8 +74,9 @@ public:
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
-    static constexpr bool transA = AscendC::IsSameType<LayoutA, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
-	static constexpr bool transB = AscendC::IsSameType<LayoutB, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
+    static constexpr bool weightNz = MatmulRecipe::IsWeightNz<LayoutB>::value;
+    static constexpr bool transA = MatmulRecipe::IsTrans<LayoutA>::value;
+    static constexpr bool transB = MatmulRecipe::IsTrans<LayoutB>::value;
     static constexpr bool isDTypeFp4 = AscendC::IsSameType<AType, fp4x2_e1m2_t>::value ||
         AscendC::IsSameType<AType, fp4x2_e2m1_t>::value;
     static constexpr uint64_t L1_BUFFER_NUM = DispatchPolicy::stages;
