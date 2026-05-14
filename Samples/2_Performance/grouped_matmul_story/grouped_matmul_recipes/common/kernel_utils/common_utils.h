@@ -22,8 +22,7 @@
 #include "kernel_operator.h"
 #endif
 #include "lib/matmul_intf.h"
-
-#include "integral_constant.h"
+#include "include/tensor_api/tensor.h"
 
 // On-chip buffer capacities used by the kernel helper code.
 constexpr static int64_t L0A_SIZE = 64 * 1024;

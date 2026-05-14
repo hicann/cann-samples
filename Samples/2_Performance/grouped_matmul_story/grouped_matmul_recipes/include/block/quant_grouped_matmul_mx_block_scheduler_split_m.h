@@ -65,10 +65,10 @@ public:
 
     __aicore__ inline void UpdateNextProblem(const TupleShape& problemShape)
     {
-        k_ = Get<MNK_K>(problemShape);
-        if (m_ != Get<MNK_M>(problemShape) || n_ != Get<MNK_N>(problemShape)) {
-            m_ = Get<MNK_M>(problemShape);
-            n_ = Get<MNK_N>(problemShape);
+        k_ = AscendC::Te::Get<MNK_K>(problemShape);
+        if (m_ != AscendC::Te::Get<MNK_M>(problemShape) || n_ != AscendC::Te::Get<MNK_N>(problemShape)) {
+            m_ = AscendC::Te::Get<MNK_M>(problemShape);
+            n_ = AscendC::Te::Get<MNK_N>(problemShape);
             mCnt_ = CeilDiv(m_, baseM_);
             nCnt_ = CeilDiv(n_, baseN_);
             mBaseTail_ = m_ - (mCnt_ - 1) * baseM_;
@@ -179,17 +179,17 @@ public:
         }
         int64_t rowIdx = index / nCnt_ / mainMWindow_;
         if (rowIdx < mainRow_) {
-            Get<MNK_M>(blockCoord) = rowIdx * mainMWindow_ + index % mainMWindow_;
-            Get<MNK_N>(blockCoord) = (index / mainMWindow_) % nCnt_;
+            AscendC::Std::get<MNK_M>(blockCoord) = rowIdx * mainMWindow_ + index % mainMWindow_;
+            AscendC::Std::get<MNK_N>(blockCoord) = (index / mainMWindow_) % nCnt_;
         } else {
             rowIdx = mainRow_;
             int64_t tailIndex = index - mainRow_ * mainMWindow_ * nCnt_;
-            Get<MNK_M>(blockCoord) = mainRow_ * mainMWindow_ + tailIndex % tailWindow_;
-            Get<MNK_N>(blockCoord) = (tailIndex / tailWindow_) % nCnt_;
+            AscendC::Std::get<MNK_M>(blockCoord) = mainRow_ * mainMWindow_ + tailIndex % tailWindow_;
+            AscendC::Std::get<MNK_N>(blockCoord) = (tailIndex / tailWindow_) % nCnt_;
         }
 
         if (rowIdx & 1) {
-            Get<MNK_N>(blockCoord) = nCnt_ - 1 - Get<MNK_N>(blockCoord);
+            AscendC::Std::get<MNK_N>(blockCoord) = nCnt_ - 1 - AscendC::Te::Get<MNK_N>(blockCoord);
         }
         roundIdx_++;
         return true;
@@ -197,8 +197,8 @@ public:
 
     __aicore__ inline TupleShape GetBlockShape(const BlockCoord& blockCoord)
     {
-        int64_t singleCoreM = Get<MNK_M>(blockCoord) != (mCnt_ - 1) ? baseM_ : mBaseTail_;
-        int64_t singleCoreN = Get<MNK_N>(blockCoord) != (nCnt_ - 1) ? baseN_ : nBaseTail_;
+        int64_t singleCoreM = AscendC::Te::Get<MNK_M>(blockCoord) != (mCnt_ - 1) ? baseM_ : mBaseTail_;
+        int64_t singleCoreN = AscendC::Te::Get<MNK_N>(blockCoord) != (nCnt_ - 1) ? baseN_ : nBaseTail_;
         if (tailCnt_ == 1 || roundIdx_ < round_) { // roundIdx++ in GetTileIdx
             return {singleCoreM, singleCoreN, 0, 0};
         }

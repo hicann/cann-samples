@@ -17,7 +17,6 @@
 #endif
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 #include "../utils/quant_matmul_constant.h"
 #include "../tile/tile_mmad_mx.h"
@@ -91,14 +90,14 @@ public:
     __aicore__ inline void Init(
         const TupleShape& problemShape, const BlockShape& l0TileShape, const L1Params& l1Params)
     {
-        m_ = Get<IDX_M_IDX>(problemShape);
-        n_ = Get<IDX_N_IDX>(problemShape);
-        k_ = Get<IDX_K_IDX>(problemShape);
+        m_ = AscendC::Te::Get<IDX_M_IDX>(problemShape);
+        n_ = AscendC::Te::Get<IDX_N_IDX>(problemShape);
+        k_ = AscendC::Te::Get<IDX_K_IDX>(problemShape);
         kL1_ = l1Params.kL1;
         scaleKL1_ = l1Params.scaleKL1;
-        baseM_ = Get<IDX_M_IDX>(l0TileShape);
-        baseN_ = Get<IDX_N_IDX>(l0TileShape);
-        baseK_ = Get<IDX_K_IDX>(l0TileShape);
+        baseM_ = AscendC::Te::Get<IDX_M_IDX>(l0TileShape);
+        baseN_ = AscendC::Te::Get<IDX_N_IDX>(l0TileShape);
+        baseK_ = AscendC::Te::Get<IDX_K_IDX>(l0TileShape);
         l1BufNum_ = l1Params.l1BufNum;
         scaleKL1Ratio_ = scaleKL1_ / kL1_;
 
@@ -200,8 +199,8 @@ AscendC::Te::Mmad(
         TensorA gmA, TensorB gmB, TensorScaleA gmScaleA, TensorScaleB gmScaleB, TensorC gmC,
         BlockShape singleShape)
     {
-        auto curM = Get<IDX_M_TILEIDX>(singleShape);
-        auto curN = Get<IDX_N_TILEIDX>(singleShape);
+        auto curM = AscendC::Te::Get<IDX_M_TILEIDX>(singleShape);
+        auto curN = AscendC::Te::Get<IDX_N_TILEIDX>(singleShape);
         uint64_t l0cOffset = (l0cPingPong_ & 1) * HALF_L0C_SIZE;
         auto layoutL0C = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(curM, curN);
         auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(l0cOffset), layoutL0C);

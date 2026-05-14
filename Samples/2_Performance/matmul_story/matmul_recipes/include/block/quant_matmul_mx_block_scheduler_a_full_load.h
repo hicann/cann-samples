@@ -127,8 +127,8 @@ public:
     __aicore__ inline void CalSingleCoreShapeByCoord(
         int64_t& singleCoreM, int64_t& singleCoreN, const BlockCoord& blockCoord)
     {
-        int64_t mTileIdx = Get<MNK_K>(blockCoord);
-        int64_t nTileIdx = Get<MNK_B>(blockCoord);
+        int64_t mTileIdx = AscendC::Te::Get<MNK_K>(blockCoord);
+        int64_t nTileIdx = AscendC::Te::Get<MNK_B>(blockCoord);
         if constexpr (!TransA_) {
             if (mTileIdx >= mBaseNormCnt_) {
                 singleCoreM = mTileIdx < mCnt_ - 1 ? mBaseTailMain_ : mBaseTailLast_;
@@ -204,8 +204,8 @@ public:
         int64_t nTileIdx = curRoundIdx * blockNum_ / mCnt_ % nCnt_ + blockIdx_ / mCnt_ / curNTailTile;
 
         BlockCoord shapeCoord{};
-        Get<MNK_K>(shapeCoord) = mTileIdx;
-        Get<MNK_B>(shapeCoord) = nTileIdx;
+        AscendC::Std::get<MNK_K>(shapeCoord) = mTileIdx;
+        AscendC::Std::get<MNK_B>(shapeCoord) = nTileIdx;
         int64_t singleCoreM = baseM_;
         int64_t singleCoreN = baseN_;
         CalSingleCoreShapeByCoord(singleCoreM, singleCoreN, shapeCoord);
@@ -243,10 +243,10 @@ public:
         // Pack one scheduler result into `blockCoord`:
         // M/N hold GM origin, while K/B preserve logical tile indices for the
         // later `GetBlockShape` call.
-        Get<MNK_M>(blockCoord) = mPos;
-        Get<MNK_N>(blockCoord) = nPos;
-        Get<MNK_K>(blockCoord) = mTileIdx;
-        Get<MNK_B>(blockCoord) = nTileIdx;
+        AscendC::Std::get<MNK_M>(blockCoord) = mPos;
+        AscendC::Std::get<MNK_N>(blockCoord) = nPos;
+        AscendC::Std::get<MNK_K>(blockCoord) = mTileIdx;
+        AscendC::Std::get<MNK_B>(blockCoord) = nTileIdx;
         roundIdx_++;
         return true;
     }

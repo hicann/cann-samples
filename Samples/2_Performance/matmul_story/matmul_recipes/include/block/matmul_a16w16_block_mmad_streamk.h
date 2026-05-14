@@ -16,7 +16,6 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 #include "../policy/dispatch_policy.h"
 #include "../utils/constant.h"
@@ -81,15 +80,15 @@ public:
     __aicore__ inline BlockMmad(
         const TupleShape& problemShape, const TupleShape& tileL1Shape, const TupleShape& tileL0Shape)
     {
-        m_ = Get<IDX_M_IDX>(problemShape);
-        n_ = Get<IDX_N_IDX>(problemShape);
-        k_ = Get<IDX_K_IDX>(problemShape);
-        mL1_ = Get<IDX_M_IDX>(tileL1Shape);
-        nL1_ = Get<IDX_N_IDX>(tileL1Shape);
-        kL1_ = Get<IDX_K_IDX>(tileL1Shape);
-        baseM_ = Get<IDX_M_IDX>(tileL0Shape);
-        baseN_ = Get<IDX_N_IDX>(tileL0Shape);
-        baseK_ = Get<IDX_K_IDX>(tileL0Shape);
+        m_ = AscendC::Te::Get<IDX_M_IDX>(problemShape);
+        n_ = AscendC::Te::Get<IDX_N_IDX>(problemShape);
+        k_ = AscendC::Te::Get<IDX_K_IDX>(problemShape);
+        mL1_ = AscendC::Te::Get<IDX_M_IDX>(tileL1Shape);
+        nL1_ = AscendC::Te::Get<IDX_N_IDX>(tileL1Shape);
+        kL1_ = AscendC::Te::Get<IDX_K_IDX>(tileL1Shape);
+        baseM_ = AscendC::Te::Get<IDX_M_IDX>(tileL0Shape);
+        baseN_ = AscendC::Te::Get<IDX_N_IDX>(tileL0Shape);
+        baseK_ = AscendC::Te::Get<IDX_K_IDX>(tileL0Shape);
         aL1OneBuffer_ = mL1_ * kL1_;
         bL1Init_ = aL1OneBuffer_ * L1_BUFFER_NUM;
         bL1OneBuffer_ = nL1_ * kL1_;
@@ -119,9 +118,9 @@ public:
         TensorC gmC, TensorA gmA, TensorB gmB, TensorWorkSpace gmWorkSpace, const BlockShape& tileShape,
         int64_t kCntIndex, bool checkIsSkScene)
     {
-        uint64_t curML1 = Get<MNK_M>(tileShape);
-        uint64_t curNL1 = Get<MNK_N>(tileShape);
-        uint64_t curSingleCoreK = Get<MNK_K>(tileShape);
+        uint64_t curML1 = AscendC::Te::Get<MNK_M>(tileShape);
+        uint64_t curNL1 = AscendC::Te::Get<MNK_N>(tileShape);
+        uint64_t curSingleCoreK = AscendC::Te::Get<MNK_K>(tileShape);
         uint64_t curKL1Iter = (curSingleCoreK + kL1_ - 1) / kL1_;
 
         // LoC move out

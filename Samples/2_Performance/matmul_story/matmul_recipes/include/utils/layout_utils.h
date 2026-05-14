@@ -15,8 +15,7 @@
 
 #pragma once
 
-#include "kernel_utils/integral_constant.h"
-#include "include/tensor_api/tensor.h"
+#include "kernel_utils/common_utils.h"
 
 namespace MatmulRecipe {
 

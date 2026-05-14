@@ -16,7 +16,6 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 #include "../policy/dispatch_policy.h"
 #include "../utils/constant.h"
@@ -160,14 +159,14 @@ public:
         // In the A-full-load path, the A tile and its scale stay resident in
         // L1. The offset plan therefore reserves a dedicated resident region
         // and packs the rolling B/scaleB buffers around it.
-        m_ = Get<IDX_M_IDX>(problemShape);
-        n_ = Get<IDX_N_IDX>(problemShape);
-        k_ = Get<IDX_K_IDX>(problemShape);
+        m_ = AscendC::Te::Get<IDX_M_IDX>(problemShape);
+        n_ = AscendC::Te::Get<IDX_N_IDX>(problemShape);
+        k_ = AscendC::Te::Get<IDX_K_IDX>(problemShape);
         kL1_ = l1Params.kL1;
         scaleKL1_ = l1Params.scaleKL1;
-        baseM_ = Get<IDX_M_IDX>(l0TileShape);
-        baseN_ = Get<IDX_N_IDX>(l0TileShape);
-        baseK_ = Get<IDX_K_IDX>(l0TileShape);
+        baseM_ = AscendC::Te::Get<IDX_M_IDX>(l0TileShape);
+        baseN_ = AscendC::Te::Get<IDX_N_IDX>(l0TileShape);
+        baseK_ = AscendC::Te::Get<IDX_K_IDX>(l0TileShape);
         enableL0cPingPong_ = enableL0cPingPong;
 
         constexpr uint64_t sizeShift = isDTypeFp4 ? 1UL : 0UL;
@@ -208,8 +207,8 @@ public:
         // This path keeps A-side data resident across the N tiles handled by
         // the same block. The first tile populates the resident A buffers and
         // loads scaleA once; later tiles mainly stream the B side through K.
-        auto curM = Get<IDX_M_TILEIDX>(singleShape);
-        auto curN = Get<IDX_N_TILEIDX>(singleShape);
+        auto curM = AscendC::Te::Get<IDX_M_TILEIDX>(singleShape);
+        auto curN = AscendC::Te::Get<IDX_N_TILEIDX>(singleShape);
         uint64_t l0cOffset = (l0cPingPong_ & 1) * HALF_L0C_SIZE;
         auto layoutL0C = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(curM, curN);
         auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(l0cOffset), layoutL0C);

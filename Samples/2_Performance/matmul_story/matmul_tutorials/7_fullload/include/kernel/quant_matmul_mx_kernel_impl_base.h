@@ -21,7 +21,6 @@
 #include "kernel_operator_intf.h"
 #endif
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 #include "../block/block_scheduler_mx_base.h"
 #include "../block/quant_matmul_mxfp4_block_mmad_a_full_load.h"
@@ -148,18 +147,18 @@ __aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS
     constexpr int64_t kPos = 0L;
     while (bs.GetTileIdx(blockIdx)) {
         BlockShape singleShape = bs.GetBlockShape(blockIdx);
-        if (Get<MNK_M>(singleShape) <= 0 || Get<MNK_N>(singleShape) <= 0) {
+        if (AscendC::Te::Get<MNK_M>(singleShape) <= 0 || AscendC::Te::Get<MNK_N>(singleShape) <= 0) {
             return;
         }
 
-        int64_t mTileIdx = Get<MNK_M>(blockIdx);
-        int64_t nTileIdx = Get<MNK_N>(blockIdx);
-        int64_t mSplitOffset = Get<IDX_M_TAIL_SPLIT_TILEIDX>(singleShape);
-        int64_t nSplitOffset = Get<IDX_N_TAIL_SPLIT_TILEIDX>(singleShape);
+        int64_t mTileIdx = AscendC::Te::Get<MNK_M>(blockIdx);
+        int64_t nTileIdx = AscendC::Te::Get<MNK_N>(blockIdx);
+        int64_t mSplitOffset = AscendC::Te::Get<IDX_M_TAIL_SPLIT_TILEIDX>(singleShape);
+        int64_t nSplitOffset = AscendC::Te::Get<IDX_N_TAIL_SPLIT_TILEIDX>(singleShape);
         int64_t mPos = mTileIdx * params.qbmmParams.baseM + mSplitOffset;
         int64_t nPos = nTileIdx * params.qbmmParams.baseN + nSplitOffset;
-        auto curM = Get<IDX_M_TILEIDX>(singleShape);
-        auto curN = Get<IDX_N_TILEIDX>(singleShape);
+        auto curM = AscendC::Te::Get<IDX_M_TILEIDX>(singleShape);
+        auto curN = AscendC::Te::Get<IDX_N_TILEIDX>(singleShape);
 
         auto gmBlockA = gmA.Slice(AscendC::Te::MakeCoord(mPos, kPos),
             AscendC::Te::MakeShape(curM, params.problemShape.k));

@@ -15,51 +15,43 @@
 
 #pragma once
 
-// Cube format definitions.
-#include "matmul/matmul_config.h"
-// Required by matmul_utils.h.
-#include "matmul/tiling.h"
+#include "include/tensor_api/tensor.h"
 
-// Provides AscendC::CeilAlign.
-#include "../../impl/adv_api/detail/matmul/utils/matmul_utils.h"
-#include "./integral_constant.h"
+template <typename LayoutPattern>
+constexpr bool GetTransValue()
+{
+    constexpr bool isNonTrans =
+        AscendC::Std::is_one_of_v<LayoutPattern, AscendC::Te::NDExtLayoutPtn, AscendC::Te::NZLayoutPtn>;
+    constexpr bool isTrans =
+        AscendC::Std::is_one_of_v<LayoutPattern, AscendC::Te::DNExtLayoutPtn, AscendC::Te::ZNLayoutPtn>;
 
-namespace layout {
-struct RowMajor {};
-struct ColumnMajor {};
-} // namespace layout
+    constexpr bool isKnown = isNonTrans || isTrans;
+    static_assert(isKnown, "IsTrans is not implemented for this layout pattern");
 
-// Map layout tags to CubeFormat values.
-template <typename T>
-struct TagToFormat {
-    static_assert(AscendC::Std::always_false_v<T>, "TagToFormat is not implemented for this layout");
+    return !isNonTrans && isTrans;
+}
+
+template <typename LayoutPattern>
+struct IsTrans {
+    static constexpr bool value = GetTransValue<LayoutPattern>();
 };
 
-template <>
-struct TagToFormat<layout::RowMajor> {
-    using tag = layout::RowMajor;
-    static constexpr CubeFormat format = CubeFormat::ND;
-};
+template <typename LayoutPattern>
+constexpr bool GetWeightNzValue()
+{
+    constexpr bool isNonWeightNz =
+        AscendC::Std::is_one_of_v<LayoutPattern, AscendC::Te::NDExtLayoutPtn, AscendC::Te::DNExtLayoutPtn>;
+    constexpr bool isWeightNz =
+        AscendC::Std::is_one_of_v<LayoutPattern, AscendC::Te::NZLayoutPtn, AscendC::Te::ZNLayoutPtn>;
 
-template <>
-struct TagToFormat<layout::ColumnMajor> {
-    using tag = layout::ColumnMajor;
-    static constexpr CubeFormat format = CubeFormat::ND;
-};
+    constexpr bool isKnown = isNonWeightNz || isWeightNz;
+    static_assert(isKnown, "IsWeightNz is not implemented for this layout");
 
-// Map layout tags to transpose flags.
-template <typename T>
-struct TagToTrans {
-    static_assert(AscendC::Std::always_false_v<T>, "TagToTrans is not implemented for this layout");
-};
+    return !isNonWeightNz && isWeightNz;
+}
 
-template <>
-struct TagToTrans<layout::RowMajor> {
-    static constexpr bool value = false;
-};
-
-template <>
-struct TagToTrans<layout::ColumnMajor> {
-    static constexpr bool value = true;
+template <typename LayoutPattern>
+struct IsWeightNz {
+    static constexpr bool value = GetWeightNzValue<LayoutPattern>();
 };
 

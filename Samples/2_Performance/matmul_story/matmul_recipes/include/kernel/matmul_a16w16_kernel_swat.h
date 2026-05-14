@@ -23,7 +23,6 @@
 #endif
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 
 #include "../block/matmul_a16w16_block_mmad_swat.h"
@@ -115,9 +114,9 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
     // Instantiate mmadOp
     BlockMmad blockMmadOp(problemShape_, tileL1, tileL0, l0cDB);
 
-    int64_t m = Get<MNK_M>(problemShape_);
-    int64_t n = Get<MNK_N>(problemShape_);
-    int64_t k = Get<MNK_K>(problemShape_);
+    int64_t m = AscendC::Te::Get<MNK_M>(problemShape_);
+    int64_t n = AscendC::Te::Get<MNK_N>(problemShape_);
+    int64_t k = AscendC::Te::Get<MNK_K>(problemShape_);
 
     auto layoutA = MakeLayoutA{}(m, k); // ND layout for A
     auto layoutB = MakeLayoutB{}(k, n); // ND layout for B
@@ -136,12 +135,12 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
         auto tileShape = bs.GetBlockShape(tileIdx); // (m, n, k, b)
         auto tileCoord = bs.GetBlockCoord(tileIdx); // (m, n, k, b)
         auto gmBlockA =
-            gmA.Slice(AscendC::MakeCoord(Get<0>(tileCoord), 0), AscendC::MakeShape(Get<0>(tileShape), Get<2>(tileShape)));
+            gmA.Slice(AscendC::MakeCoord(AscendC::Te::Get<0>(tileCoord), 0), AscendC::MakeShape(AscendC::Te::Get<0>(tileShape), AscendC::Te::Get<2>(tileShape)));
         auto gmBlockB =
-            gmB.Slice(AscendC::MakeCoord(0, Get<1>(tileCoord)), AscendC::MakeShape(Get<2>(tileShape), Get<1>(tileShape)));
+            gmB.Slice(AscendC::MakeCoord(0, AscendC::Te::Get<1>(tileCoord)), AscendC::MakeShape(AscendC::Te::Get<2>(tileShape), AscendC::Te::Get<1>(tileShape)));
         auto gmBlockC =
-            gmC.Slice(AscendC::MakeCoord(Get<0>(tileCoord), Get<1>(tileCoord)),
-                AscendC::MakeShape(Get<0>(tileShape), Get<1>(tileShape)));
+            gmC.Slice(AscendC::MakeCoord(AscendC::Te::Get<0>(tileCoord), AscendC::Te::Get<1>(tileCoord)),
+                AscendC::MakeShape(AscendC::Te::Get<0>(tileShape), AscendC::Te::Get<1>(tileShape)));
         blockMmadOp(gmBlockC, gmBlockA, gmBlockB, tileShape);
     }
 

@@ -16,7 +16,6 @@
 #include "kernel_operator_intf.h"
 #endif
 #include "../../../common/kernel_utils/common_utils.h"
-#include "../../../common/kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 #include "../utils/quant_matmul_constant.h"
 #include "../block/block_scheduler_mx_swat.h"
@@ -142,22 +141,22 @@ __aicore__ inline void QuantMatmulMxKernelLastRoundTileBalanceImpl<QBMM_MX_KERNE
     constexpr int64_t kPos = 0L;
     while (bs.GetTileIdx(blockCoord)) {
         BlockShape singleShape = bs.GetBlockShape(blockCoord);
-        if (Get<MNK_M>(singleShape) <= 0 || Get<MNK_N>(singleShape) <= 0) {
+        if (AscendC::Te::Get<MNK_M>(singleShape) <= 0 || AscendC::Te::Get<MNK_N>(singleShape) <= 0) {
             return;
         }
-        int64_t mPos = Get<MNK_M>(blockCoord) + Get<IDX_M_TAIL_SPLIT_TILEIDX>(singleShape);
-        int64_t nPos = Get<MNK_N>(blockCoord) + Get<IDX_N_TAIL_SPLIT_TILEIDX>(singleShape);
+        int64_t mPos = AscendC::Te::Get<MNK_M>(blockCoord) + AscendC::Te::Get<IDX_M_TAIL_SPLIT_TILEIDX>(singleShape);
+        int64_t nPos = AscendC::Te::Get<MNK_N>(blockCoord) + AscendC::Te::Get<IDX_N_TAIL_SPLIT_TILEIDX>(singleShape);
 
-        auto gmBlockA = gmA.Slice(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), params.problemShape.k));
+        auto gmBlockA = gmA.Slice(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(AscendC::Te::Get<MNK_M>(singleShape), params.problemShape.k));
         auto gmBlockScaleA = gmScaleA.Slice(AscendC::Te::MakeCoord(mPos, kPos),
             AscendC::Te::MakeShape(
-                Get<MNK_M>(singleShape), CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE));
-        auto gmBlockB = gmB.Slice(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, Get<MNK_N>(singleShape)));
+                AscendC::Te::Get<MNK_M>(singleShape), CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE));
+        auto gmBlockB = gmB.Slice(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, AscendC::Te::Get<MNK_N>(singleShape)));
         auto gmBlockScaleB = gmScaleB.Slice(AscendC::Te::MakeCoord(kPos, nPos),
             AscendC::Te::MakeShape(
-                CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, Get<MNK_N>(singleShape)));
+                CeilDiv(params.problemShape.k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, AscendC::Te::Get<MNK_N>(singleShape)));
         auto gmBlockC = gmC.Slice(AscendC::Te::MakeCoord(mPos, nPos),
-            AscendC::Te::MakeShape(Get<MNK_M>(singleShape), Get<MNK_N>(singleShape)));
+            AscendC::Te::MakeShape(AscendC::Te::Get<MNK_M>(singleShape), AscendC::Te::Get<MNK_N>(singleShape)));
         mmadOp_(gmBlockA, gmBlockB, gmBlockScaleA, gmBlockScaleB, gmBlockC, singleShape);
     }
 }

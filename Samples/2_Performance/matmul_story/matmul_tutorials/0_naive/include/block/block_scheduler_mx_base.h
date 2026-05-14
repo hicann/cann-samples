@@ -16,7 +16,6 @@
 #include "kernel_operator.h"
 #endif
 #include "../../../common/kernel_utils/common_utils.h"
-#include "../../../common/kernel_utils/tuple_utils.h"
 #include "block_scheduler_utils.h"
 
 namespace Block {
@@ -80,8 +79,8 @@ public:
 
     __aicore__ inline BlockShape GetBlockShape(BlockCoord blockCoord)
     {
-        int64_t mTileIdx = Get<MNK_K>(blockCoord);
-        int64_t nTileIdx = Get<MNK_B>(blockCoord);
+        int64_t mTileIdx = AscendC::Te::Get<MNK_K>(blockCoord);
+        int64_t nTileIdx = AscendC::Te::Get<MNK_B>(blockCoord);
         int64_t singleCoreM = (mTileIdx == mCnt_ - 1) ? tailM_ : baseM_;
         int64_t singleCoreN = (nTileIdx == nCnt_ - 1) ? tailN_ : baseN_;
         return {singleCoreM, singleCoreN, 0, 0};
@@ -98,10 +97,10 @@ public:
         }
         int64_t mTileIdx = tileIdx % mCnt_;
         int64_t nTileIdx = tileIdx / mCnt_;
-        Get<MNK_M>(blockCoord) = mTileIdx * baseM_;
-        Get<MNK_N>(blockCoord) = nTileIdx * baseN_;
-        Get<MNK_K>(blockCoord) = mTileIdx;
-        Get<MNK_B>(blockCoord) = nTileIdx;
+        AscendC::Std::get<MNK_M>(blockCoord) = mTileIdx * baseM_;
+        AscendC::Std::get<MNK_N>(blockCoord) = nTileIdx * baseN_;
+        AscendC::Std::get<MNK_K>(blockCoord) = mTileIdx;
+        AscendC::Std::get<MNK_B>(blockCoord) = nTileIdx;
         roundIdx_++;
         return true;
     }

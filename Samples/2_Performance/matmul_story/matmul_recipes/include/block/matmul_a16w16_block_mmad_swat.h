@@ -16,7 +16,6 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 #include "../policy/dispatch_policy.h"
 #include "../utils/constant.h"
@@ -84,15 +83,15 @@ public:
 
     __aicore__ inline BlockMmad(const TupleShape& problemShape, const TupleShape& tileL1Shape, const TupleShape& tileL0Shape, bool l0cDB)
     {
-        m_ = Get<IDX_M_IDX>(problemShape);
-        n_ = Get<IDX_N_IDX>(problemShape);
-        k_ = Get<IDX_K_IDX>(problemShape);
-        mL1_ = Get<IDX_M_IDX>(tileL1Shape);
-        nL1_ = Get<IDX_N_IDX>(tileL1Shape);
-        kL1_ = Get<IDX_K_IDX>(tileL1Shape);
-        baseM_ = Get<IDX_M_IDX>(tileL0Shape);
-        baseN_ = Get<IDX_N_IDX>(tileL0Shape);
-        baseK_ = Get<IDX_K_IDX>(tileL0Shape);
+        m_ = AscendC::Te::Get<IDX_M_IDX>(problemShape);
+        n_ = AscendC::Te::Get<IDX_N_IDX>(problemShape);
+        k_ = AscendC::Te::Get<IDX_K_IDX>(problemShape);
+        mL1_ = AscendC::Te::Get<IDX_M_IDX>(tileL1Shape);
+        nL1_ = AscendC::Te::Get<IDX_N_IDX>(tileL1Shape);
+        kL1_ = AscendC::Te::Get<IDX_K_IDX>(tileL1Shape);
+        baseM_ = AscendC::Te::Get<IDX_M_IDX>(tileL0Shape);
+        baseN_ = AscendC::Te::Get<IDX_N_IDX>(tileL0Shape);
+        baseK_ = AscendC::Te::Get<IDX_K_IDX>(tileL0Shape);
         kAlign_ = Align(k_, AscendC::BLOCK_CUBE);
         enableL0cPingPong_ = l0cDB;
         // Non-full load
@@ -126,8 +125,8 @@ public:
     template <typename TensorC, typename TensorA, typename TensorB>
     __aicore__ inline void operator()(TensorC gmC, TensorA gmA, TensorB gmB, const BlockShape& tileShape)
     {
-        uint64_t curM = Get<MNK_M>(tileShape);
-        uint64_t curN = Get<MNK_N>(tileShape);
+        uint64_t curM = AscendC::Te::Get<MNK_M>(tileShape);
+        uint64_t curN = AscendC::Te::Get<MNK_N>(tileShape);
         uint64_t ml1Align = Align(curM, AscendC::BLOCK_CUBE);
         uint64_t l0cOffset = (l0cPingPong_ & 0x1) * HALF_L0C_SIZE;
         if (enableL0cPingPong_) {

@@ -15,8 +15,6 @@
 #pragma once
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/integral_constant.h"
-#include "kernel_utils/tuple_utils.h"
 
 struct KernelMultiBlockOnKAxisWithScale {};
 

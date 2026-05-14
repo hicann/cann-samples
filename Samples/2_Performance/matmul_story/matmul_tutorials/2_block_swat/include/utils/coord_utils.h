@@ -40,40 +40,40 @@ public:
         int64_t nOffset = nTileIdx * l1N + nSplitOffset;
         if constexpr (enableLoadBalance) {
             if constexpr (!isTransA) {
-                if (mTileIdx > Get<IDX_M_BASE_NORM_CNT>(loadBalanceParam)) {
-                    mOffset -= (mTileIdx - Get<IDX_M_BASE_NORM_CNT>(loadBalanceParam)) *
-                               (l1M - Get<IDX_M_BASE_TAIL_MAIN>(loadBalanceParam));
+                if (mTileIdx > AscendC::Te::Get<IDX_M_BASE_NORM_CNT>(loadBalanceParam)) {
+                    mOffset -= (mTileIdx - AscendC::Te::Get<IDX_M_BASE_NORM_CNT>(loadBalanceParam)) *
+                               (l1M - AscendC::Te::Get<IDX_M_BASE_TAIL_MAIN>(loadBalanceParam));
                 }
             }
             if constexpr (isTransB) {
-                if (nTileIdx > Get<IDX_N_BASE_NORM_CNT>(loadBalanceParam)) {
-                    nOffset -= (nTileIdx - Get<IDX_N_BASE_NORM_CNT>(loadBalanceParam)) *
-                               (l1N - Get<IDX_N_BASE_TAIL_MAIN>(loadBalanceParam));
+                if (nTileIdx > AscendC::Te::Get<IDX_N_BASE_NORM_CNT>(loadBalanceParam)) {
+                    nOffset -= (nTileIdx - AscendC::Te::Get<IDX_N_BASE_NORM_CNT>(loadBalanceParam)) *
+                               (l1N - AscendC::Te::Get<IDX_N_BASE_TAIL_MAIN>(loadBalanceParam));
                 }
             }
         }
         AscendC::Std::tuple<int64_t, int64_t, int64_t, int64_t, int64_t> offset{0, 0, 0, 0, 0};
         if constexpr (isTransA) {
-            Get<IDX_A_OFFSET>(offset) = mOffset;
+            AscendC::Std::get<IDX_A_OFFSET>(offset) = mOffset;
         } else {
-            Get<IDX_A_OFFSET>(offset) = mOffset * k;
+            AscendC::Std::get<IDX_A_OFFSET>(offset) = mOffset * k;
         }
         if constexpr (isTransB) {
-            Get<IDX_B_OFFSET>(offset) = nOffset * k;
+            AscendC::Std::get<IDX_B_OFFSET>(offset) = nOffset * k;
         } else {
-            Get<IDX_B_OFFSET>(offset) = nOffset;
+            AscendC::Std::get<IDX_B_OFFSET>(offset) = nOffset;
         }
 
-        Get<IDX_C_OFFSET>(offset) = mOffset * n + nOffset;
+        AscendC::Std::get<IDX_C_OFFSET>(offset) = mOffset * n + nOffset;
         if constexpr (isTransA) {
-            Get<IDX_X1SCALE_OFFSET>(offset) = mOffset * MXFP_MULTI_BASE_SIZE;
+            AscendC::Std::get<IDX_X1SCALE_OFFSET>(offset) = mOffset * MXFP_MULTI_BASE_SIZE;
         } else {
-            Get<IDX_X1SCALE_OFFSET>(offset) = mOffset * CeilDiv(k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
+            AscendC::Std::get<IDX_X1SCALE_OFFSET>(offset) = mOffset * CeilDiv(k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
         }
         if constexpr (isTransB) {
-            Get<IDX_X2SCALE_OFFSET>(offset) = nOffset * CeilDiv(k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
+            AscendC::Std::get<IDX_X2SCALE_OFFSET>(offset) = nOffset * CeilDiv(k, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE;
         } else {
-            Get<IDX_X2SCALE_OFFSET>(offset) = nOffset * MXFP_MULTI_BASE_SIZE;
+            AscendC::Std::get<IDX_X2SCALE_OFFSET>(offset) = nOffset * MXFP_MULTI_BASE_SIZE;
         }
         return offset;
     }

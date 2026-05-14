@@ -15,14 +15,14 @@
 
 #pragma once
 
-#include "kernel_utils/integral_constant.h"
+#include "kernel_utils/common_utils.h"
 
 namespace Block {
 template <
     class DispatchPolicy_, class AType_, class LayoutA_, class BType_,
     class LayoutB_, class CType_, class LayoutC_, class Enable = void>
 class BlockMmad {
-    static_assert(AscendC::Std::always_false_v<DispatchPolicy_>, "Should not be here!");
+    static_assert(!AscendC::Std::is_same_v<DispatchPolicy_, DispatchPolicy_>, "Should not be here!");
 };
 } // namespace Block
 

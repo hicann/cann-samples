@@ -16,7 +16,6 @@
 #include "kernel_operator.h"
 #endif
 #include "../../../common/kernel_utils/common_utils.h"
-#include "../../../common/kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 #include "../utils/quant_matmul_constant.h"
 #include "../tile/tile_mmad_mx.h"
@@ -63,12 +62,12 @@ public:
     __aicore__ inline void Init(const TupleShape& problemShape, const BlockShape& l0TileShape,
                                 const L1Params& l1Params)
     {
-        m_ = static_cast<uint64_t>(Get<IDX_M_IDX>(problemShape));
-        n_ = static_cast<uint64_t>(Get<IDX_N_IDX>(problemShape));
-        k_ = static_cast<uint64_t>(Get<IDX_K_IDX>(problemShape));
-        baseM_ = static_cast<uint64_t>(Get<IDX_M_IDX>(l0TileShape));
-        baseN_ = static_cast<uint64_t>(Get<IDX_N_IDX>(l0TileShape));
-        baseK_ = static_cast<uint64_t>(Get<IDX_K_IDX>(l0TileShape));
+        m_ = static_cast<uint64_t>(AscendC::Te::Get<IDX_M_IDX>(problemShape));
+        n_ = static_cast<uint64_t>(AscendC::Te::Get<IDX_N_IDX>(problemShape));
+        k_ = static_cast<uint64_t>(AscendC::Te::Get<IDX_K_IDX>(problemShape));
+        baseM_ = static_cast<uint64_t>(AscendC::Te::Get<IDX_M_IDX>(l0TileShape));
+        baseN_ = static_cast<uint64_t>(AscendC::Te::Get<IDX_N_IDX>(l0TileShape));
+        baseK_ = static_cast<uint64_t>(AscendC::Te::Get<IDX_K_IDX>(l0TileShape));
         if (baseK_ == 0) {
             baseK_ = 128 / sizeof(fp4x2_e2m1_t);
         }
@@ -86,8 +85,8 @@ public:
         TensorC cGlobal,
         const BlockShape& singleShape)
     {
-        uint64_t curM = static_cast<uint64_t>(Get<IDX_M_TILEIDX>(singleShape));
-        uint64_t curN = static_cast<uint64_t>(Get<IDX_N_TILEIDX>(singleShape));
+        uint64_t curM = static_cast<uint64_t>(AscendC::Te::Get<IDX_M_TILEIDX>(singleShape));
+        uint64_t curN = static_cast<uint64_t>(AscendC::Te::Get<IDX_N_TILEIDX>(singleShape));
 
         auto layoutL0C = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(curM, curN);
         auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(0), layoutL0C);

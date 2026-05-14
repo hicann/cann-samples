@@ -21,7 +21,6 @@
 #include "kernel_operator_intf.h"
 #endif
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 #include "../block/block_scheduler_mx_base.h"
 #include "../block/block_mmad_mx_base.h"
@@ -146,14 +145,14 @@ __aicore__ inline void QuantMatmulMxKernelBaseImpl<QBMM_MX_KERNEL_FUN_TEM_PARAMS
     BlockCoord blockCoord;
     constexpr int64_t kPos = 0L;
     while (bs.GetTileIdx(blockCoord)) {
-        int64_t mPos = Get<MNK_M>(blockCoord);
-        int64_t nPos = Get<MNK_N>(blockCoord);
+        int64_t mPos = AscendC::Te::Get<MNK_M>(blockCoord);
+        int64_t nPos = AscendC::Te::Get<MNK_N>(blockCoord);
         BlockShape singleShape = bs.GetBlockShape(blockCoord);
-        if (Get<MNK_M>(singleShape) <= 0 || Get<MNK_N>(singleShape) <= 0) {
+        if (AscendC::Te::Get<MNK_M>(singleShape) <= 0 || AscendC::Te::Get<MNK_N>(singleShape) <= 0) {
             return;
         }
-        auto curM = Get<IDX_M_TILEIDX>(singleShape);
-        auto curN = Get<IDX_N_TILEIDX>(singleShape);
+        auto curM = AscendC::Te::Get<IDX_M_TILEIDX>(singleShape);
+        auto curN = AscendC::Te::Get<IDX_N_TILEIDX>(singleShape);
 
         auto gmBlockA = gmA.Slice(AscendC::Te::MakeCoord(mPos, kPos),
             AscendC::Te::MakeShape(curM, params.problemShape.k));

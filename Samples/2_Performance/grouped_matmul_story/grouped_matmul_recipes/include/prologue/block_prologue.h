@@ -20,7 +20,9 @@ namespace Prologue {
 
 template <class DispatchPolicy, class... Args>
 class BlockPrologue {
-    static_assert(AscendC::Std::always_false_v<DispatchPolicy>, "BlockPrologue is not implemented for this DispatchPolicy");
+    static_assert(
+        !AscendC::Std::is_same_v<DispatchPolicy, DispatchPolicy>,
+        "BlockPrologue is not implemented for this DispatchPolicy");
 };
 
 } // namespace Prologue

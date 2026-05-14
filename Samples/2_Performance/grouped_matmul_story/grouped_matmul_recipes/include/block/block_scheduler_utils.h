@@ -14,7 +14,7 @@
  */
 #pragma once
 
-#include "kernel_utils/tuple_utils.h"
+#include "kernel_utils/common_utils.h"
 
 #include "../policy/dispatch_policy.h"
 

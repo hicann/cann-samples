@@ -16,6 +16,8 @@
 
 #include <cstdint>
 
+#include "kernel_utils/common_utils.h"
+
 namespace Block {
 
 /*!
@@ -114,7 +116,7 @@ public:
     __aicore__ inline void UpdateNextProblem(const ProblemShape& problemShape)
     {
         startBasicBlockId_ = (startBasicBlockId_ + prevTileNum_) % params_.coreNum;
-        mSize_ = AscendC::Std::get<0>(problemShape);
+        mSize_ = AscendC::Te::Get<0>(problemShape);
         mBlkNum_ = CeilDiv(mSize_, static_cast<uint64_t>(params_.baseM));
         mStep_ = CeilDiv(mSize_, mBlkNum_);
         tileNum_ = mBlkNum_ * nBlockNum_;
@@ -156,8 +158,8 @@ public:
     // Compute tile shape from tile coordinate and segment-specific N split.
     __aicore__ inline BlockShape GetBlockShape(BlockCoord blockCoord)
     {
-        uint64_t mOffset = static_cast<uint64_t>(AscendC::Std::get<0>(blockCoord));
-        uint64_t nOffset = static_cast<uint64_t>(AscendC::Std::get<1>(blockCoord));
+        uint64_t mOffset = static_cast<uint64_t>(AscendC::Te::Get<0>(blockCoord));
+        uint64_t nOffset = static_cast<uint64_t>(AscendC::Te::Get<1>(blockCoord));
 
         uint64_t mL1Size = (mOffset + mStep_ > mSize_) ? (mSize_ - mOffset) : mStep_;
 

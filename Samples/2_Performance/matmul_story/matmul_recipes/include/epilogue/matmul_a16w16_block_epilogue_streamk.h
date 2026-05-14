@@ -90,13 +90,13 @@ public:
     __aicore__ inline void Init(Params const& params, TupleShape blockShapeInAiv, TupleShape tileL1ShapeInAiv,
                                 BlockCoord coordInAiv, uint64_t usedCoreNum, bool checkIsSkScene)
     {
-        m_ = Get<MNK_M>(blockShapeInAiv);
-        n_ = Get<MNK_N>(blockShapeInAiv);
-        mL1_ = Get<MNK_M>(tileL1ShapeInAiv);
-        nL1_ = Get<MNK_N>(tileL1ShapeInAiv);
-        mCnt_ = Get<MNK_M>(coordInAiv);
-        nCnt_ = Get<MNK_N>(coordInAiv);
-        kCnt_ = Get<MNK_K>(coordInAiv);
+        m_ = AscendC::Te::Get<MNK_M>(blockShapeInAiv);
+        n_ = AscendC::Te::Get<MNK_N>(blockShapeInAiv);
+        mL1_ = AscendC::Te::Get<MNK_M>(tileL1ShapeInAiv);
+        nL1_ = AscendC::Te::Get<MNK_N>(tileL1ShapeInAiv);
+        mCnt_ = AscendC::Te::Get<MNK_M>(coordInAiv);
+        nCnt_ = AscendC::Te::Get<MNK_N>(coordInAiv);
+        kCnt_ = AscendC::Te::Get<MNK_K>(coordInAiv);
         usedCoreNum_ = usedCoreNum;
         // Decrease tile size of per vector core to prevent data race of cube and vector
         aivMte2Num_ = checkIsSkScene ? AscendC::GetTaskRation() : AscendC::BLOCK_CUBE;

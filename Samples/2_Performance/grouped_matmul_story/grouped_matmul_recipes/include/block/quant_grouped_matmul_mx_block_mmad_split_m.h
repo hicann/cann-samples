@@ -16,7 +16,6 @@
 
 #include "kernel_utils/common_utils.h"
 #include "kernel_utils/layout_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 
 #include "../policy/dispatch_policy.h"
@@ -149,15 +148,15 @@ public:
         // Force double-buffering on L1.
         constexpr uint64_t l1BufNum = GroupedMatmulRecipe::DOUBLE_BUFFER;
 
-        m_ = Get<GroupedMatmulRecipe::MNK_M>(problemShape);
-        n_ = Get<GroupedMatmulRecipe::MNK_N>(problemShape);
-        k_ = Get<GroupedMatmulRecipe::MNK_K>(problemShape);
+        m_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_M>(problemShape);
+        n_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_N>(problemShape);
+        k_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_K>(problemShape);
         kAL1_ = l1Params.kAL1;
         kBL1_ = l1Params.kBL1;
         scaleKL1_ = l1Params.scaleKL1;
-        baseM_ = Get<GroupedMatmulRecipe::MNK_M>(l0TileShape);
-        baseN_ = Get<GroupedMatmulRecipe::MNK_N>(l0TileShape);
-        baseK_ = Get<GroupedMatmulRecipe::MNK_K>(l0TileShape);
+        baseM_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_M>(l0TileShape);
+        baseN_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_N>(l0TileShape);
+        baseK_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_K>(l0TileShape);
         // Prefer outer-K loops on the operand with the larger L1 K-tile to hide memory latency.
         orderAL1BL1_ = l1Params.kAL1 >= l1Params.kBL1;
         enableL0cPingPong_ = enableL0cPingPong;
@@ -183,9 +182,9 @@ public:
     // Update global (m,n,k) for next group
     __aicore__ inline void UpdateParamsForNextProblem(const TupleShape& problemShape)
     {
-        m_ = Get<GroupedMatmulRecipe::MNK_M>(problemShape);
-        n_ = Get<GroupedMatmulRecipe::MNK_N>(problemShape);
-        k_ = Get<GroupedMatmulRecipe::MNK_K>(problemShape);
+        m_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_M>(problemShape);
+        n_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_N>(problemShape);
+        k_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_K>(problemShape);
     }
 
     template <typename TensorA, typename TensorB, typename TensorScaleA, typename TensorScaleB, typename TensorC>
@@ -390,8 +389,8 @@ private:
         const BlockShape& singleShape)
     {
         // current tile shape
-        uint64_t curM = Get<GroupedMatmulRecipe::MNK_M>(singleShape);
-        uint64_t curN = Get<GroupedMatmulRecipe::MNK_N>(singleShape);
+        uint64_t curM = AscendC::Te::Get<GroupedMatmulRecipe::MNK_M>(singleShape);
+        uint64_t curN = AscendC::Te::Get<GroupedMatmulRecipe::MNK_N>(singleShape);
         uint64_t l0cOffset = (l0cPingPong_ & 1) * HALF_L0C_SIZE;
         auto tensorL0C = AscendC::Te::MakeTensor(
             AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(l0cOffset),

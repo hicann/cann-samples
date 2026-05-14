@@ -23,7 +23,6 @@
 #endif
 
 #include "kernel_utils/common_utils.h"
-#include "kernel_utils/tuple_utils.h"
 #include "include/tensor_api/tensor.h"
 
 #include "../block/block_mmad.h"
@@ -219,10 +218,10 @@ __aicore__ inline void QuantMatmulMxKernelSwat4Buffer<QBMM_MX_KERNEL_SWAT_4BUF_F
     while (bs.template GetTileIdx<weightNz>(blockIdx)) {
         // The scheduler packs GM origin into M/N and retains logical tile
         // indices in K/B so shape reconstruction still works.
-        int64_t mPos = Get<MNK_M>(blockIdx);
-        int64_t nPos = Get<MNK_N>(blockIdx);
+        int64_t mPos = AscendC::Te::Get<MNK_M>(blockIdx);
+        int64_t nPos = AscendC::Te::Get<MNK_N>(blockIdx);
         BlockShape singleShape = bs.template GetBlockShape<weightNz>(blockIdx);
-        if (Get<MNK_M>(singleShape) <= 0 || Get<MNK_N>(singleShape) <= 0) {
+        if (AscendC::Te::Get<MNK_M>(singleShape) <= 0 || AscendC::Te::Get<MNK_N>(singleShape) <= 0) {
             // Tail splitting can create empty logical slices; ignore them and
             // stop the current block once no useful work remains.
             return;
@@ -230,16 +229,16 @@ __aicore__ inline void QuantMatmulMxKernelSwat4Buffer<QBMM_MX_KERNEL_SWAT_4BUF_F
 
         // `blockIdx` now carries both GM origin and logical tile metadata.
         auto gmBlockA =
-            gmA.Slice(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), params.problemShape.k));
+            gmA.Slice(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(AscendC::Te::Get<MNK_M>(singleShape), params.problemShape.k));
         auto gmBlockScaleA =
-            gmScaleA.Slice(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(Get<MNK_M>(singleShape), kScaleSize));
+            gmScaleA.Slice(AscendC::Te::MakeCoord(mPos, kPos), AscendC::Te::MakeShape(AscendC::Te::Get<MNK_M>(singleShape), kScaleSize));
         auto gmBlockB =
-            gmB.Slice(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, Get<MNK_N>(singleShape)));
+            gmB.Slice(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(params.problemShape.k, AscendC::Te::Get<MNK_N>(singleShape)));
         auto gmBlockScaleB =
-            gmScaleB.Slice(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(kScaleSize, Get<MNK_N>(singleShape)));
+            gmScaleB.Slice(AscendC::Te::MakeCoord(kPos, nPos), AscendC::Te::MakeShape(kScaleSize, AscendC::Te::Get<MNK_N>(singleShape)));
         auto gmBlockC =
             gmC.Slice(AscendC::Te::MakeCoord(mPos, nPos),
-                AscendC::Te::MakeShape(Get<MNK_M>(singleShape), Get<MNK_N>(singleShape)));
+                AscendC::Te::MakeShape(AscendC::Te::Get<MNK_M>(singleShape), AscendC::Te::Get<MNK_N>(singleShape)));
 
         // The block MMAD layer owns all data movement below GM granularity and
         // performs the actual accumulation for this scheduled tile.
