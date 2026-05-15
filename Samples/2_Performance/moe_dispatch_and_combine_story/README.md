@@ -110,7 +110,7 @@ source /usr/local/Ascend/ascend-toolkit/set_env.sh
 
 ## 构建
 
-在本示例目录执行 CMake 构建，目标为 `moe_dispatch_and_combine_story`（见本示例目录下的 `CMakeLists.txt`）。构建完成后，可执行文件会生成到 `build/Samples/2_Performance/moe_dispatch_and_combine_story/` 目录下。以下命令中的 `${cann_samples_path}` 表示用户本地 `cann-samples` 仓库所在目录，请根据实际路径替换。
+在本示例目录执行 CMake 构建，目标为 `moe_dispatch_and_combine_dispatch_and_combine_final`（见本示例目录下的 `CMakeLists.txt`）。构建完成后，可执行文件会生成到 `build/Samples/2_Performance/moe_dispatch_and_combine_story/` 目录下。以下命令中的 `${cann_samples_path}` 表示用户本地 `cann-samples` 仓库所在目录，请根据实际路径替换。
 
 ```bash
 cd ${cann_samples_path}/Samples/2_Performance/moe_dispatch_and_combine_story
@@ -146,13 +146,13 @@ python3 ./scripts/gen_data.py --chip-num-per-server 2 --bs 8
 测试数据生成后，在本示例目录运行构建产物。命令行参数依次为 `rankNum` 和 `bs`，需要与生成数据时的 `--chip-num-per-server`、`--bs` 保持一致：
 
 ```bash
-../../../build/Samples/2_Performance/moe_dispatch_and_combine_story/moe_dispatch_and_combine_story <rankNum> <bs>
+../../../build/Samples/2_Performance/moe_dispatch_and_combine_story/moe_dispatch_and_combine_dispatch_and_combine_final <rankNum> <bs>
 ```
 
 例如前面生成的是 2 张卡、batch size 为 8 的数据，则执行：
 
 ```bash
-../../../build/Samples/2_Performance/moe_dispatch_and_combine_story/moe_dispatch_and_combine_story 2 8
+../../../build/Samples/2_Performance/moe_dispatch_and_combine_story/moe_dispatch_and_combine_dispatch_and_combine_final 2 8
 ```
 
 运行完成后，算子输出会写入本示例目录下的 `output/`，并按 `chip_{rankId}` 分目录保存。

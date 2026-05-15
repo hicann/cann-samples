@@ -18,27 +18,40 @@ endif()
 
 include(${PROJECT_SOURCE_DIR}/cmake/shmem.cmake)
 
-add_executable(moe_dispatch_and_combine_story src/dispatch_and_combine_final.asc)
-target_compile_definitions(moe_dispatch_and_combine_story PRIVATE SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_include_directories(moe_dispatch_and_combine_story PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+set(CPP_FILES
+    src/dispatch_and_combine_final.asc
 )
-target_compile_options(moe_dispatch_and_combine_story PRIVATE
-    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
-    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
-)
-target_link_libraries(moe_dispatch_and_combine_story
-    PRIVATE
-    m
-    dl
-    platform
-    tiling_api
-    cann_samples::shmem
-    ascendcl
-    runtime
-    stdc++
-)
-install(TARGETS moe_dispatch_and_combine_story
+
+set(INSTALL_TARGETS "")
+foreach(CPP_FILE ${CPP_FILES})
+    get_filename_component(TARGET_NAME ${CPP_FILE} NAME_WE)
+    set(TARGET_NAME "moe_dispatch_and_combine_${TARGET_NAME}")
+    add_executable(${TARGET_NAME} ${CPP_FILE})
+    target_compile_definitions(${TARGET_NAME} PRIVATE SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_include_directories(${TARGET_NAME} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+    target_compile_options(${TARGET_NAME} PRIVATE
+        "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
+        "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
+    )
+    target_link_libraries(${TARGET_NAME}
+        PRIVATE
+        m
+        dl
+        platform
+        tiling_api
+        cann_samples::shmem
+        ascendcl
+        runtime
+        stdc++
+    )
+    list(APPEND INSTALL_TARGETS ${TARGET_NAME})
+endforeach()
+
+add_custom_target(moe_dispatch_and_combine_story DEPENDS ${INSTALL_TARGETS})
+
+install(TARGETS ${INSTALL_TARGETS}
     RUNTIME DESTINATION 2_Performance/moe_dispatch_and_combine_story
 )
