@@ -38,8 +38,10 @@ public:
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
-    static constexpr bool transA = AscendC::IsSameType<LayoutA, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
-	static constexpr bool transB = AscendC::IsSameType<LayoutB, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
+    static constexpr bool transA =
+        AscendC::IsSameType<LayoutA, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
+    static constexpr bool transB =
+        AscendC::IsSameType<LayoutB, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
     static constexpr int32_t L0C_C0 = 16;
     uint64_t m_{1};
     uint64_t n_{1};
@@ -59,10 +61,12 @@ public:
     uint64_t aL1OneBuffer_{1};
     uint64_t bL1OneBuffer_{1};
 
-    using MakeLayoutAL1 =
-        AscendC::Std::conditional_t<transA, AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeA>>, AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeA>>>;
-    using MakeLayoutBL1 =
-        AscendC::Std::conditional_t<transB, AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeB>>, AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeB>>>;
+    using MakeLayoutAL1 = AscendC::Std::conditional_t<
+        transA, AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeA>>,
+        AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeA>>>;
+    using MakeLayoutBL1 = AscendC::Std::conditional_t<
+        transB, AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeB>>,
+        AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeB>>>;
 
     struct Params {
         GM_ADDR aGmAddr{nullptr};
@@ -94,8 +98,8 @@ public:
         bL1OneBuffer_ = nL1_ * kL1_;
         l0PingPong_ = 0;
         abL1LoopCnt_ = 0;
-        // Set a synchronized variable inside a for loop
-        #pragma unroll
+// Set a synchronized variable inside a for loop
+#pragma unroll
         for (uint8_t i = 0; i < MTE1_MTE2_EVENT_ID_NUM; ++i) {
             AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(i);
         }
@@ -105,7 +109,7 @@ public:
 
     __aicore__ inline ~BlockMmad()
     {
-        #pragma unroll
+#pragma unroll
         for (uint8_t i = 0; i < MTE1_MTE2_EVENT_ID_NUM; ++i) {
             AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(i);
         }
@@ -124,8 +128,10 @@ public:
         uint64_t curKL1Iter = (curSingleCoreK + kL1_ - 1) / kL1_;
 
         // LoC move out
-        auto layoutL0C = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(curML1, curNL1);
-        auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(0), layoutL0C);
+        auto layoutL0C =
+            AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(curML1, curNL1);
+        auto tensorL0C =
+            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(0), layoutL0C);
         // Loop of k in L1
         for (uint64_t iter0 = 0; iter0 < curKL1Iter; ++iter0) {
             auto curKL1 = (iter0 + 1 == curKL1Iter) ? (curSingleCoreK - iter0 * kL1_) : kL1_;
@@ -137,7 +143,8 @@ public:
             // A GM->L1
             auto layoutAL1 = MakeLayoutAL1{}(static_cast<int64_t>(curML1), static_cast<int64_t>(curKL1));
             auto copyGM2L1 = AscendC::Te::MakeCopy(AscendC::Te::CopyGM2L1{});
-            auto tensorAL1 = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, TypeA>(offsetAL1), layoutAL1);
+            auto tensorAL1 = AscendC::Te::MakeTensor(
+                AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, TypeA>(offsetAL1), layoutAL1);
             auto gmTileA = gmA.Slice(AscendC::Te::MakeCoord(0, iter0 * kL1_), AscendC::Te::MakeShape(curML1, curKL1));
             // Copy AL1
             AscendC::Te::Copy(copyGM2L1, tensorAL1, gmTileA);
@@ -148,7 +155,8 @@ public:
             AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(l1BufId + L1_EVENT_ID_OFFSET);
             // B GM->L1
             auto layoutBL1 = MakeLayoutBL1{}(static_cast<int64_t>(curKL1), static_cast<int64_t>(curNL1));
-            auto tensorBL1 = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, TypeB>(offsetBL1), layoutBL1);
+            auto tensorBL1 = AscendC::Te::MakeTensor(
+                AscendC::Te::MakeMemPtr<AscendC::Te::Location::L1, TypeB>(offsetBL1), layoutBL1);
             auto gmTileB = gmB.Slice(AscendC::Te::MakeCoord(iter0 * kL1_, 0), AscendC::Te::MakeShape(curKL1, curNL1));
             // Copy BL1
             AscendC::Te::Copy(copyGM2L1, tensorBL1, gmTileB);
@@ -163,8 +171,11 @@ public:
                 // A L1->L0
                 auto copyL12L0A = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0A{});
                 auto copyL12L0B = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0B{});
-                auto layoutAL0 = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeA>>(curML1, curK0);
-                auto tensorAL0 = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, TypeA>(l0Offset), layoutAL0);
+                auto layoutAL0 =
+                    AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeA>>(
+                        curML1, curK0);
+                auto tensorAL0 = AscendC::Te::MakeTensor(
+                    AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, TypeA>(l0Offset), layoutAL0);
                 auto tensorBlockAL1 =
                     tensorAL1.Slice(AscendC::Te::MakeCoord(0, iter1 * baseK_), AscendC::Te::MakeShape(curML1, curK0));
                 AscendC::Te::Copy(copyL12L0A, tensorAL0, tensorBlockAL1);
@@ -173,8 +184,11 @@ public:
                     AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE1>(l1BufId + L1_EVENT_ID_OFFSET);
                 }
                 // B L1->L0
-                auto layoutBL0 = AscendC::Te::MakeFrameLayout<AscendC::Te::ZNLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeB>>(curK0, curNL1);
-                auto tensorBL0 = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, TypeB>(l0Offset), layoutBL0);
+                auto layoutBL0 =
+                    AscendC::Te::MakeFrameLayout<AscendC::Te::ZNLayoutPtn, AscendC::Te::LayoutTraitDefault<TypeB>>(
+                        curK0, curNL1);
+                auto tensorBL0 = AscendC::Te::MakeTensor(
+                    AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, TypeB>(l0Offset), layoutBL0);
                 auto tensorBlockBL1 =
                     tensorBL1.Slice(AscendC::Te::MakeCoord(iter1 * baseK_, 0), AscendC::Te::MakeShape(curK0, curNL1));
                 AscendC::Te::Copy(copyL12L0B, tensorBL0, tensorBlockBL1);

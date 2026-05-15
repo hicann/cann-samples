@@ -94,5 +94,3 @@ __aicore__ inline uint64_t Align(uint64_t a, uint64_t b)
     }
     return (a + b - 1) / b * b;
 }
-
-

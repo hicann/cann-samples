@@ -19,8 +19,8 @@
 
 namespace Block {
 template <
-    class DispatchPolicy_, class AType_, class LayoutA_, class BType_,
-    class LayoutB_, class CType_, class LayoutC_, class Enable = void>
+    class DispatchPolicy_, class AType_, class LayoutA_, class BType_, class LayoutB_, class CType_, class LayoutC_,
+    class Enable = void>
 class BlockMmad {
     static_assert(!AscendC::Std::is_same_v<DispatchPolicy_, DispatchPolicy_>, "Should not be here!");
 };

@@ -27,7 +27,8 @@ public:
     MatmulA16W16TilingBase() = default;
     virtual ~MatmulA16W16TilingBase() = default;
 
-    virtual void GetTilingData(uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, MatmulA16W16TilingData& tilingData)
+    virtual void GetTilingData(
+        uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, MatmulA16W16TilingData& tilingData)
     {
         InitCompileInfo();
         InitShapeArgs(m, n, k, transA, transB);
@@ -101,4 +102,3 @@ private:
         printf("  l0cDB              : %u\n", tilingData.l0cDB);
     }
 };
-

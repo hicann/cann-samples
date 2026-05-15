@@ -136,12 +136,18 @@ __aicore__ inline void MatmulA16W16KernelStreamK<ProblemShape, BlockMmad, BlockS
         auto layoutB = MakeLayoutB{}(k, n);
         auto layoutC = MakeLayoutC{}(m, n);
 
-        auto gmA =
-            MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)), layoutA);
-        auto gmB =
-            MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)), layoutB);
-        auto gmC =
-            MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)), layoutC);
+        auto gmA = MakeTensor(
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(
+                reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)),
+            layoutA);
+        auto gmB = MakeTensor(
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(
+                reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)),
+            layoutB);
+        auto gmC = MakeTensor(
+            AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(
+                reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)),
+            layoutC);
 
         for (int64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += usedCoreNum_) {
             int64_t tmpTileIdx = tileIdx;

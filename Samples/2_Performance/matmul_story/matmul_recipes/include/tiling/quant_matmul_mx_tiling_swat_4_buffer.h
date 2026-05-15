@@ -94,10 +94,10 @@ private:
         tilingData.nBaseTailSplitCnt = static_cast<uint32_t>(runInfo_.nBaseTailSplitCnt);
         tilingData.mTailMain = static_cast<uint32_t>(runInfo_.mTailMain);
         tilingData.nTailMain = static_cast<uint32_t>(runInfo_.nTailMain);
-        tilingData.usedCoreNum =
-            static_cast<uint32_t>((runInfo_.totalBlockCnt > 1UL || runInfo_.tailBlockCnt == 0UL)
-                                      ? platformInfo_.aicNum
-                                      : runInfo_.tailBlockCnt * runInfo_.mTailTile * runInfo_.nTailTile);
+        tilingData.usedCoreNum = static_cast<uint32_t>(
+            (runInfo_.totalBlockCnt > 1UL || runInfo_.tailBlockCnt == 0UL) ?
+                platformInfo_.aicNum :
+                runInfo_.tailBlockCnt * runInfo_.mTailTile * runInfo_.nTailTile);
         tilingData.dbL0c = static_cast<uint8_t>(runInfo_.dbL0c);
         tilingData.scaleKL1 = scaleKL1;
         tilingData.stepK = static_cast<uint8_t>(std::min(runInfo_.stepKa, runInfo_.stepKb));
@@ -327,8 +327,8 @@ private:
         return mTile * nTile * runInfo.tailBlockCnt;
     }
 
-    uint64_t GetDepthA1B1(const QuantMatmulRunInfo& runInfo, uint64_t leftSize, uint64_t perDepthSize,
-                                 uint64_t depthInit)
+    uint64_t GetDepthA1B1(
+        const QuantMatmulRunInfo& runInfo, uint64_t leftSize, uint64_t perDepthSize, uint64_t depthInit)
     {
         // The first pass grows by powers of two to find a feasible region; the
         // second pass snaps the result to a DMA-friendly K granularity.
@@ -387,9 +387,9 @@ private:
         runInfo.depthB1 = runInfo.stepKb * DB_SIZE;
     }
 
-    void CalScaleFactors(const QuantMatmulArgs& args, const QuantMatmulPlatformInfo& platformInfo,
-                                QuantMatmulRunInfo& runInfo, uint64_t baseASize, uint64_t baseBSize,
-                                uint64_t baseScaleASize, uint64_t baseScaleBSize)
+    void CalScaleFactors(
+        const QuantMatmulArgs& args, const QuantMatmulPlatformInfo& platformInfo, QuantMatmulRunInfo& runInfo,
+        uint64_t baseASize, uint64_t baseBSize, uint64_t baseScaleASize, uint64_t baseScaleBSize)
     {
         // Scale reuse is solved after A/B depth is fixed. The search keeps the
         // two scale paths balanced while staying inside the leftover L1 budget.
@@ -424,4 +424,3 @@ private:
         }
     }
 };
-

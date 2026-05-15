@@ -45,8 +45,8 @@ struct CopyL12L0MxScaleA3510 {
         auto dstStride = kStep;
         // The intrinsic takes a 16-byte unit address, hence the right shift.
         uint64_t mxDstAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(dst.Data().Get())) >> 4;
-        asc_copy_l12l0a_mx(mxDstAddr, src.Data().Get(), mStartPosition, kStartPosition, mStep, kStep,
-            srcStride, dstStride);
+        asc_copy_l12l0a_mx(
+            mxDstAddr, src.Data().Get(), mStartPosition, kStartPosition, mStep, kStep, srcStride, dstStride);
     }
 };
 
@@ -56,6 +56,5 @@ struct CopyL12L0MxScaleA3510 {
 template <>
 struct AscendC::Te::CopyTraits<::Tile::CopyL12L0MxScaleA3510>
     : public CopyTraits<
-        ::Tile::CopyL12L0MxScaleA3510, CopyL12L0ATraitDefault, ::Tile::CopyL12L0MxScaleA3510,
-        CopyL12L0ATraitDefault> {};
-
+          ::Tile::CopyL12L0MxScaleA3510, CopyL12L0ATraitDefault, ::Tile::CopyL12L0MxScaleA3510,
+          CopyL12L0ATraitDefault> {};

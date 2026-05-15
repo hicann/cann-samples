@@ -648,4 +648,3 @@ private:
     static constexpr uint64_t NUM_TEN = 10UL;
     static constexpr int MAX_LOOP_NUM = 20;
 };
-

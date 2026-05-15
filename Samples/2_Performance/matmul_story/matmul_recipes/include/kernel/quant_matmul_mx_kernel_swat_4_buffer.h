@@ -32,8 +32,7 @@
 namespace Kernel {
 // Keep the class template parameter list in one place so the declaration and
 // out-of-line member definitions stay perfectly aligned.
-#define QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS \
-    template <class ProblemShape, class BlockMmad, class BlockScheduler>
+#define QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS template <class ProblemShape, class BlockMmad, class BlockScheduler>
 #define QBMM_MX_KERNEL_SWAT_4BUF_FUN_TEM_PARAMS ProblemShape, BlockMmad, BlockScheduler
 
 using namespace AscendC;
@@ -204,12 +203,15 @@ __aicore__ inline void QuantMatmulMxKernelSwat4Buffer<QBMM_MX_KERNEL_SWAT_4BUF_F
     auto layoutScaleA = MakeLayoutScaleA{}(params.problemShape.m, kScaleSize);
     auto layoutB = MakeLayoutB{}(params.problemShape.k, params.problemShape.n);
     auto layoutScaleB = MakeLayoutScaleB{}(kScaleSize, params.problemShape.n);
-    auto layoutC = AscendC::Te::MakeFrameLayout<AscendC::Te::NDExtLayoutPtn>(params.problemShape.m, params.problemShape.n);
+    auto layoutC =
+        AscendC::Te::MakeFrameLayout<AscendC::Te::NDExtLayoutPtn>(params.problemShape.m, params.problemShape.n);
 
     auto gmA = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(aGmAddr_), layoutA);
-    auto gmScaleA = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(scaleAGmAddr_), layoutScaleA);
+    auto gmScaleA =
+        AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(scaleAGmAddr_), layoutScaleA);
     auto gmB = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(bGmAddr_), layoutB);
-    auto gmScaleB = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(scaleBGmAddr_), layoutScaleB);
+    auto gmScaleB =
+        AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(scaleBGmAddr_), layoutScaleB);
     auto gmC = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(cGmAddr_), layoutC);
 
     BlockCoord blockIdx;
@@ -250,4 +252,3 @@ __aicore__ inline void QuantMatmulMxKernelSwat4Buffer<QBMM_MX_KERNEL_SWAT_4BUF_F
 
 #undef QBMM_MX_KERNEL_SWAT_4BUF_CLASS_TEM_PARAMS
 #undef QBMM_MX_KERNEL_SWAT_4BUF_FUN_TEM_PARAMS
-

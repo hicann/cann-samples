@@ -25,7 +25,8 @@
 
 namespace mm {
 // Quantized MX element layouts for non-type template parameters.
-enum class DataType {
+enum class DataType
+{
     DT_FLOAT4_E2M1,
     DT_FLOAT8_E4M3FN,
 };
@@ -64,7 +65,8 @@ inline T FloorAlign(T a, T b)
     return a / b * b;
 }
 
-enum class DataType {
+enum class DataType
+{
     FP4,
     FP8
 };
@@ -125,14 +127,7 @@ inline bool ParseBoolArg(const char* arg, const char* name)
     throw std::invalid_argument(std::string("ERROR: ") + name + " must be 0/1/true/false/t/f");
 }
 
-inline void ParseArguments(
-    int argc,
-    char* argv[],
-    uint64_t& m,
-    uint64_t& k,
-    uint64_t& n,
-    bool& transA,
-    bool& transB)
+inline void ParseArguments(int argc, char* argv[], uint64_t& m, uint64_t& k, uint64_t& n, bool& transA, bool& transB)
 {
     if (argc >= 2 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
         PrintUsage(argv[0]);
@@ -183,4 +178,3 @@ constexpr T GetSizeWithDataType(T shape)
         return shape;
     }
 }
-

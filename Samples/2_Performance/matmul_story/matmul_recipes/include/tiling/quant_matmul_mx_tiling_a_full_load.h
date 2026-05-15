@@ -78,10 +78,10 @@ private:
         tilingData.nBaseTailSplitCnt = static_cast<uint32_t>(runInfo_.nBaseTailSplitCnt);
         tilingData.mTailMain = static_cast<uint32_t>(runInfo_.mTailMain);
         tilingData.nTailMain = static_cast<uint32_t>(runInfo_.nTailMain);
-        tilingData.usedCoreNum =
-            static_cast<uint32_t>((runInfo_.totalBlockCnt > 1UL || runInfo_.tailBlockCnt == 0UL)
-                                      ? platformInfo_.aicNum
-                                      : runInfo_.tailBlockCnt * runInfo_.mTailTile * runInfo_.nTailTile);
+        tilingData.usedCoreNum = static_cast<uint32_t>(
+            (runInfo_.totalBlockCnt > 1UL || runInfo_.tailBlockCnt == 0UL) ?
+                platformInfo_.aicNum :
+                runInfo_.tailBlockCnt * runInfo_.mTailTile * runInfo_.nTailTile);
         tilingData.dbL0c = static_cast<uint8_t>(runInfo_.dbL0c);
         tilingData.scaleKL1 = scaleKL1;
         tilingData.stepK = static_cast<uint8_t>(std::min(runInfo_.stepKa, runInfo_.stepKb));
@@ -109,13 +109,12 @@ private:
         // remaining L1 budget to determine B depth and scale reuse.
         runInfo_.stepKa = CeilDiv(args_.k, runInfo_.baseK);
 
-        uint64_t aL1Size =
-            GetSizeWithDataType<aDataType>(runInfo_.baseM * Align(args_.k, aDataType == mm::DataType::DT_FLOAT4_E2M1 ? FP4_C0_SIZE : FP8_C0_SIZE));
+        uint64_t aL1Size = GetSizeWithDataType<aDataType>(
+            runInfo_.baseM * Align(args_.k, aDataType == mm::DataType::DT_FLOAT4_E2M1 ? FP4_C0_SIZE : FP8_C0_SIZE));
         runInfo_.scaleFactorA = 1U;
         uint64_t leftL1Size = platformInfo_.l1Size - aL1Size;
         uint64_t bL0Size = GetSizeWithDataType<bDataType>(runInfo_.baseN * runInfo_.baseK);
-        uint64_t scaleAL1Size =
-            runInfo_.baseM * Align(CeilDiv(args_.k, MX_GROUP_SIZE), TILING_MXFP_MULTI_BASE_SIZE);
+        uint64_t scaleAL1Size = runInfo_.baseM * Align(CeilDiv(args_.k, MX_GROUP_SIZE), TILING_MXFP_MULTI_BASE_SIZE);
 
         leftL1Size -= scaleAL1Size;
         runInfo_.stepKb = GetDepthB1AFullLoad(args_, runInfo_, leftL1Size);
@@ -297,8 +296,7 @@ private:
             runInfo_.baseM * runInfo_.baseN * DATA_SIZE_L0C * DB_SIZE <= platformInfo_.l0cSize ? DB_SIZE : 1U;
     }
 
-    uint64_t GetDepthB1AFullLoad(const QuantMatmulArgs& args, const QuantMatmulRunInfo& runInfo,
-                                        uint64_t leftSize)
+    uint64_t GetDepthB1AFullLoad(const QuantMatmulArgs& args, const QuantMatmulRunInfo& runInfo, uint64_t leftSize)
     {
         // Build the B-side depth in multiples of the base K tile while
         // respecting both DMA granularity and the remaining L1 capacity.
@@ -328,8 +326,7 @@ private:
         return baseStepK;
     }
 
-    uint64_t GetScaleFactorBAFullLoad(const QuantMatmulArgs& args, const QuantMatmulRunInfo& runInfo,
-                                             uint64_t leftSize)
+    uint64_t GetScaleFactorBAFullLoad(const QuantMatmulArgs& args, const QuantMatmulRunInfo& runInfo, uint64_t leftSize)
     {
         // After B tiles are placed in L1, scaleB can reuse whatever capacity is
         // still left, capped by both K coverage and the path-specific max.
@@ -360,4 +357,3 @@ private:
         return scaleFactorB;
     }
 };
-

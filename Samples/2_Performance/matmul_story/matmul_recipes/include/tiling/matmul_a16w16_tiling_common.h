@@ -74,4 +74,3 @@ struct MatmulA16W16RunInfo {
     double defaultBalance{0.0};
     double redundantData{0.0};
 };
-

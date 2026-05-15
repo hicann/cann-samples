@@ -16,7 +16,6 @@
 
 #include <cstdint>
 
-
 /**
  * @brief Dispatch tag for MX quantized matmul kernels that use the SWAT
  *        scheduling family.

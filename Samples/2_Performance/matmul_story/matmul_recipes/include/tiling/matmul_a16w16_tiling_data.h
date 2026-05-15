@@ -44,4 +44,3 @@ struct alignas(8) MatmulA16W16TilingData {
     uint8_t l0cDB{1};
 };
 #pragma pack(pop)
-

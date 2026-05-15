@@ -271,4 +271,3 @@ struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<A_FULL_L
 };
 
 } // namespace Block
-

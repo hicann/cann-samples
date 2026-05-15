@@ -123,12 +123,15 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
     auto layoutC = MakeLayoutC{}(m, n); // ND layout for C
 
     // A,B,C Gm Tensor
-    auto gmA =
-        MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)), layoutA);
-    auto gmB =
-        MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)), layoutB);
-    auto gmC =
-        MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)), layoutC);
+    auto gmA = MakeTensor(
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)),
+        layoutA);
+    auto gmB = MakeTensor(
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)),
+        layoutB);
+    auto gmC = MakeTensor(
+        AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)),
+        layoutC);
 
     // Process tiles in ping-pong mode
     for (int64_t tileIdx = curBlockIdx; tileIdx < tileNum; tileIdx += blockNum) {
@@ -148,4 +151,3 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
 }
 
 } // namespace Kernel
-

@@ -22,7 +22,8 @@
 
 class AclRtSession {
 public:
-    explicit AclRtSession(int32_t deviceId) : deviceId_(deviceId) {}
+    explicit AclRtSession(int32_t deviceId) : deviceId_(deviceId)
+    {}
 
     void Init()
     {
@@ -69,4 +70,3 @@ private:
     bool deviceSet_{false};
     bool aclInitialized_{false};
 };
-

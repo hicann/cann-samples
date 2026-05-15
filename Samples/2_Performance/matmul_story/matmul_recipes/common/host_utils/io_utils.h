@@ -172,4 +172,3 @@ inline bool WriteFile(const std::string& filePath, const void* buffer, size_t si
 
     return true;
 }
-

@@ -303,10 +303,8 @@ private:
 };
 
 template <class ProblemShape_, bool TransA_, bool TransB_, class AType_>
-struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<NO_FULL_LOAD_MODE>, TransA_, TransB_,
-    AType_> {
+struct BlockSchedulerSelector<ProblemShape_, QuantMatmulMxSwatScheduler<NO_FULL_LOAD_MODE>, TransA_, TransB_, AType_> {
     using SchedulerOp = BlockSchedulerQuantMatmulMxSwat4Buffer<ProblemShape_, TransA_, TransB_, AType_>;
 };
 
 } // namespace Block
-
