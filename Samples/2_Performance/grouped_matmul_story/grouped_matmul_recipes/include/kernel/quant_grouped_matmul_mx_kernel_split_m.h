@@ -143,8 +143,10 @@ private:
             bs.UpdateNextProblem(bsProblemShape);
             if (IsLastGroupAndNeedSplit(bs, groupIdx)) {
                 bs.UpdateTailTile();
+                ProcessSingleGroup(params, bs, false);
+            } else {
+                ProcessSingleGroup(params, bs, true);
             }
-            ProcessSingleGroup(params, bs);
         }
     }
 
@@ -173,6 +175,41 @@ private:
             l0Shape,
             l1Params,
             params.kernelParams.dbL0C == GroupedMatmulRecipe::DOUBLE_BUFFER);
+    }
+
+    template <typename TensorB, typename TensorScaleB>
+    __aicore__ inline void SetL2Cache(
+        const TupleShape& problemShape, uint64_t curBaseM, uint64_t baseN, TensorB& gmB, TensorScaleB& gmScaleB)
+    {
+        if constexpr (kWeightNzGm_) {
+            if (curBaseM >= AscendC::Std::get<MNK_M>(problemShape)) {
+                gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+                gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+            } else {
+                gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+                gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+            }
+        } else {
+            if constexpr (transB) {
+                if (curBaseM >= AscendC::Std::get<MNK_M>(problemShape) &&
+                    (AscendC::Std::get<MNK_K>(problemShape) & 0xff) == 0) {
+                    gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+                    gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+                } else {
+                    gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+                    gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+                }
+            } else {
+                if (curBaseM >= AscendC::Std::get<MNK_M>(problemShape) &&
+                    (AscendC::Std::get<MNK_N>(problemShape) & 0xff) == 0 && (baseN & 0xff) == 0) {
+                    gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+                    gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_DISABLE);
+                } else {
+                    gmB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+                    gmScaleB.SetL2CacheHint(AscendC::Te::CacheMode::CACHE_MODE_NORMAL);
+                }
+            }
+        }
     }
 
     template <class SchedulerOp>
@@ -226,7 +263,7 @@ private:
     }
 
     template <class SchedulerOp>
-    __aicore__ inline void ProcessSingleGroup(const Params& params, SchedulerOp& bs)
+    __aicore__ inline void ProcessSingleGroup(const Params& params, SchedulerOp& bs, bool needSetL2Cache)
     {
         int64_t groupM = AscendC::Std::get<MNK_M>(problemShape_);
         int64_t groupN = AscendC::Std::get<MNK_N>(problemShape_);
@@ -249,6 +286,9 @@ private:
             AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(groupCPtr),
             AscendC::Te::MakeFrameLayout<AscendC::Te::NDExtLayoutPtn>(groupM, groupN));
         BlockCoord tileIdx;
+        if (needSetL2Cache) {
+            SetL2Cache(problemShape_, curBaseM_, params.kernelParams.baseN, groupB, groupScaleB);
+        }
         while (bs.GetTileIdx(tileIdx)) {
             BlockShape singleShape = bs.GetBlockShape(tileIdx);
             if (AscendC::Std::get<MNK_M>(singleShape) <= 0 || AscendC::Std::get<MNK_N>(singleShape) <= 0) {
