@@ -9,14 +9,15 @@
  */
 
 /*!
- * \file quant_grouped_matmul_mx_kernel_split_m.h
- * \brief Sample-side grouped MX split-M kernel wrapper.
+ * \file quant_grouped_matmul_mx_kernel.h
+ * \brief Sample-side grouped MX kernel wrapper.
  */
 #pragma once
 
 #include "kernel_basic_intf.h"
 #include "include/tensor_api/tensor.h"
-#include "../block/quant_grouped_matmul_mx_block_mmad_split_m.h"
+#include "../../common/kernel_utils/common_utils.h"
+#include "../block/quant_grouped_matmul_mx_block_mmad.h"
 #include "../block/quant_grouped_matmul_mx_block_scheduler_split_m.h"
 #include "../block/block_scheduler_utils.h"
 #include "../policy/dispatch_policy.h"
@@ -43,7 +44,6 @@ public:
     static constexpr bool transB =
         AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::DNExtLayoutPtn> ||
         AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn>;
-    static_assert(!transA, "QuantGroupedMatmulMxKernelSplitM only supports non-transposed A.");
     static constexpr bool kWeightNzGm_ =
         AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn> ||
         AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::NZLayoutPtn>;
@@ -122,30 +122,116 @@ private:
         bs.SetTailAlign(mTailAlign, nTailAlign);
     }
 
+    __aicore__ inline void InitZeroOutputForEmptyGroups(const Params& params)
+    {
+        if ASCEND_IS_AIC {
+            return;
+        }
+        // Only needed in splitK mode (transA=true) when some groups have k=0
+        if constexpr (!transA) {
+            return;
+        }
+
+        const int64_t m = static_cast<int64_t>(params.kernelParams.m);
+        const int64_t n = static_cast<int64_t>(params.kernelParams.n);
+        if (m <= 0 || n <= 0) {
+            return;
+        }
+
+        // UB buffer for zero init (256B aligned)
+        constexpr uint32_t UB_ALIGN_SIZE = 32;
+        constexpr uint32_t MAX_REPEAT_TIMES = 255;
+        constexpr uint32_t ONE_BLK_SIZE = 32;
+        uint64_t usedBlockNum = AscendC::GetBlockNum() * AscendC::GetTaskRation();
+
+        // Calculate init buffer size in elements
+        uint64_t ySize = static_cast<uint64_t>(m) * n;
+        uint64_t initSize = (MAX_REPEAT_TIMES * ONE_BLK_SIZE) / sizeof(CType);
+        uint64_t perCoreSize = CeilDiv(ySize * sizeof(CType), usedBlockNum);
+        perCoreSize = Align(perCoreSize, UB_ALIGN_SIZE) / sizeof(CType);
+        initSize = Min(initSize, perCoreSize);
+
+        // Local tensor for zero init
+        AscendC::LocalTensor<CType> initLocal =
+            AscendC::LocalTensor<CType>(AscendC::TPosition::VECCALC, 0, MAX_REPEAT_TIMES * UB_ALIGN_SIZE / sizeof(CType));
+
+        uint64_t yBaseOffset = 0;
+        bool isKZeroInit = false;
+        uint32_t blockIdx = AscendC::GetBlockIdx();
+
+        // Local groupList tensor from params
+        AscendC::GlobalTensor<int64_t> groupListGlobal;
+        groupListGlobal.SetGlobalBuffer((__gm__ int64_t*)params.groupListGmAddr);
+        auto cGm = reinterpret_cast<__gm__ CType*>(params.mmadParams.cGmAddr);
+
+        for (uint32_t groupIdx = 0; groupIdx < params.kernelParams.groupNum; ++groupIdx) {
+            int32_t groupK = static_cast<int32_t>(groupListGlobal.GetValue(groupIdx));
+            if (groupK == 0) {
+                // Calculate this core's portion
+                uint64_t realCoreNum = Min(CeilDiv(ySize, initSize), static_cast<uint64_t>(usedBlockNum));
+                if (blockIdx < realCoreNum) {
+                    if (!isKZeroInit) {
+                        // Initialize UB buffer with zeros (only once)
+                        AscendC::Duplicate<CType>(initLocal, 0, initSize);
+                        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+                        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
+                        isKZeroInit = true;
+                    }
+
+                    // Calculate offset and size for this core
+                    uint64_t yOffset = perCoreSize * blockIdx;
+                    uint64_t outCurSize = (blockIdx == realCoreNum - 1) ? (ySize - yOffset) : perCoreSize;
+                    uint64_t movRound = outCurSize / initSize;
+                    uint64_t movTail = outCurSize - movRound * initSize;
+
+                    // GM address for this group's output (set to group base, use relative offset in DataCopyPad)
+                    AscendC::GlobalTensor<CType> yInitGlobal;
+                    yInitGlobal.SetGlobalBuffer(cGm + yBaseOffset);
+
+                    // DataCopy from UB to GM
+                    AscendC::DataCopyExtParams ub2GmParams{1, static_cast<uint32_t>(initSize * sizeof(CType)), 0, 0, 0};
+                    for (uint64_t i = 0; i < movRound; ++i) {
+                        AscendC::DataCopyPad(yInitGlobal[yOffset + i * initSize], initLocal, ub2GmParams);
+                    }
+                    if (movTail != 0) {
+                        ub2GmParams.blockLen = static_cast<uint32_t>(movTail * sizeof(CType));
+                        AscendC::DataCopyPad(yInitGlobal[yOffset + movRound * initSize], initLocal, ub2GmParams);
+                    }
+                }
+            }
+            yBaseOffset += ySize;
+        }
+    }
+
     __aicore__ inline void Run(const Params& params)
     {
-        ResetGmAddr(params);
-        Init(params);
-        using SchedulerOp = BlockScheduler;
-        SchedulerOp bs(params.schedulerParams);
-        SetSchedulerTailAlign(bs);
-        for (uint32_t groupIdx = 0; groupIdx < groupNum_; ++groupIdx) {
-            UpdateOffset(groupIdx);
-            SetMNK(groupIdx);
-            if (AscendC::Std::get<MNK_M>(problemShape_) <= 0 || AscendC::Std::get<MNK_K>(problemShape_) <= 0) {
-                continue;
-            }
-            mmadOp_.UpdateParamsForNextProblem(problemShape_);
-            BaseMBalance(bs, AscendC::Std::get<MNK_M>(problemShape_), params.kernelParams.baseM);
-            typename SchedulerOp::TupleShape bsProblemShape{
-                AscendC::Std::get<MNK_M>(problemShape_), AscendC::Std::get<MNK_N>(problemShape_),
-                AscendC::Std::get<MNK_K>(problemShape_), 1L};
-            bs.UpdateNextProblem(bsProblemShape);
-            if (IsLastGroupAndNeedSplit(bs, groupIdx)) {
-                bs.UpdateTailTile();
-                ProcessSingleGroup(params, bs, false);
-            } else {
-                ProcessSingleGroup(params, bs, true);
+        if ASCEND_IS_AIV { // init zero in aiv when splitK
+            InitZeroOutputForEmptyGroups(params);
+        }
+        if ASCEND_IS_AIC {
+            ResetGmAddr(params);
+            Init(params);
+            using SchedulerOp = BlockScheduler;
+            SchedulerOp bs(params.schedulerParams);
+            SetSchedulerTailAlign(bs);
+            for (uint32_t groupIdx = 0; groupIdx < groupNum_; ++groupIdx) {
+                UpdateOffset(groupIdx);
+                SetMNK(groupIdx);
+                if (AscendC::Std::get<MNK_M>(problemShape_) <= 0 || AscendC::Std::get<MNK_K>(problemShape_) <= 0) {
+                    continue;
+                }
+                mmadOp_.UpdateParamsForNextProblem(problemShape_);
+                BaseMBalance(bs, AscendC::Std::get<MNK_M>(problemShape_), params.kernelParams.baseM);
+                typename SchedulerOp::TupleShape bsProblemShape{
+                    AscendC::Std::get<MNK_M>(problemShape_), AscendC::Std::get<MNK_N>(problemShape_),
+                    AscendC::Std::get<MNK_K>(problemShape_), 1L};
+                bs.UpdateNextProblem(bsProblemShape);
+                if (IsLastGroupAndNeedSplit(bs, groupIdx)) {
+                    bs.UpdateTailTile();
+                    ProcessSingleGroup(params, bs, false);
+                } else {
+                    ProcessSingleGroup(params, bs, true);
+                }
             }
         }
     }
@@ -215,9 +301,11 @@ private:
     template <class SchedulerOp>
     __aicore__ inline void BaseMBalance(SchedulerOp& bs, int64_t m, int64_t baseM)
     {
-        int64_t mCnt = CeilDiv(m, baseM);
-        curBaseM_ = CeilAlign(CeilDiv(m, mCnt), AscendC::BLOCK_CUBE);
-        bs.UpdateBaseM(curBaseM_);
+        if constexpr (!transA) {
+            int64_t mCnt = CeilDiv(m, baseM);
+            curBaseM_ = CeilAlign(CeilDiv(m, mCnt), AscendC::BLOCK_CUBE);
+            bs.UpdateBaseM(curBaseM_);
+        }
     }
 
     template <class SchedulerOp>
@@ -235,7 +323,11 @@ private:
     __aicore__ inline void SetMNK(uint32_t groupIdx)
     {
         int32_t splitValue = GetSplitValueFromGroupList(groupIdx);
-        AscendC::Std::get<MNK_M>(problemShape_) = splitValue;
+        if constexpr (transA) {
+            AscendC::Std::get<MNK_K>(problemShape_) = splitValue;
+        } else {
+            AscendC::Std::get<MNK_M>(problemShape_) = splitValue;
+        }
     }
 
     __aicore__ inline void UpdateOffset(uint32_t groupIdx)
@@ -243,23 +335,39 @@ private:
         if (groupIdx == 0) {
             return;
         }
-        int64_t m = AscendC::Std::get<MNK_M>(problemShape_);
-        int64_t n = AscendC::Std::get<MNK_N>(problemShape_);
-        int64_t k = AscendC::Std::get<MNK_K>(problemShape_);
+        // 获取前一个分组的参数（SetMNK尚未调用，problemShape_中仍是前一个分组的值）
+        int64_t prevM = AscendC::Std::get<MNK_M>(problemShape_);
+        int64_t prevN = AscendC::Std::get<MNK_N>(problemShape_);
+        int64_t prevK = AscendC::Std::get<MNK_K>(problemShape_);
         constexpr bool isFp4Type = AscendC::Std::is_one_of_v<AType, fp4x2_e2m1_t, fp4x2_e1m2_t>;
         constexpr uint64_t sizeShift = isFp4Type ? 1UL : 0UL;
-        AscendC::Std::get<0>(baseOffset_) += (m * k) >> sizeShift;
+        AscendC::Std::get<0>(baseOffset_) += (prevM * prevK) >> sizeShift;
         if constexpr (kWeightNzGm_) {
-            AscendC::Std::get<1>(baseOffset_) += GetWeightNzSize(n, k) >> sizeShift;
+            AscendC::Std::get<1>(baseOffset_) += GetWeightNzSize(prevN, prevK) >> sizeShift;
         } else {
-            AscendC::Std::get<1>(baseOffset_) += (n * k) >> sizeShift;
+            AscendC::Std::get<1>(baseOffset_) += (prevN * prevK) >> sizeShift;
         }
-        int64_t scaleK =
-            CeilDiv(k, static_cast<int64_t>(GroupedMatmulRecipe::MX_DIVISOR_SIZE)) *
-            GroupedMatmulRecipe::MX_MULTI_SIZE;
-        AscendC::Std::get<2>(baseOffset_) += m * scaleK;
-        AscendC::Std::get<3>(baseOffset_) += n * scaleK;
-        AscendC::Std::get<4>(baseOffset_) += m * n;
+        AscendC::Std::get<4>(baseOffset_) += prevM * prevN;
+
+        // 先累积分组值，使preGroupListSum_包含前面所有分组值之和
+        preGroupListSum_ += prevK;
+
+        if constexpr (transA) {
+            // splitK模式: 新的scale布局，scale的最高维度为 scale_k + group_num
+            // 第i个分组的scale起始位置: (k_offset / 64 + i)
+            // 其中k_offset是前面所有分组的k值之和(preGroupListSum_)
+            int64_t scaleStart = (preGroupListSum_ / GroupedMatmulRecipe::MX_DIVISOR_SIZE + groupIdx) * GroupedMatmulRecipe::MX_MULTI_SIZE;
+            // splitK模式下各组m,n相同，直接使用prevM, prevN
+            AscendC::Std::get<2>(baseOffset_) = prevM * scaleStart;
+            AscendC::Std::get<3>(baseOffset_) = prevN * scaleStart;
+        } else {
+            // 非splitK模式: 使用传统的连续scale布局
+            int64_t prevScaleK =
+                CeilDiv(prevK, static_cast<int64_t>(GroupedMatmulRecipe::MX_DIVISOR_SIZE)) *
+                GroupedMatmulRecipe::MX_MULTI_SIZE;
+            AscendC::Std::get<2>(baseOffset_) += prevM * prevScaleK;
+            AscendC::Std::get<3>(baseOffset_) += prevN * prevScaleK;
+        }
     }
 
     template <class SchedulerOp>
@@ -320,6 +428,7 @@ private:
     BlockMmad mmadOp_;
     TupleShape problemShape_{};
     BlockOffset baseOffset_{0, 0, 0, 0, 0};
+    int64_t preGroupListSum_{0};
     AscendC::GlobalTensor<int64_t> groupListGlobal_;
     GM_ADDR groupListPtr_{nullptr};
     __gm__ AType* xGmAddr_{nullptr};

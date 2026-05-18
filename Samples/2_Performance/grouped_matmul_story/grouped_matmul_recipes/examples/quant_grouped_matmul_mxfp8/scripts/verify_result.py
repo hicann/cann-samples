@@ -47,6 +47,15 @@ def load_group_m_list(group_num: int) -> List[int]:
     return group_list.astype(np.int64).tolist()
 
 
+def parse_bool_arg(arg: str, name: str) -> bool:
+    value = arg.strip().lower()
+    if value in {"1", "true", "t", "yes", "y"}:
+        return True
+    if value in {"0", "false", "f", "no", "n"}:
+        return False
+    raise ValueError(f"{name} must be 0/1/true/false")
+
+
 def compute_error_metrics(golden_f32: torch.Tensor, npu_f32: torch.Tensor):
     abs_diff = torch.abs(golden_f32 - npu_f32)
     non_finite_mask = ~(torch.isfinite(golden_f32) & torch.isfinite(npu_f32) & torch.isfinite(abs_diff))
@@ -74,32 +83,40 @@ def print_point_error_details(
     point_error_indices = torch.nonzero(point_error_mask, as_tuple=False)
     print(f"point error details(rel diff > {POINT_ERROR_TOL} or non-finite):")
     for idx in point_error_indices:
-        row = int(idx[0].item())
-        col = int(idx[1].item())
+        coord = tuple(int(item.item()) for item in idx)
         print(
-            f"  (row={row}, col={col}) "
-            f"golden={float(golden_f32[row, col].item())}, "
-            f"npu={float(npu_f32[row, col].item())}, "
-            f"abs_diff={float(abs_diff[row, col].item())}, "
-            f"rel_diff={float(rel_diff[row, col].item())}"
+            f"  index={coord} "
+            f"golden={float(golden_f32[coord].item())}, "
+            f"npu={float(npu_f32[coord].item())}, "
+            f"abs_diff={float(abs_diff[coord].item())}, "
+            f"rel_diff={float(rel_diff[coord].item())}"
         )
 
 
-def verify_result(group_m_list: List[int], m: int, n: int):
+def verify_result(group_m_list: List[int], m: int, k: int, n: int, trans_a: bool):
     sum_group_m = sum(group_m_list)
-    if sum_group_m > m:
+    if trans_a and sum_group_m > k:
+        raise ValueError("sum(group_k_list) must be less than or equal to k")
+    if not trans_a and sum_group_m > m:
         raise ValueError("sum(group_m_list) must be less than or equal to m")
     output = np.fromfile("./output/npu_out.bin", dtype=DATA_TYPE)
     golden = np.fromfile("./output/cpu_output.bin", dtype=DATA_TYPE)
     if output.size != golden.size:
         raise ValueError("npu output size != cpu output size")
-    if output.size != m * n:
-        raise ValueError(f"output element count {output.size} does not match m*n={m * n}")
+    expect_output_size = len(group_m_list) * m * n if trans_a else m * n
+    if output.size != expect_output_size:
+        raise ValueError(f"output element count {output.size} does not match expected size={expect_output_size}")
 
-    golden_cmp = torch.from_numpy(golden).view(torch.bfloat16).reshape(m, n)[:sum_group_m]
-    npu_cmp = torch.from_numpy(output).view(torch.bfloat16).reshape(m, n)[:sum_group_m]
-    print("\ncpu golden (sum(group_m_list) rows):\n", golden_cmp)
-    print("npu output (sum(group_m_list) rows):\n", npu_cmp)
+    if trans_a:
+        golden_cmp = torch.from_numpy(golden).view(torch.bfloat16).reshape(len(group_m_list), m, n)
+        npu_cmp = torch.from_numpy(output).view(torch.bfloat16).reshape(len(group_m_list), m, n)
+        print("\ncpu golden (group_num, m, n):\n", golden_cmp)
+        print("npu output (group_num, m, n):\n", npu_cmp)
+    else:
+        golden_cmp = torch.from_numpy(golden).view(torch.bfloat16).reshape(m, n)[:sum_group_m]
+        npu_cmp = torch.from_numpy(output).view(torch.bfloat16).reshape(m, n)[:sum_group_m]
+        print("\ncpu golden (sum(group_m_list) rows):\n", golden_cmp)
+        print("npu output (sum(group_m_list) rows):\n", npu_cmp)
     golden_cmp_f32 = golden_cmp.to(torch.float32)
     npu_cmp_f32 = npu_cmp.to(torch.float32)
     abs_diff, rel_diff, point_error_mask, ratio_error_mask = compute_error_metrics(golden_cmp_f32, npu_cmp_f32)
@@ -136,10 +153,15 @@ if __name__ == "__main__":
             raise ValueError("k must be greater than 0")
         if n <= 0:
             raise ValueError("n must be greater than 0")
-        if len(sys.argv) == 7 and sys.argv[5].lower() not in {"0", "false"}:
-            raise ValueError("transA=true is not supported")
+        trans_a = False
+        trans_b = True
+        if len(sys.argv) == 7:
+            trans_a = parse_bool_arg(sys.argv[5], "transA")
+            trans_b = parse_bool_arg(sys.argv[6], "transB")
+        if trans_a and trans_b:
+            raise ValueError("K-axis grouping requires transA=true and transB=false")
         group_m_list = load_group_m_list(group_num)
-        res = verify_result(group_m_list, m, n)
+        res = verify_result(group_m_list, m, k, n, trans_a)
         if not res:
             raise ValueError(
                 f"[ERROR] NPU results differ from CPU. "

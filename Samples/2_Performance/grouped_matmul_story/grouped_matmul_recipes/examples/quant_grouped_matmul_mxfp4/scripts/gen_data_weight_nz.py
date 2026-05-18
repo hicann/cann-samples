@@ -44,13 +44,13 @@ def parse_group_m_list(arg: str) -> List[int]:
     for item in arg.split(","):
         item = item.strip()
         if not item:
-            raise ValueError("group_m_list contains an empty item")
+            raise ValueError("group_value_list contains an empty item")
         value = int(item)
         if value < 0:
             raise ValueError("Each group M value must be greater than or equal to 0")
         values.append(value)
     if not values:
-        raise ValueError("group_m_list must not be empty")
+        raise ValueError("group_value_list must not be empty")
     return values
 
 
@@ -77,14 +77,14 @@ def build_random_group_m_list(group_num: int, expect_m_per_group: int, m: int) -
         return [0] * group_num
 
     for _ in range(200):
-        group_m_list = np.random.randint(low, high + 1, size=group_num).astype(int).tolist()
-        if sum(group_m_list) <= m:
-            return group_m_list
+        group_value_list = np.random.randint(low, high + 1, size=group_num).astype(int).tolist()
+        if sum(group_value_list) <= m:
+            return group_value_list
 
-    group_m_list = [low] * group_num
-    remaining = m - sum(group_m_list)
+    group_value_list = [low] * group_num
+    remaining = m - sum(group_value_list)
     if remaining <= 0:
-        return group_m_list
+        return group_value_list
 
     capacities = [high - low for _ in range(group_num)]
     order = np.random.permutation(group_num).tolist()
@@ -93,7 +93,7 @@ def build_random_group_m_list(group_num: int, expect_m_per_group: int, m: int) -
         for idx in order:
             if capacities[idx] <= 0:
                 continue
-            group_m_list[idx] += 1
+            group_value_list[idx] += 1
             capacities[idx] -= 1
             remaining -= 1
             progressed = True
@@ -101,7 +101,7 @@ def build_random_group_m_list(group_num: int, expect_m_per_group: int, m: int) -
                 break
         if not progressed:
             break
-    return group_m_list
+    return group_value_list
 
 
 def parse_bool_arg(arg: str, name: str) -> bool:
@@ -115,18 +115,18 @@ def parse_bool_arg(arg: str, name: str) -> bool:
 
 def parse_cli_args(argv: List[str]) -> Tuple[List[int], int, int, int, bool, bool]:
     if len(argv) in {6, 8} and argv[1] == GROUP_LIST_MODE:
-        group_m_list = parse_group_m_list(argv[2])
+        group_value_list = parse_group_m_list(argv[2])
         m = int(argv[3])
         k = int(argv[4])
         n = int(argv[5])
-        if m < sum(group_m_list):
-            raise ValueError(f"m must be greater than or equal to sum(group_m_list)={sum(group_m_list)}")
+        if m < sum(group_value_list):
+            raise ValueError(f"m must be greater than or equal to sum(group_value_list)={sum(group_value_list)}")
         trans_a = DEFAULT_TRANS_A
         trans_b = DEFAULT_TRANS_B
         if len(argv) == 8:
             trans_a = parse_bool_arg(argv[6], "transA")
             trans_b = parse_bool_arg(argv[7], "transB")
-        return group_m_list, m, k, n, trans_a, trans_b
+        return group_value_list, m, k, n, trans_a, trans_b
 
     if len(argv) in {7, 9} and argv[1] == EXPECT_M_PER_GROUP_MODE:
         group_num = int(argv[2])
@@ -134,23 +134,23 @@ def parse_cli_args(argv: List[str]) -> Tuple[List[int], int, int, int, bool, boo
         m = int(argv[4])
         k = int(argv[5])
         n = int(argv[6])
-        group_m_list = build_random_group_m_list(group_num, expect_m_per_group, m)
+        group_value_list = build_random_group_m_list(group_num, expect_m_per_group, m)
         trans_a = DEFAULT_TRANS_A
         trans_b = DEFAULT_TRANS_B
         if len(argv) == 9:
             trans_a = parse_bool_arg(argv[7], "transA")
             trans_b = parse_bool_arg(argv[8], "transB")
-        return group_m_list, m, k, n, trans_a, trans_b
+        return group_value_list, m, k, n, trans_a, trans_b
 
     raise ValueError(
         "Usage:\n"
-        "  python3 gen_data_weight_nz.py group_list group_m_list m k n [transA transB]\n"
+        "  python3 gen_data_weight_nz.py group_list group_value_list m k n [transA transB]\n"
         "  python3 gen_data_weight_nz.py expect_m_per_group group_num expect_m_per_group m k n [transA transB]"
     )
 
 
-def build_group_list(group_m_list: List[int]) -> np.ndarray:
-    return np.array(group_m_list, dtype=np.int64)
+def build_group_list(group_value_list: List[int]) -> np.ndarray:
+    return np.array(group_value_list, dtype=np.int64)
 
 
 def pack_b4_to_b8(b4_data: np.ndarray):
@@ -243,8 +243,8 @@ def write_artifacts(base_dir, a_pack_int8, b_fp4_nz, a_scale, b_scale, group_lis
     out.view(torch.uint16).numpy().tofile(os.path.join(output_dir, "cpu_output.bin"))
 
 
-def gen_golden_data_simple(group_m_list: List[int], m: int, k: int, n: int, trans_b: bool):
-    group_num = len(group_m_list)
+def gen_golden_data_simple(group_value_list: List[int], m: int, k: int, n: int, trans_b: bool):
+    group_num = len(group_value_list)
 
     a_ori = np.random.uniform(1, 8, (m, k)).astype(float4_e2m1fn)
     a_pack_int8 = pack_b4_to_b8(a_ori)
@@ -258,14 +258,14 @@ def gen_golden_data_simple(group_m_list: List[int], m: int, k: int, n: int, tran
     a_scale = np.random.uniform(1, 8, size=(m, scale_k, 2)).astype(float8_e8m0)
     b_scale_shape = (group_num, n, scale_k, 2) if trans_b else (group_num, scale_k, n, 2)
     b_scale = np.random.uniform(1, 8, size=b_scale_shape).astype(float8_e8m0)
-    group_list = build_group_list(group_m_list)
+    group_list = build_group_list(group_value_list)
 
     a_scale_reshape = a_scale.reshape(m, scale_k * 2)
     a_scale_broadcast = np.repeat(a_scale_reshape, 32, axis=-1)[..., :k]
 
     outputs = []
     m_offset = 0
-    for group_idx, group_m in enumerate(group_m_list):
+    for group_idx, group_m in enumerate(group_value_list):
         if group_m == 0:
             continue
         a_group = a_ori[m_offset : m_offset + group_m]
@@ -300,7 +300,7 @@ def gen_golden_data_simple(group_m_list: List[int], m: int, k: int, n: int, tran
 
 if __name__ == "__main__":
     try:
-        group_m_list, m, k, n, trans_a, trans_b = parse_cli_args(sys.argv)
+        group_value_list, m, k, n, trans_a, trans_b = parse_cli_args(sys.argv)
     except ValueError as error:
         print(error)
         sys.exit(1)
@@ -317,11 +317,11 @@ if __name__ == "__main__":
     if trans_a:
         print("transA=true is not supported")
         sys.exit(1)
-    sum_group_m = sum(group_m_list)
+    sum_group_m = sum(group_value_list)
     if m < sum_group_m:
-        print(f"m must be greater than or equal to sum(group_m_list)={sum_group_m}")
+        print(f"m must be greater than or equal to sum(group_value_list)={sum_group_m}")
         sys.exit(1)
 
-    print(f"group_m_list={','.join(str(value) for value in group_m_list)}")
-    print(f"m={m}, sum(group_m_list)={sum_group_m}, k={k}, n={n}, transA={trans_a}, transB={trans_b}")
-    gen_golden_data_simple(group_m_list, m, k, n, trans_b)
+    print(f"group_value_list={','.join(str(value) for value in group_value_list)}")
+    print(f"m={m}, sum(group_value_list)={sum_group_m}, k={k}, n={n}, transA={trans_a}, transB={trans_b}")
+    gen_golden_data_simple(group_value_list, m, k, n, trans_b)

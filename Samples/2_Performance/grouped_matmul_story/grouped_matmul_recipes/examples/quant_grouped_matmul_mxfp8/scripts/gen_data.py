@@ -119,13 +119,16 @@ def parse_cli_args(argv: List[str]) -> Tuple[List[int], int, int, int, bool, boo
         m = int(argv[3])
         k = int(argv[4])
         n = int(argv[5])
-        if m < sum(group_m_list):
-            raise ValueError(f"m must be greater than or equal to sum(group_m_list)={sum(group_m_list)}")
         trans_a = DEFAULT_TRANS_A
         trans_b = DEFAULT_TRANS_B
         if len(argv) == 8:
             trans_a = parse_bool_arg(argv[6], "transA")
             trans_b = parse_bool_arg(argv[7], "transB")
+        if trans_a:
+            if k < sum(group_m_list):
+                raise ValueError(f"k must be greater than or equal to sum(group_k_list)={sum(group_m_list)}")
+        elif m < sum(group_m_list):
+            raise ValueError(f"m must be greater than or equal to sum(group_m_list)={sum(group_m_list)}")
         return group_m_list, m, k, n, trans_a, trans_b
 
     if len(argv) in {7, 9} and argv[1] == EXPECT_M_PER_GROUP_MODE:
@@ -134,12 +137,13 @@ def parse_cli_args(argv: List[str]) -> Tuple[List[int], int, int, int, bool, boo
         m = int(argv[4])
         k = int(argv[5])
         n = int(argv[6])
-        group_m_list = build_random_group_m_list(group_num, expect_m_per_group, m)
         trans_a = DEFAULT_TRANS_A
         trans_b = DEFAULT_TRANS_B
         if len(argv) == 9:
             trans_a = parse_bool_arg(argv[7], "transA")
             trans_b = parse_bool_arg(argv[8], "transB")
+        group_budget = k if trans_a else m
+        group_m_list = build_random_group_m_list(group_num, expect_m_per_group, group_budget)
         return group_m_list, m, k, n, trans_a, trans_b
 
     raise ValueError(
@@ -170,7 +174,56 @@ def write_artifacts(base_dir, a_fp8, b_fp8, a_scale, b_scale, group_list, out):
 def gen_golden_data_simple(group_m_list: List[int], m: int, k: int, n: int, trans_a: bool, trans_b: bool):
     group_num = len(group_m_list)
     if trans_a:
-        raise ValueError("transA=true is not supported in grouped quant matmul samples")
+        if trans_b:
+            raise ValueError("K-axis grouping requires transA=true and transB=false")
+        if sum(group_m_list) > k:
+            raise ValueError(f"k must be greater than or equal to sum(group_k_list)={sum(group_m_list)}")
+
+        a_ori = np.random.uniform(1, 8, (k, m)).astype(float8_e4m3fn)
+        b_ori = np.random.uniform(1, 8, (k, n)).astype(float8_e4m3fn)
+
+        scale_k = k // 64
+        a_scale = np.random.uniform(1, 8, size=(scale_k + group_num, m, 2)).astype(float8_e8m0)
+        b_scale = np.random.uniform(1, 8, size=(scale_k + group_num, n, 2)).astype(float8_e8m0)
+        group_list = build_group_list(group_m_list)
+
+        def broadcast_scale_for_group(scale, group_idx, k_offset, group_k, is_a=True):
+            """
+            从 scale 中提取当前分组的 scale 并 broadcast。
+            起始位置计算: (k_offset / 64 + group_idx)
+            """
+            scale_start = k_offset // 64 + group_idx
+            group_scale_k = math.ceil(group_k / 64)
+            if is_a:
+                # a_scale: (scale_k + group_num, m, 2)
+                group_scale = scale[scale_start : scale_start + group_scale_k]
+                group_scale = np.transpose(group_scale, (0, 2, 1)).reshape(group_scale_k * 2, m)
+            else:
+                # b_scale: (scale_k + group_num, n, 2)
+                group_scale = scale[scale_start : scale_start + group_scale_k]
+                group_scale = np.transpose(group_scale, (0, 2, 1)).reshape(group_scale_k * 2, n)
+            broadcasted = np.repeat(group_scale, 32, axis=0)[:group_k]
+            return broadcasted
+
+        outputs = []
+        k_offset = 0
+        for group_idx, group_k in enumerate(group_m_list):
+            if group_k == 0:
+                outputs.append(torch.zeros((m, n), dtype=torch.bfloat16))
+                continue
+            a_group = a_ori[k_offset : k_offset + group_k]
+            b_group = b_ori[k_offset : k_offset + group_k]
+            a_group_scale = broadcast_scale_for_group(a_scale, group_idx, k_offset, group_k, is_a=True)
+            b_group_scale = broadcast_scale_for_group(b_scale, group_idx, k_offset, group_k, is_a=False)
+            a_dequant = (a_group.astype(np.float32) * a_group_scale.astype(np.float32)).T
+            b_dequant = b_group.astype(np.float32) * b_group_scale.astype(np.float32)
+            outputs.append(torch.matmul(torch.from_numpy(a_dequant), torch.from_numpy(b_dequant)).to(torch.bfloat16))
+            k_offset += group_k
+
+        out = torch.stack(outputs, dim=0)
+        base = _recipe_example_root()
+        write_artifacts(base, a_ori, b_ori, a_scale, b_scale, group_list, out)
+        return
 
     # X and scales are sized to the declared M budget (m), not sum(group_m_list), so inputs stay well-defined when
     # some experts have zero rows. Golden output is padded to (m, n) with zeros below the computed rows.
@@ -238,11 +291,11 @@ if __name__ == "__main__":
         sys.exit(1)
 
     sum_group_m = sum(group_m_list)
-    if m < sum_group_m:
+    if not trans_a and m < sum_group_m:
         print(f"m must be greater than or equal to sum(group_m_list)={sum_group_m}")
         sys.exit(1)
-    if trans_a:
-        print("transA=true is not supported")
+    if trans_a and trans_b:
+        print("K-axis grouping requires transA=true and transB=false")
         sys.exit(1)
 
     print(f"group_m_list={','.join(str(value) for value in group_m_list)}")

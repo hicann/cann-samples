@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file quant_grouped_matmul_mx_tiling_split_m.h
- * \brief Host-side tiling helper for grouped MX split-M samples.
+ * \file quant_grouped_matmul_mx_tiling.h
+ * \brief Host-side tiling helper for grouped MX samples.
  */
 #pragma once
 
@@ -25,15 +25,17 @@
 #include "quant_grouped_matmul_tiling_common.h"
 
 template <gmm::DataType dataType>
-class QuantGroupedMatmulMxTilingSplitM
+class QuantGroupedMatmulMxTiling
 {
 public:
     void GetTilingData(
-        uint32_t numOfGroups, uint32_t m, uint32_t n, uint32_t k, bool transB, QuantGroupedMatmulMxTilingData& tilingData)
+        uint32_t numOfGroups, uint32_t m, uint32_t n, uint32_t k, bool transA, bool transB,
+        QuantGroupedMatmulMxTilingData& tilingData)
     {
         args_ = {};
         platformInfo_ = {};
         runInfo_ = {};
+        transA_ = transA;
         transB_ = transB;
 
         InitCompileInfo();
@@ -46,6 +48,7 @@ private:
     QuantGroupedMatmulTilingArgs args_{};
     QuantGroupedMatmulPlatformInfo platformInfo_{};
     QuantGroupedMatmulRunInfo runInfo_{};
+    bool transA_{QuantGroupedMatmulTilingConst::TRANS_A};
     bool transB_{QuantGroupedMatmulTilingConst::TRANS_B};
 
     void InitCompileInfo()
@@ -337,9 +340,10 @@ private:
 
     void PrintTilingData(const QuantGroupedMatmulMxTilingData& tilingData) const
     {
-        printf("[GroupedMatmul Strategy]\n");
-        printf("  strategy           : split_m\n");
         printf("[GroupedMatmul Tiling Data]\n");
+        printf("  transA             : %s\n", transA_ ? "true" : "false");
+        printf("  transB             : %s\n", transB_ ? "true" : "false");
+        printf("  splitMode          : %s\n", transA_ ? "SPLIT_K" : "SPLIT_M");
         printf("  groupNum           : %u\n", tilingData.groupNum);
         printf("  m                  : %u\n", tilingData.m);
         printf("  n                  : %u\n", tilingData.n);
@@ -356,5 +360,5 @@ private:
     }
 };
 
-using QuantGroupedMatmulMxfp4TilingSplitM = QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT4_E2M1>;
-using QuantGroupedMatmulMxfp8TilingSplitM = QuantGroupedMatmulMxTilingSplitM<gmm::DataType::DT_FLOAT8_E4M3FN>;
+using QuantGroupedMatmulMxfp4Tiling = QuantGroupedMatmulMxTiling<gmm::DataType::DT_FLOAT4_E2M1>;
+using QuantGroupedMatmulMxfp8Tiling = QuantGroupedMatmulMxTiling<gmm::DataType::DT_FLOAT8_E4M3FN>;

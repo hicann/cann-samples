@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file quant_grouped_matmul_mx_block_mmad_split_m.h
- * \brief Block-level grouped MX MMAD wrapper for split-M recipes.
+ * \file quant_grouped_matmul_mx_block_mmad.h
+ * \brief Block-level grouped MX MMAD wrapper.
  */
 #pragma once
 
@@ -92,13 +92,14 @@ public:
     using LayoutBPattern = AscendC::Te::GetLayoutPattern<decltype(LayoutB{}(0L, 0L))>;
     static constexpr bool transB = AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::DNExtLayoutPtn> ||
                                    AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn>;
-    static_assert(!transA, "QuantGroupedMatmulMxBlockMmadSplitM only supports non-transposed A.");
     // MXFP8: zero-pad L1 K tail to match NZ layout / ND2NZ path (see Tile::PadMxK*L1);
     // MXFP4 keeps unpadded L1 views.
     static constexpr bool needASetL1KZero = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t>;
     static constexpr bool needBSetL1KZero = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> ||
                                             (AscendC::Std::is_one_of_v<AType, fp4x2_e2m1_t, fp4x2_e1m2_t> && !transB);
-    using MakeLayoutAL1 = AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>;
+    using MakeLayoutAL1 = AscendC::Std::conditional_t<
+        transA, AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>,
+        AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>>;
     using MakeLayoutBL1 = AscendC::Std::conditional_t<
         transB, AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>,
         AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>>;

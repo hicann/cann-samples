@@ -37,13 +37,13 @@ def parse_group_m_list(arg: str) -> List[int]:
     for item in arg.split(","):
         item = item.strip()
         if not item:
-            raise ValueError("group_m_list contains an empty item")
+            raise ValueError("group_value_list contains an empty item")
         value = int(item)
         if value < 0:
             raise ValueError("Each group M value must be greater than or equal to 0")
         values.append(value)
     if not values:
-        raise ValueError("group_m_list must not be empty")
+        raise ValueError("group_value_list must not be empty")
     return values
 
 
@@ -56,10 +56,10 @@ def load_group_m_list(group_num: int) -> List[int]:
     return group_list.astype(np.int64).tolist()
 
 
-def verify_result(group_m_list: List[int], m: int, n: int):
-    sum_group_m = sum(group_m_list)
+def verify_result(group_value_list: List[int], m: int, n: int):
+    sum_group_m = sum(group_value_list)
     if sum_group_m > m:
-        raise ValueError("sum(group_m_list) must be less than or equal to m")
+        raise ValueError("sum(group_value_list) must be less than or equal to m")
     output = np.fromfile("./output/npu_out.bin", dtype=DATA_TYPE)
     golden = np.fromfile("./output/cpu_output.bin", dtype=DATA_TYPE)
 
@@ -72,8 +72,8 @@ def verify_result(group_m_list: List[int], m: int, n: int):
     golden_tensor = torch.from_numpy(golden).view(torch.bfloat16).reshape(m, n)
     golden_cmp = golden_tensor[:sum_group_m]
     npu_cmp = npu_output_tensor[:sum_group_m]
-    print("\ncpu golden (sum(group_m_list) rows):\n", golden_cmp)
-    print("npu output (sum(group_m_list) rows):\n", npu_cmp)
+    print("\ncpu golden (sum(group_value_list) rows):\n", golden_cmp)
+    print("npu output (sum(group_value_list) rows):\n", npu_cmp)
     golden_cmp_f32 = golden_cmp.to(torch.float32)
     npu_cmp_f32 = npu_cmp.to(torch.float32)
     abs_diff = torch.abs(golden_cmp_f32 - npu_cmp_f32)
@@ -127,8 +127,8 @@ if __name__ == "__main__":
                 raise ValueError("transA=true is not supported")
         if not trans_b and n % 2 != 0:
             raise ValueError("n must be a positive multiple of 2 when transB=false")
-        group_m_list = load_group_m_list(group_num)
-        res = verify_result(group_m_list, m, n)
+        group_value_list = load_group_m_list(group_num)
+        res = verify_result(group_value_list, m, n)
         if not res:
             raise ValueError(
                 f"[ERROR] NPU results differ from CPU. "
