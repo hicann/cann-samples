@@ -19,11 +19,9 @@
 | A/B数据类型  | `float8_e4m3fn`             | `float4_e2m1`              |
 | 量化方式      | GroupSize=32的per-group量化 | 同左                         |
 | scaleA/B  | `float8_e8m0`               | 同左              |
-| 分组     | M轴分组（A ND，B ND/DN），K轴分组（A DN，B ND）    | M轴分组（A ND，B ND/DN）   |
+| 分组     | M轴分组（A ND，B ND/DN/NZ/ZN），K轴分组（A DN，B ND）    | M轴分组（A ND，B ND/DN/NZ/ZN）   |
 | 显存压缩比     | 相比FP16/BF16内存占用减少约50%    | 相比FP16/BF16内存占用减少约75%   |
 | 典型用途      | 模型训推，兼顾速度与精度的平衡                  | 模型推理，侧重极致显存效率与推理速度                 |
-
-> 注：当前仅支持A/scaleA为ND、B/scaleB为DN排布。
 
 - **计算公式**  
 对每个专家e：
@@ -42,11 +40,12 @@ MXFP4仅支持M轴分组。
 | **变量名** | **描述**          | **Dtype**     | **Layout** | **Shape**                                      |
 | ------- | --------------- | ------------- | ---------- | -------------------------------------------------- |
 | A       | 输入左矩阵 | `float4_e2m1` | ND         | 整体`(M, K)`，按M分组切片                           |
-| B       | 输入右矩阵 | `float4_e2m1` | DN/ND         | `(E, N, K)/(E, K, N)`，每个分组大小相同                                       |
+| B       | 输入右矩阵 | `float4_e2m1` | ND/DN/NZ/ZN         | `(E, K, N)/(E, N, K)/(E, N1, K1, K0, N0)/(E, K1, N1, N0, K0)`，每个分组大小相同                                       |
 | scaleA  | 左矩阵量化参数 | `float8_e8m0` | ND         | 整体`(M, ceil(K/64), 2)`，与A同M拼接规则 |
-| scaleB  | 右矩阵量化参数 | `float8_e8m0` | DN/ND         | `(E, N, ceil(K/64), 2)/(E, ceil(K/64), N, 2)`，每个分组大小相同                              |
+| scaleB  | 右矩阵量化参数 | `float8_e8m0` | ND/DN         | `(E, ceil(K/64), N, 2)/(E, N, ceil(K/64), 2)`，每个分组大小相同，转置属性同B                       |
 | c       | 输出              | `bfloat16`    | ND         | 整体`(M, N)`，与A同M拼接规则                                       |
 
+> 注：MXFP4的NZ/ZN的后两维为`(16, 64)`。
 
 #### MXFP8参数说明
 
@@ -85,8 +84,8 @@ MXFP4仅支持M轴分组。
       <td>B</td>
       <td>输入右矩阵</td>
       <td><code>float8_e4m3fn</code></td>
-      <td><code>DN/ND</code></td>
-      <td><code>(E, N, K)/(E, K, N)</code></td>
+      <td><code>ND/DN/NZ/ZN</code></td>
+      <td><code>(E, K, N)/(E, N, K)/(E, N1, K1, K0, N0)/(E, K1, N1, N0, K0)</code></td>
       <td><code>ND</code></td>
       <td><code>(K, N)</code></td>
     </tr>
@@ -97,16 +96,16 @@ MXFP4仅支持M轴分组。
       <td><code>ND</code></td>
       <td><code>(M, ceil(K/64), 2)</code></td>
       <td><code>DN</code></td>
-      <td><code>(ceil(K/64), M, 2)</code></td>
+      <td><code>(K/64 + E, M, 2)</code></td>
     </tr>
     <tr>
       <td>scaleB</td>
       <td>右矩阵量化参数</td>
       <td><code>float8_e8m0</code></td>
       <td><code>DN/ND</code></td>
-      <td><code>(E, N, ceil(K/64), 2)/(E, ceil(K/64), N, 2)</code></td>
+      <td><code>(E, N, ceil(K/64), 2)/(E, ceil(K/64), N, 2)，每个分组大小相同，转置属性同B</code></td>
       <td><code>ND</code></td>
-      <td><code>(ceil(K/64), N, 2)</code></td>
+      <td><code>(K/64 + E, N, 2)</code></td>
     </tr>
     <tr>
       <td>c</td>
@@ -119,6 +118,8 @@ MXFP4仅支持M轴分组。
     </tr>
   </tbody>
 </table>
+
+> 注：MXFP8的NZ/ZN的后两维为`(16, 32)`。
 
 ### 算子实现说明
 GroupedMatmul是由E个单Matmul组成，按分组更新`A/B/ScaleA/ScaleB/C` GM基址偏移。
@@ -284,6 +285,59 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
   - MTE2带宽利用率受Scale搬运限制的场景
   - L1缓冲区有充足剩余空间的场景
 
+#### WeightNZ优化
+
+**同QuantMatmul**。
+
+- **原理介绍**
+
+  `NZ/ZN`为NPU私有格式数据。`NZ/ZN`格式的weight数据可通过普通的`DataCopy`搬运，相比带有格式转换的`ND2NZ`等指令具有更高的带宽利用率，能够更高效地将weight数据从GM搬运到L1缓冲区，从而减少weight数据搬运的MTE2耗时，优化Memory Bound场景性能。
+
+  下图展示了从标准DN排布 `(n, k)` 到ZN私有格式 `(k1, n1, n0, k0)` 的数据排布转换过程，其中 `n0=16`, `k0=32/sizeof(BType)`：
+
+  <div align="center">
+    <img src="images/weightDN2ZN_offline.png" width="1500" />
+  </div>
+
+- **效果对比**
+
+  下图展示了使用weight ND和NZ搬运的流水对比，NZ的weight数据搬运耗时显著降低。
+
+  <div align="center">
+    <img src="images/weightnz-optimization-compare.png" width="1500" />
+  </div>
+
+- **适用场景**
+  - 仅支持M轴分组的推理场景，离线处理weight DN->ZN或ND->NZ的过程
+  - MTE2 Bound场景
+  - 原始shape内轴不对齐场景
+
+#### 双页表
+
+**同QuantMatmul**。
+
+- **原理介绍**
+
+  当分组matmul的m较小（<=baseM）时，weight数据只使用一次。当前默认HBM数据先进L2Cache再进L1缓冲区，weight数据量大，weight加载会造成L2里的有效数据回写到HBM，这部分会产生额外的MTE2耗时。
+  
+  如果在小m场景下，将weight数据从HBM直接加载进L1缓冲区，不仅不会增加原有weight加载耗时，且不会造成非必要的L2有效数据回写到HBM。
+
+  <div align="center">
+    <img src="images/bypass-l2.png" width="400" />
+  </div>
+
+- **效果对比**
+
+  下图展示了使用双页表前后的流水对比，优化后数据搬运耗时显著降低。
+
+  <div align="center">
+    <img src="images/bypass-l2-compare.png" width="1500" />
+  </div>
+
+- **适用场景**
+  - 大weight数据量
+  - 整网推理场景
+
 ### 计算效率优化
 
 #### group间核负载均衡
@@ -348,23 +402,28 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
 
 ### SWAT模板
 
-- **模板特点**： 
+- **模板特点**：
   - 作为基础模板用于处理非特化模板的所有场景，具有广泛的适用性
   - 适用于大规模矩阵乘法场景，在Cube Bound场景下表现优异
   - 支持灵活的形状配置，可适应不同维度的矩阵输入，尤其是host侧不可知的可变的分组值
 
-- **涉及优化手段**：  
+- **涉及优化手段**：
   - Double Buffer：隐藏内存访问延迟，提升流水线并行度
   - UnitFlag：提升计算与搬出流水并行度
   - SWAT（自适应滑动窗口）：提升L2命中率，优化多核并行效率
   - L1 Bank冲突优化：消除Bank冲突，提升MTE1带宽利用率
   - Scale缓存：优化Scale数据搬运，减少传输开销
+  - WeightNZ优化：使用非随路转换格式的普通指令高效搬运weight数据，提升weight数据搬运效率
+  - 双页表：针对只使用一次的weight数据从GM直接加载到L1，不发生不必要的L2回写劣化
   - M分组M均衡负载：均衡多核负载，减轻快慢核的计算不均导致的负载失衡
   - 分组间和尾轮负载均衡：均衡多核负载，消除空闲核的浪费
-  
-- **模板实现**  
-  - MXFP4：[quant_grouped_matmul_mxfp4_split_m.cpp](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/quant_grouped_matmul_mxfp4_split_m.cpp) 
-  - MXFP8：[quant_grouped_matmul_mxfp8_split_m.cpp](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/quant_grouped_matmul_mxfp8_split_m.cpp) 
+
+- **模板实现**
+  - MXFP4 splitM：[quant_grouped_matmul_mxfp4_split_m.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/quant_grouped_matmul_mxfp4_split_m.asc)
+  - MXFP4 splitM + WeightNZ：[quant_grouped_matmul_mxfp4_split_m_weight_nz.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/quant_grouped_matmul_mxfp4_split_m_weight_nz.asc)
+  - MXFP8 splitM：[quant_grouped_matmul_mxfp8_split_m.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_m.asc)
+  - MXFP8 splitM + WeightNZ：[quant_grouped_matmul_mxfp8_split_m_weight_nz.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_m_weight_nz.asc)
+  - MXFP8 splitK：[quant_grouped_matmul_mxfp8_split_k.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_k.asc)
 
 ## 优化策略选择指南
 
@@ -374,7 +433,7 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
 | **Bound类型**   | **推荐优化策略**       | **优先级**                                |
 | ------------- | ----------------------- | ----------------------------------------- |
 | CUBE Bound    | SWAT + 多核负载均衡             | 高                 |
-| MTE2 Bound    | Scale 缓存                     | 高   |
+| MTE2 Bound    | Scale 缓存 + WeightNZ搬运优化 + 双页表| 高   |
 | MTE1 Bound    | L1 Bank 冲突优化                | 中                                                |
 | FIXPIPE Bound | UnitFlag                        | 中                                 |
 | 流水停顿       | Double Buffer                  | 高 |
