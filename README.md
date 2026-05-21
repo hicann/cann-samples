@@ -21,13 +21,15 @@
 
 | CANN 版本 | 时间戳 | 验证结果 | 下载链接 |
 | --- | --- | --- | --- |
+| `9.1.0` | `20260513000324948` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260513000324948/Ascend-cann-toolkit_9.1.0_linux-aarch64.run) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260513000324948/Ascend-cann-toolkit_9.1.0_linux-x86_64.run) |
+| `9.1.0` | `20260508171052185` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260508171052185/Ascend-cann-toolkit_9.1.0_linux-aarch64.run) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260508171052185/Ascend-cann-toolkit_9.1.0_linux-x86_64.run) |
 | `9.0.0` | `20260422000325096` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260422000325096/Ascend-cann-toolkit_9.0.0_linux-aarch64.run) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260422000325096/Ascend-cann-toolkit_9.0.0_linux-x86_64.run) |
 
 请根据实际 CPU 架构，从上述链接目录中自行选择对应的 `.run` 安装包。
 
 ### 兼容性声明
 
-ops-samples中矩阵乘类example更新，引入ops-tensor子模块。涉及Tensor API的样例需使用上表中的`20260422000325096`及之后的`9.0.0`Toolkit构建，并按下文[ops-tensor子模块与Toolkit约束](#ops-tensor子模块与toolkit约束)初始化子模块、配置环境变量。
+ops-samples中矩阵乘类example更新，引入ops-tensor子模块。涉及Tensor API的样例需使用上表中已验证通过的 Toolkit 版本构建，并按下文[ops-tensor子模块与Toolkit约束](#ops-tensor子模块与toolkit约束)初始化子模块、配置环境变量。
 
 toolkit 安装包文件名格式如下：
 
@@ -73,7 +75,7 @@ toolkit 安装包文件名格式如下：
      git submodule update --init --recursive third_party/tensor_api
      ```
      若未提前初始化子模块，CMake在构建依赖`cann_samples::tensor_api`的目标时也会尝试执行上述子模块更新命令。
-   - **Toolkit要求**：Tensor API相关样例会使用`third_party/tensor_api/include/tensor_api`以及Toolkit中的Ascend C头文件，因此必须安装完整的CANN Toolkit并先执行`source ${install_path}/ascend-toolkit/set_env.sh`。当前请使用上表中已验证的`20260422000325096`版本构建；Toolkit版本过旧、仅安装Run包或环境变量未生效时，可能出现头文件缺失、符号未定义或编译选项报错。
+   - **Toolkit要求**：Tensor API相关样例会使用`third_party/tensor_api/include/tensor_api`以及Toolkit中的Ascend C头文件，因此必须安装完整的CANN Toolkit并先执行`source ${install_path}/ascend-toolkit/set_env.sh`。当前请使用上表中已验证通过的版本构建；Toolkit版本过旧、仅安装Run包或环境变量未生效时，可能出现头文件缺失、符号未定义或编译选项报错。
    - **NPU架构**：`matmul_story`、`grouped_matmul_story`额外要求`NPU_ARCH=dav-3510`（Ascend 950）；使用`dav-2201`全量配置工程时，这两项样例会被跳过，属预期行为。
 
 ## ⚡️快速入门
