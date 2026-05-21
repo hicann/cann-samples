@@ -14,6 +14,8 @@ matmul_story/
 │   ├── docs/                                   # 性能优化技术文档
 │   └── examples/                               # 算子示例目录
 │       ├── quant_matmul_mxfp4/                 # MXFP4 量化矩阵乘示例
+│       ├── quant_matmul_mxfp8/                 # MXFP8 量化矩阵乘示例
+│       ├── quant_matmul_hifp8/                 # HiFloat8 量化矩阵乘示例
 │       └── matmul_a16w16/                      # A16W16 非量化矩阵乘示例
 └── matmul_tutorials/                           # 分步教程（细目见 matmul_tutorials/README.md）
     ├── CMakeLists.txt
@@ -44,6 +46,7 @@ matmul_story/
 - [matmul_a16w16](./matmul_recipes/examples/matmul_a16w16/README.md)：A16W16 非量化矩阵乘算子优化实践
 - [quant_matmul_mxfp4](./matmul_recipes/examples/quant_matmul_mxfp4/README.md)：MXFP4 量化矩阵乘算子优化实践
 - [quant_matmul_mxfp8](./matmul_recipes/examples/quant_matmul_mxfp8/README.md)：MXFP8 量化矩阵乘算子优化实践
+- [quant_matmul_hifp8](./matmul_recipes/examples/quant_matmul_hifp8/README.md)：HiFloat8（hifp8）矩阵乘，`quant_matmul_hifp8_tt` / `quant_matmul_hifp8_tc` 双入口说明见目录 README
 
 ## 优化指南
 

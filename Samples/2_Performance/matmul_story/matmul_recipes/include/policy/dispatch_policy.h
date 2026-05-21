@@ -46,3 +46,8 @@ struct MatmulA16W16MultiBlockWithSwat {
  *        scheduling family.
  */
 struct MatmulA16W16MultiBlockWithStreamK {};
+
+template <uint64_t FULL_LOAD_MODE_>
+struct MatmulWithScale {
+    static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
+};

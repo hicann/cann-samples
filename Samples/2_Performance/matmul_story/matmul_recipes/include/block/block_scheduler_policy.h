@@ -33,3 +33,8 @@ struct MatmulA16W16SwatScheduler {
 };
 
 struct MatmulA16W16StreamKScheduler {};
+
+template <uint64_t FULL_LOAD_MODE_>
+struct QuantBatchMatmulV3Scheduler {
+    static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
+};
