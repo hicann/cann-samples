@@ -7,12 +7,45 @@
 
 在整网推理过程中，各层的 TopK 路由结果会动态变化。若采用传统的 `alltoallv` 通信流程，通常需要先交换各 rank 的发送量信息，再通过排序/重排将发往同一专家的数据聚集，最后再进行一次 `alltoallv` 发送 token 数据。这一流程链路长、同步点多，整体效率不高。因此，我们考虑将 `Dispatch/Combine` 的数据收发过程进一步细粒度拆分：基于共享内存的写入机制按 token 逐个发送与接收，通过流水并行（pipeline）重叠通信与数据整理开销，以获得更好的整体性能。
 
+![Dispatch 与 Combine 流程示意图](images/dispatch_and_combine_flow.png)
+
+本文基于 CANN Samples 中的 Dispatch/Combine 实践案例，采用 Ascend C **Kernel 直调**（通过内核调用符 `<<<>>>` 启动核函数；亦可使用 `ACLRT_LAUNCH_KERNEL` 等等价方式，详见昇腾文档《[基于样例工程完成 Kernel 直调](http://hiascend.com/document/detail/zh/canncommercial/900/programug/Ascendcopdevg/atlas_ascendc_10_0056.html)》），并引入 [CANN shmem（ACL SHMEM）](https://gitcode.com/cann/shmem) 对称共享内存完成跨设备数据交换，整体实现路径更贴近 Ascend C 工程习惯与开源通信组件生态。
+
+![Kernel 直调与 ACL SHMEM 方案示意图](images/direct_call_and_shmem.png)
+
+采用上述两种方案的主要优势如下：
+
+- **Kernel 直调**：核函数由应用在 Device 侧直接启动，可与 `aclrtStream`、Host/Device 内存管理等 ACL 接口在同一套异步流水线中编排；调用链路与官方 Kernel Launch 样例一致，便于对齐文档、调试与迭代，无需额外引入一层算子封装即可验证通信与计算逻辑。
+- **ACL SHMEM**：通过对称共享内存窗口与设备侧 `aclshmem_ptr`、`mte_put` 等接口，提供跨 PE 的单边写与统一寻址抽象，便于实现上文所述「按 token 写入对端 + 状态区同步」的细粒度通信；相较于层层 `alltoallv` 与全局排序，更易与本案例的数据面/状态面划分及流水并行设计结合，并复用 CANN 开源 shmem 组件而非自建底层传输。
+
 ## Dispatch 功能介绍
 
 - 完成 token 分发：根据 token 选中的专家，将 token 发送到对应卡上。
 - 为支持后续 FFN 计算，将各卡发送过来的 token 连续重排。
 - 为支持后续 `Combine` 处理，统计接收 token 信息，支撑 `Combine` 将 FFN 计算后的 token 发送回源端。
 - 将量化提前到通信之前，将量化后的 `int8 token` 与 `fp32 scale` 合并发送，并在接收端重排分离。
+
+### 内存划分
+
+```
+PE rank=0               PE rank=1               PE rank=N-1
+┌──────────────┐        ┌──────────────┐        ┌──────────────┐
+│ 数据面        │        │ 数据面       │        │ 数据面        │
+│ [0,1022MB)   │        │ [0,1022MB)   │        │ [0,1022MB)   │
+│              │        │              │        │              │
+│ winOffset_   │        │ winOffset_   │        │ winOffset_   │
+│ ▼专家栅格     │        │ ▼专家栅格     │        │ ▼专家栅格    │
+│              │        │              │        │              │
+├──────────────┤        ├──────────────┤        ├──────────────┤
+│ 状态面        │        │ 状态面       │        │ 状态面        │
+│ 1022MB+      │        │ 1022MB+      │        │ 1022MB+      │
+│ Dispatch区   │        │ Dispatch区   │        │ Dispatch区   │
+│ Combine区    │        │ Combine区    │        │ Combine区    │
+└──────────────┘        └──────────────┘        └──────────────┘
+        │                       │                        │
+        └───── mte_put 可以跨 PE 写对方窗口内的偏移 ───────┘
+        访问对端：aclshmem_ptr(shmemCtx, pe) + offset
+```
 
 ### 计算步骤
 
@@ -40,6 +73,28 @@
 - 将 FFN 计算后的 token 发送回源端。
 - 将选中的 `K`（MoE 专家数）个 FFN 结果加权求和，完成 `combine` 计算。
 
+### 内存划分
+
+```
+PE rank=0               PE rank=1               PE rank=N-1
+┌──────────────┐        ┌──────────────┐        ┌──────────────┐
+│ 数据面        │        │ 数据面       │        │ 数据面        │
+│ [0,1022MB)   │        │ [0,1022MB)   │        │ [0,1022MB)   │
+│              │        │              │        │              │
+│ winOffset_   │        │ winOffset_   │        │ winOffset_   │
+│ ▼专家栅格     │        │ ▼专家栅格     │        │ ▼专家栅格    │
+│              │        │              │        │              │
+├──────────────┤        ├──────────────┤        ├──────────────┤
+│ 状态面        │        │ 状态面       │        │ 状态面        │
+│ 1022MB+      │        │ 1022MB+      │        │ 1022MB+      │
+│ Dispatch区   │        │ Dispatch区   │        │ Dispatch区   │
+│ Combine区    │        │ Combine区    │        │ Combine区    │
+└──────────────┘        └──────────────┘        └──────────────┘
+        │                       │                        │
+        └───── mte_put 可以跨 PE 写对方窗口内的偏移 ───────┘
+        访问对端：aclshmem_ptr(shmemCtx, pe) + offset
+```
+
 ### 计算步骤
 
 1. **循环发送数据与发送 `flag`（按总 token 数分核）**
@@ -54,6 +109,49 @@
    - 状态齐备后，从通信 Shared Memory 搬运各 FFN 结果。
    - 从输入 HBM 搬运 `expert scale`。
    - 执行 `combine`：对各 MoE FFN 结果乘以 `expert scale` 后求和，再叠加 shared FFN 结果。
+
+
+## 性能优化实践
+
+### 优化措施一：通信前量化
+
+在数据进入通信链路之前完成量化，降低传输字节数并改善算子侧效率。两条路径对比如下：
+
+- **Dispatch**：量化前移到发送侧；通信时同步携带动态量化参数（如对端解析所需的 scale）。
+- **Combine**：发送前按 **block** 量化为 `int8`，压缩通信量；接收后再反量化参与计算，combine详情如下：
+
+#### 搬运前：量化
+
+- **数据搬运**：GM 输入 → UB，并转为 `float`。
+- **算 scale**：取数据最大绝对值 → 按 `int8` 表示范围计算 scale。
+- **存 scale**：将 scale 写入 UB 后半段。
+- **量化计算**：广播 scale → 原始数据 ÷ scale → 映射到 `int8` 数值范围。
+- **转 int8**：`float` → `fp16` → `int8`，写入 UB 前半段。
+- **硬件同步**：保证流水线各阶段顺序正确。
+
+#### 通信：搬运数据
+
+从 UB 搬运量化后的数据到对端缓冲区。
+
+#### 搬运后：反量化
+
+- **拆输入**：从同一段缓冲读取 `int8` 数据及尾部 scale。
+- **类型转换**：`int8` → `fp16` → `float`，scale 同步转为 `float`。
+- **反量化计算**：广播 scale → `int8` 数据 × scale → 恢复浮点幅值。
+- **写回**：将恢复后的浮点数据写回原 `int8` 数据区。
+
+
+基于dispatch 和 combine算子基础版本，各自实现一个非量化和量化版本，构建低时延和高吞吐场景性能验证用例，详细性能数据如下：
+| 算子名 | BS | H | K | 卡数 | 单卡专家数 | 量化类型 | 算子耗时(us) | 提升比例 |
+|--------|----|----|---|------|------------|----------|--------------|----------|
+| dispatch | 8 | 7168 | 8 | 8 | 4 | 非量化 | 17.1 | base |
+| dispatch | 8 | 7168 | 8 | 8 | 4 | mxfp8量化 | 16.6 | 1.03 |
+| dispatch | 256 | 7168 | 8 | 8 | 4 | 非量化 | 170 | base |
+| dispatch | 256 | 7168 | 8 | 8 | 4 | mxfp8量化 | 113 | 1.50 |
+| combine | 8 | 7168 | 8 | 8 | 4 | 非量化 | 19.4 | base |
+| combine | 8 | 7168 | 8 | 8 | 4 | int8量化 | 18.8 | 1.03 |
+| combine | 256 | 7168 | 8 | 8 | 4 | 非量化 | 150.7 | base |
+| combine | 256 | 7168 | 8 | 8 | 4 | int8量化 | 108 | 1.40 |
 
 
 ## 示例演示
