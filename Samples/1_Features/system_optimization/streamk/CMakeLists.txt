@@ -9,7 +9,37 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(unit_flag)
-add_subdirectory(n_buffer)
-add_subdirectory(mte2_preload)
-add_subdirectory(weightnz)
+set(SUPPORTED_NPU_ARCHS dav-3510)
+file(RELATIVE_PATH SAMPLE_PATH ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
+    message(STATUS "Skip sample ${SAMPLE_PATH}: NPU_ARCH=${NPU_ARCH} is not supported")
+    return()
+endif()
+
+add_executable(streamk main.asc)
+
+target_compile_options(streamk PRIVATE
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
+)
+
+target_link_libraries(streamk
+    m
+    dl
+    platform
+    tiling_api
+    cann_samples::tensor_api
+)
+
+set(DIST_PATH
+    1_Features/system_optimization/streamk
+)
+
+install(TARGETS streamk
+    RUNTIME DESTINATION ${DIST_PATH}
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
+    DESTINATION ${DIST_PATH}
+    FILES_MATCHING PATTERN "*"
+)

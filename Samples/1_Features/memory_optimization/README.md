@@ -11,3 +11,6 @@
 ### [slide_window_adaptive_template](./slide_window_adaptive_template)
 演示如何利用 SWAT（Slide Window Adaptive Template）滑窗技术优化访存效率。
 
+### [scale_cache](./scale_cache)
+演示当单次搬运数据量不足时，如何利用L1缓存预取Scale数据，解决带宽利用率下降问题。
+

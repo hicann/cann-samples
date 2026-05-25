@@ -10,3 +10,4 @@
 # ----------------------------------------------------------------------------
 
 add_subdirectory(tail_rebalance)
+add_subdirectory(streamk)
