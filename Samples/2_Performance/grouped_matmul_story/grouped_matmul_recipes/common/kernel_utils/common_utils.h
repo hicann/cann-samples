@@ -89,6 +89,25 @@ __aicore__ inline uint64_t Align(uint64_t a, uint64_t b)
     return (a + b - 1) / b * b;
 }
 
+constexpr int64_t ALIGN_MASK_64 = 63LL;
+constexpr int64_t ALIGN_MASK_32 = 31LL;
+constexpr int64_t ALIGN_MASK_16 = 15LL;
+
+__aicore__ inline int64_t Align64(int64_t x)
+{
+    return (x + ALIGN_MASK_64) & ~ALIGN_MASK_64;
+}
+
+__aicore__ inline int64_t Align32(int64_t x)
+{
+    return (x + ALIGN_MASK_32) & ~ALIGN_MASK_32;
+}
+
+__aicore__ inline int64_t Align16(int64_t x)
+{
+    return (x + ALIGN_MASK_16) & ~ALIGN_MASK_16;
+}
+
 template <typename T>
 __aicore__ constexpr uint32_t GetKBUnit()
 {

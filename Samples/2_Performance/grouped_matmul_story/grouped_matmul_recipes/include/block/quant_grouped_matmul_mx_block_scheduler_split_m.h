@@ -20,7 +20,8 @@ namespace Block {
 constexpr int64_t WINDOW_LEN = 4LL;                 // Window length is 4.
 class BlockSchedulerGmmAswtWithTailSplit {
 public:
-    using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
+    using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
+    using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
     struct Params {
         int32_t baseM{0};
@@ -195,7 +196,7 @@ public:
         return true;
     }
 
-    __aicore__ inline TupleShape GetBlockShape(const BlockCoord& blockCoord)
+    __aicore__ inline BlockShape GetBlockShape(const BlockCoord& blockCoord)
     {
         int64_t singleCoreM = AscendC::Te::Get<MNK_M>(blockCoord) != (mCnt_ - 1) ? baseM_ : mBaseTail_;
         int64_t singleCoreN = AscendC::Te::Get<MNK_N>(blockCoord) != (nCnt_ - 1) ? baseN_ : nBaseTail_;
