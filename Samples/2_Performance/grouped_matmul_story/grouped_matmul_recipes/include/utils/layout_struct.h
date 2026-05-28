@@ -10,6 +10,7 @@
 #pragma once
 
 #include "include/tensor_api/tensor.h"
+#include "kernel_utils/common_utils.h"
 
 namespace AscendC {
 namespace Te {

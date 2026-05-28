@@ -185,6 +185,14 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
 
   Double Buffer使用两个缓冲区交替工作：一个缓冲区用于当前计算，另一个并行准备下一轮数据。通过计算与数据加载/准备的重叠，隐藏内存访问延迟，减少流水线停顿，提高算子吞吐量。
 
+- **Double Buffer（2-Buffer） vs 3-Buffer**
+  - **2-Buffer**：两份buffer交替，覆盖“当前计算/下一轮准备”的基本重叠关系，资源开销更小，适用于多数GroupedMatmul场景。
+  - **3-Buffer**：相较2-Buffer，3-Buffer仅在L1侧增加第三份阶段缓冲（A/B数据），L0层级仍为2-Buffer，以减少因搬运抖动、带宽瞬时不足造成的断流风险。
+  - **使能3-Buffer条件**：需满足L1容量约束，并且在保持目标`baseM/baseN/baseK`块大小后不引入新的瓶颈。以当前Grouped MXFP8 split-M 3buffer实现为例，需要满足：
+    - `A1 + B1 + scaleA + scaleB + A3 <= HALF_L1_SIZE`
+    - `A2 + B2 + scaleA + scaleB + B3 <= HALF_L1_SIZE`
+    其中，A1=A2=A3,B1=B2=B3，A1/B1分别为A/B一次MTE2搬运到L1的数据量。若不满足上述条件，建议回退2-Buffer并结合SWAT/Bank冲突优化提升整体吞吐。
+
 - **效果对比**
 
   下图展示了L1,L0A,L0B使能Double Buffer后流水图的预期变化，从而有效提升不同流水间的并行度。
@@ -422,6 +430,7 @@ MX量化矩阵乘算子的性能瓶颈主要分为以下两类，同**QuantMatmu
   - MXFP4 splitM：[quant_grouped_matmul_mxfp4_split_m.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/quant_grouped_matmul_mxfp4_split_m.asc)
   - MXFP4 splitM + WeightNZ：[quant_grouped_matmul_mxfp4_split_m_weight_nz.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp4/quant_grouped_matmul_mxfp4_split_m_weight_nz.asc)
   - MXFP8 splitM：[quant_grouped_matmul_mxfp8_split_m.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_m.asc)
+  - MXFP8 splitM + 3Buffer：[quant_grouped_matmul_mxfp8_split_m_3buffer.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_m_3buffer.asc)
   - MXFP8 splitM + WeightNZ：[quant_grouped_matmul_mxfp8_split_m_weight_nz.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_m_weight_nz.asc)
   - MXFP8 splitK：[quant_grouped_matmul_mxfp8_split_k.asc](../grouped_matmul_recipes/examples/quant_grouped_matmul_mxfp8/quant_grouped_matmul_mxfp8_split_k.asc)
 

@@ -66,6 +66,9 @@ inline T FloorAlign(T a, T b)
     return a / b * b;
 }
 
+static constexpr uint64_t DOUBLE_BUFFER_NUM = 2UL;
+static constexpr uint64_t TRIPLE_BUFFER_NUM = 3UL;
+
 template <gmm::DataType dataType, typename T>
 constexpr T GetShapeWithDataType(T size)
 {

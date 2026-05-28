@@ -28,12 +28,8 @@ namespace Block {
 
 namespace {
 // Half of one L0C bank (float workspace) when double-buffering the accumulator tile.
-static constexpr uint64_t HALF_L0C_SIZE = L0C_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(float);
-static constexpr uint64_t SCALE_BUFFER_NUM = 2UL;
-// MTE1_MTE2 event ids: input ring (0-1) then scale ping-pong (4-5); cross-pipe sync uses base 2 + buffer id.
-static constexpr uint16_t INPUT_BUFFER_MTE1_MTE2_BASE = 2;
-// Scale ping-pong uses ids 4 + scaleL1BufId (0 or 1).
-static constexpr uint16_t SCALE_BUFFER_MTE1_MTE2_BASE = 4;
+static constexpr uint64_t HALF_L0C_SIZE = L0C_SIZE / KERNEL_DOUBLE_BUFFER_NUM / sizeof(float);
+static constexpr uint64_t SCALE_BUFFER_NUM = KERNEL_DOUBLE_BUFFER_NUM;
 
 } // namespace
 
@@ -42,7 +38,8 @@ template <
     class LayoutC_, class BiasType_>
 class BlockMmad<
     DispatchPolicy_, ATypeTuple_, LayoutATuple_, BTypeTuple_, LayoutBTuple_, CType_, LayoutC_, BiasType_,
-    AscendC::Std::enable_if_t<AscendC::Std::is_base_of_v<QuantMatmulMxMultiBlockMmad, DispatchPolicy_>>> {
+    AscendC::Std::enable_if_t<AscendC::Std::is_base_of_v<
+        QuantMatmulMxMultiBlockMmad<DispatchPolicy_::stages>, DispatchPolicy_>>> {
 public:
     template <typename T>
     struct TypeUnpack {
@@ -83,7 +80,14 @@ public:
     using DispatchPolicy = DispatchPolicy_;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t>;
-    static constexpr uint64_t HALF_L0_SIZE = L0A_SIZE / GroupedMatmulRecipe::DOUBLE_BUFFER / sizeof(AType);
+    static constexpr uint64_t HALF_L0_SIZE = L0A_SIZE / KERNEL_DOUBLE_BUFFER_NUM / sizeof(AType);
+    static constexpr uint64_t stages = DispatchPolicy::stages;
+    static constexpr uint16_t INPUT_BUFFER_MTE1_MTE2_BASE = static_cast<uint16_t>(stages);
+    static constexpr uint16_t SCALE_BUFFER_MTE1_MTE2_BASE = static_cast<uint16_t>(stages * SCALE_BUFFER_NUM);
+    static constexpr uint8_t MTE1_MTE2_EVENT_ID_NUM =
+        static_cast<uint8_t>(SCALE_BUFFER_MTE1_MTE2_BASE + SCALE_BUFFER_NUM);
+    static_assert(
+        stages == KERNEL_DOUBLE_BUFFER_NUM || stages == KERNEL_TRIPLE_BUFFER_NUM, "Only 2 or 3 L1 stages are supported.");
     constexpr static int32_t C0_SIZE = AscendC::AuxGetC0Size<AType>();
     constexpr static int32_t SCALE_C0 = 2;
     constexpr static int32_t L0C_C0 = 16;
@@ -97,6 +101,7 @@ public:
     static constexpr bool needASetL1KZero = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t>;
     static constexpr bool needBSetL1KZero = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> ||
                                             (AscendC::Std::is_one_of_v<AType, fp4x2_e2m1_t, fp4x2_e1m2_t> && !transB);
+    static constexpr bool isFp4Type = AscendC::Std::is_one_of_v<AType, fp4x2_e2m1_t, fp4x2_e1m2_t>;
     using MakeLayoutAL1 = AscendC::Std::conditional_t<
         transA, AscendC::Te::FrameLayoutFormat<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>,
         AscendC::Te::FrameLayoutFormat<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<C0_SIZE>>>;
@@ -123,7 +128,7 @@ public:
     {
         // Set all MTE1/MTE2 handshake flags so the first K stage can enter the copy/compute loop uniformly.
 #pragma unroll
-        for (uint8_t i = 0; i < GroupedMatmulRecipe::MTE1_MTE2_EVENT_ID_NUM; ++i) {
+        for (uint8_t i = 0; i < MTE1_MTE2_EVENT_ID_NUM; ++i) {
             AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(i);
         }
         AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(0);
@@ -135,7 +140,7 @@ public:
     {
         // Wait for every in-flight transfer and cube sync before disabling MM layout transform.
 #pragma unroll
-        for (uint8_t i = 0; i < GroupedMatmulRecipe::MTE1_MTE2_EVENT_ID_NUM; ++i) {
+        for (uint8_t i = 0; i < MTE1_MTE2_EVENT_ID_NUM; ++i) {
             AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(i);
         }
         AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(0);
@@ -146,9 +151,6 @@ public:
     __aicore__ inline void Init(
         const TupleShape& problemShape, const BlockShape& l0TileShape, const L1Params& l1Params, bool enableL0cPingPong)
     {
-        // Force double-buffering on L1.
-        constexpr uint64_t l1BufNum = GroupedMatmulRecipe::DOUBLE_BUFFER;
-
         m_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_M>(problemShape);
         n_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_N>(problemShape);
         k_ = AscendC::Te::Get<GroupedMatmulRecipe::MNK_K>(problemShape);
@@ -161,23 +163,14 @@ public:
         // Prefer outer-K loops on the operand with the larger L1 K-tile to hide memory latency.
         orderAL1BL1_ = l1Params.kAL1 >= l1Params.kBL1;
         enableL0cPingPong_ = enableL0cPingPong;
-        constexpr bool isFp4Type = AscendC::Std::is_one_of_v<AType, fp4x2_e2m1_t, fp4x2_e1m2_t>;
         constexpr uint64_t sizeShift = isFp4Type ? 1UL : 0UL;
         bL1OneBuffer_ = baseN_ * Align(kBL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE) >> sizeShift;
         auto mxScaleKL1B16 = CeilDiv(scaleKL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE);
         auto mxScaleKL1 = mxScaleKL1B16 * GroupedMatmulRecipe::MX_MULTI_SIZE;
         aL1OneBuffer_ = baseM_ * Align(kAL1_, GroupedMatmulRecipe::MX_DIVISOR_SIZE) >> sizeShift;
         scaleAL1OneBuffer_ = baseM_ * mxScaleKL1;
-        // Lay out L1: ping-pong halves, then A/B tile slots, then scale A/B following each B buffer.
-        for (int32_t bufferId = 0; bufferId < static_cast<int32_t>(l1BufNum); bufferId++) {
-            uint64_t l1Offset = (L1_SIZE >> 1) * (bufferId & 1);
-            l1BufferAOffset_[bufferId] = l1Offset + aL1OneBuffer_ * (bufferId >> 1);
-            l1BufferBOffset_[bufferId] = l1Offset + aL1OneBuffer_ * (l1BufNum >> 1) + bL1OneBuffer_ * (bufferId >> 1);
-        }
-        for (int32_t bufferId = 0; bufferId < SCALE_BUFFER_NUM; bufferId++) {
-            l1BufferScaleAOffset_[bufferId] = l1BufferBOffset_[bufferId] + bL1OneBuffer_ * (l1BufNum >> 1);
-            l1BufferScaleBOffset_[bufferId] = l1BufferScaleAOffset_[bufferId] + scaleAL1OneBuffer_;
-        }
+        scaleBL1OneBuffer_ = baseN_ * mxScaleKL1;
+        InitL1BufferOffsets();
     }
 
     // Update global (m,n,k) for next group
@@ -196,6 +189,31 @@ public:
     }
 
 private:
+    __aicore__ inline void InitL1BufferOffsets()
+    {
+        constexpr uint64_t halfL1Offset = L1_SIZE >> 1;
+        l1BufferAOffset_[0] = 0UL;
+        l1BufferBOffset_[0] = aL1OneBuffer_;
+        l1BufferAOffset_[1] = halfL1Offset;
+        l1BufferBOffset_[1] = halfL1Offset + aL1OneBuffer_;
+        for (int32_t bufferId = 0; bufferId < static_cast<int32_t>(SCALE_BUFFER_NUM); bufferId++) {
+            l1BufferScaleAOffset_[bufferId] = l1BufferBOffset_[bufferId] + bL1OneBuffer_;
+            l1BufferScaleBOffset_[bufferId] = l1BufferScaleAOffset_[bufferId] + scaleAL1OneBuffer_;
+        }
+        if constexpr (stages == KERNEL_TRIPLE_BUFFER_NUM) {
+            l1BufferAOffset_[2] = l1BufferScaleBOffset_[0] + scaleBL1OneBuffer_; // 2: stages - 1 
+            l1BufferBOffset_[2] = l1BufferScaleBOffset_[1] + scaleBL1OneBuffer_; // 2: stages - 1 
+        }
+    }
+
+    __aicore__ inline uint64_t GetL1BufId(uint64_t loopCnt) const
+    {
+        if constexpr (stages == KERNEL_DOUBLE_BUFFER_NUM) {
+            return loopCnt & 1UL;
+        }
+        return loopCnt % stages;
+    }
+
     // Byte column/row offset within the L1 scale tile for a given K position
     __aicore__ inline uint64_t GetScaleOffset(uint64_t kOffset) const
     {
@@ -401,7 +419,7 @@ private:
             // A-major: kAl1 >= kBl1, A outer loop, B inner loop
             for (uint64_t kOuter = 0; kOuter < k_; kOuter += kAL1_) {
                 uint64_t scaleL1BufId = scaleLoopCnt_ & 1;
-                uint64_t aL1BufId = aL1LoopCnt_ & 1;
+                uint64_t aL1BufId = GetL1BufId(aL1LoopCnt_);
                 uint64_t curGmAKL1 = (kOuter + kAL1_ > k_) ? (k_ - kOuter) : kAL1_;
                 // copy scales to L1, scaleKL1_ is multiple of kAl1_
                 CopyScalesInL1(gmScaleA, gmScaleB, curM, curN, kOuter, scaleL1BufId);
@@ -410,7 +428,7 @@ private:
                 CopyAInL1(gmA, curM, curGmAKL1, aL1BufId, kOuter);
                 // B inner loop
                 for (uint64_t kInner = kOuter; kInner < Min(kOuter + kAL1_, k_); kInner += kBL1_) {
-                    uint64_t bL1BufId = bL1LoopCnt_ & 1;
+                    uint64_t bL1BufId = GetL1BufId(bL1LoopCnt_);
                     uint64_t curGmBKL1 = (kInner + kBL1_ > k_) ? (k_ - kInner) : kBL1_;
                     AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(INPUT_BUFFER_MTE1_MTE2_BASE + bL1BufId);
                     // copy B to L1
@@ -435,7 +453,7 @@ private:
             // B-major: kBl1 > kAl1, B outer loop, A inner loop
             for (uint64_t kOuter = 0; kOuter < k_; kOuter += kBL1_) {
                 uint64_t scaleL1BufId = scaleLoopCnt_ & 1;
-                uint64_t bL1BufId = bL1LoopCnt_ & 1;
+                uint64_t bL1BufId = GetL1BufId(bL1LoopCnt_);
                 uint64_t curGmBKL1 = (kOuter + kBL1_ > k_) ? (k_ - kOuter) : kBL1_;
                 // copy scales to L1, scaleKL1_ is multiple of kBl1_
                 CopyScalesInL1(gmScaleA, gmScaleB, curM, curN, kOuter, scaleL1BufId);
@@ -444,7 +462,7 @@ private:
                 CopyBInL1(gmB, curN, curGmBKL1, bL1BufId, kOuter);
                 // A inner loop
                 for (uint64_t kInner = kOuter; kInner < Min(kOuter + kBL1_, k_); kInner += kAL1_) {
-                    uint64_t aL1BufId = aL1LoopCnt_ & 1;
+                    uint64_t aL1BufId = GetL1BufId(aL1LoopCnt_);
                     uint64_t curGmAKL1 = (kInner + kAL1_ > k_) ? (k_ - kInner) : kAL1_;
                     AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(INPUT_BUFFER_MTE1_MTE2_BASE + aL1BufId);
                     // copy A to L1
@@ -480,8 +498,9 @@ private:
     uint64_t aL1OneBuffer_ = 0UL;
     uint64_t bL1OneBuffer_ = 0UL;
     uint64_t scaleAL1OneBuffer_ = 0UL;
-    uint64_t l1BufferAOffset_[2] = {0UL};
-    uint64_t l1BufferBOffset_[2] = {0UL};
+    uint64_t scaleBL1OneBuffer_ = 0UL;
+    uint64_t l1BufferAOffset_[stages] = {0UL};
+    uint64_t l1BufferBOffset_[stages] = {0UL};
     uint64_t l1BufferScaleAOffset_[2] = {0UL};
     uint64_t l1BufferScaleBOffset_[2] = {0UL};
     // Current problem and tiling (K outer tiles may differ for A vs B strips).

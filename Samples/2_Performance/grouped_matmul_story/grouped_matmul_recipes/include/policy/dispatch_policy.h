@@ -14,13 +14,18 @@
  */
 #pragma once
 
-#include "kernel_utils/common_utils.h"
+#include <cstdint>
 
-struct KernelMultiBlockOnKAxisWithScale {};
-
+/**
+ * @brief Dispatch tag for MX quantized matmul kernels that use the SWAT
+ *        scheduling family.
+ * @tparam STAGES_ Configures how many L1 pipeline stages the block MMAD
+ *         implementation should provision for this dispatch path.
+ */
+template <uint64_t STAGES_>
 struct QuantMatmulMxMultiBlockMmad {
-    using ScheduleType = KernelMultiBlockOnKAxisWithScale;
+    static constexpr uint64_t stages = STAGES_;
 };
 
-struct KernelMixDynamicKL1NTailResplit {};
-
+struct KernelMixDynamicKL1NTailResplit {
+};

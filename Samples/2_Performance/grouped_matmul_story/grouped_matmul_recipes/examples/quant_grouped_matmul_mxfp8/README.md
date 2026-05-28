@@ -7,6 +7,7 @@
 当前目录提供以下能力：
 
 - `quant_grouped_matmul_mxfp8_split_m`：基于m轴分组、权重按ND（包括**NDExtLayout/DNExtLayout**，下面仅用ND统称）逻辑组织的分组量化矩阵乘示例。
+- `quant_grouped_matmul_mxfp8_split_m_3buffer`：基于m轴分组、权重按ND逻辑组织的3buffer分组量化矩阵乘示例，其它示例均为2buffer。
 - `quant_grouped_matmul_mxfp8_split_m_weight_nz`：基于m轴分组、权重按GM上NZ（包括**NZLayout/ZNLayout**，下面仅用NZ统称）存储的分组量化矩阵乘示例。
 - `quant_grouped_matmul_mxfp8_split_k`：基于K轴分组、权重按ND逻辑组织的分组量化矩阵乘示例，仅支持`transA=true, transB=false`场景。
 - `gen_data.py`：生成ND权重输入数据和CPU golden结果。
@@ -139,6 +140,10 @@ python3 gen_data.py group_list 128,128,0 384 256 256 false true
 # 运行M轴分组:transA=false, transB=false场景（显式指定transA/transB）
 python3 gen_data.py group_list 128,128,0 384 256 256 false false
 ./quant_grouped_matmul_mxfp8_split_m 3 384 256 256 false false
+
+# 运行M轴分组3buffer场景（显式指定transA/transB）
+python3 gen_data.py group_list 128,128,0 384 256 256 false false
+./quant_grouped_matmul_mxfp8_split_m_3buffer 3 384 256 256 false false
 
 # 运行K轴分组:transA=true, transB=false场景（显式指定transA/transB）
 python3 gen_data.py group_list 128,128,0 384 384 256 true false

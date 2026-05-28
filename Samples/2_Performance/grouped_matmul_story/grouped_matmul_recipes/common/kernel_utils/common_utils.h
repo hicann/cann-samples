@@ -25,18 +25,20 @@
 #include "include/tensor_api/tensor.h"
 
 // On-chip buffer capacities used by the kernel helper code.
-constexpr static int64_t L0A_SIZE = 64 * 1024;
-constexpr static int64_t L0B_SIZE = 64 * 1024;
-constexpr static int64_t L0C_SIZE = 256 * 1024;
-constexpr static int64_t L1_SIZE = 512 * 1024;
-constexpr static int32_t BT_SIZE = 4096;
+static constexpr int64_t L0A_SIZE = 64LL * 1024LL;
+static constexpr int64_t L0B_SIZE = 64LL * 1024LL;
+static constexpr int64_t L0C_SIZE = 256LL * 1024LL;
+static constexpr int64_t L1_SIZE = 512LL * 1024LL;
+static constexpr int32_t BT_SIZE = 4096L;
+static constexpr uint64_t KERNEL_DOUBLE_BUFFER_NUM = 2UL;
+static constexpr uint64_t KERNEL_TRIPLE_BUFFER_NUM = 3UL;
 
-constexpr int MNK_M = 0;
-constexpr int MNK_N = 1;
-constexpr int MNK_K = 2;
-constexpr int MNK_B = 3;
-constexpr int MNK_M0 = 4;
-constexpr int MNK_N0 = 5;
+static constexpr int MNK_M = 0;
+static constexpr int MNK_N = 1;
+static constexpr int MNK_K = 2;
+static constexpr int MNK_B = 3;
+static constexpr int MNK_M0 = 4;
+static constexpr int MNK_N0 = 5;
 
 struct MatmulShape {
     int64_t m;
