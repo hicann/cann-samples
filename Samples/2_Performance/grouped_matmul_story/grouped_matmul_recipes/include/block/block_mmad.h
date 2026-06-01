@@ -32,3 +32,4 @@ class BlockMmad {
 // Include all concrete BlockMmad specializations here.
 #include "weight_quant_grouped_matmul_mxfp8fp4_block_mmad_split_m.h"
 #include "quant_grouped_matmul_mx_block_mmad.h"
+#include "quant_grouped_matmul_hif8_block_mmad.h"

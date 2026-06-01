@@ -66,6 +66,18 @@ add_grouped_matmul_recipe(
 )
 
 add_grouped_matmul_recipe(
+    quant_grouped_matmul_hif8_split_m_tt
+    quant_grouped_matmul_hif8/quant_grouped_matmul_hif8_split_m_tt.asc
+    quant_grouped_matmul_hif8
+)
+
+add_grouped_matmul_recipe(
+    quant_grouped_matmul_hif8_split_m_tc
+    quant_grouped_matmul_hif8/quant_grouped_matmul_hif8_split_m_tc.asc
+    quant_grouped_matmul_hif8
+)
+
+add_grouped_matmul_recipe(
     weight_quant_grouped_matmul_mxfp8fp4
     weight_quant_grouped_matmul_mxfp8fp4/weight_quant_grouped_matmul_mxfp8fp4_split_m.asc
     weight_quant_grouped_matmul_mxfp8fp4
@@ -79,7 +91,7 @@ install(CODE
 # Install helper scripts into the same directory as the executables. Host code
 # uses the executable directory as baseDir and runs `python3 verify_result.py`
 # there; gen_data.py is also documented as run from that cwd.
-set(RECIPE_VARIANTS quant_grouped_matmul_mxfp4 quant_grouped_matmul_mxfp8 weight_quant_grouped_matmul_mxfp8fp4)
+set(RECIPE_VARIANTS quant_grouped_matmul_mxfp4 quant_grouped_matmul_mxfp8 quant_grouped_matmul_hif8 weight_quant_grouped_matmul_mxfp8fp4)
 foreach(variant IN LISTS RECIPE_VARIANTS)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/examples/${variant}/scripts/
         DESTINATION ${GROUPED_MATMUL_INSTALL_PREFIX}/grouped_matmul_recipes/${variant}

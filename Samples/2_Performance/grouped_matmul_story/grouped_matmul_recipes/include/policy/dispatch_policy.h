@@ -29,3 +29,6 @@ struct QuantMatmulMxMultiBlockMmad {
 
 struct KernelMixDynamicKL1NTailResplit {
 };
+
+struct QuantGroupedMatmulBlockMmad {
+};

@@ -101,6 +101,7 @@ struct GroupedMatmulMxArgs {
 
 using GroupedMatmulMxfp4Args = GroupedMatmulMxArgs;
 using GroupedMatmulMxfp8Args = GroupedMatmulMxArgs;
+using GroupedMatmulHif8Args = GroupedMatmulMxArgs;
 using GroupedMatmulMxfp8Fp4Args = GroupedMatmulMxArgs;
 
 inline std::vector<uint32_t> ParseGroupList(const std::vector<int64_t>& groupListHost)
@@ -219,4 +220,3 @@ inline GroupedMatmulMxArgs ParseArguments(int argc, char* argv[])
     args.groupListBytes = static_cast<size_t>(args.groupNum * sizeof(int64_t));
     return args;
 }
-

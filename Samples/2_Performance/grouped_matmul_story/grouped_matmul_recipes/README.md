@@ -15,6 +15,7 @@ grouped_matmul_recipes/
 └── examples/
     ├── quant_grouped_matmul_mxfp4/   # MXFP4 分组量化矩阵乘样例
     ├── quant_grouped_matmul_mxfp8/   # MXFP8 分组量化矩阵乘样例
+    ├── quant_grouped_matmul_hif8/    # HiFloat8 分组量化矩阵乘样例
     └── weight_quant_grouped_matmul_mxfp8fp4/  # MXA8W4 权重量化分组矩阵乘样例
 ```
 
@@ -24,6 +25,7 @@ grouped_matmul_recipes/
 |------|----------|------|
 | [quant_grouped_matmul_mxfp4](examples/quant_grouped_matmul_mxfp4/README.md) | MXFP4 | MXFP4 分组量化矩阵乘 |
 | [quant_grouped_matmul_mxfp8](examples/quant_grouped_matmul_mxfp8/README.md) | MXFP8 | MXFP8 分组量化矩阵乘 |
+| [quant_grouped_matmul_hif8](examples/quant_grouped_matmul_hif8/README.md) | HiFloat8 | HiFloat8 分组量化矩阵乘 |
 | [weight_quant_grouped_matmul_mxfp8fp4](examples/weight_quant_grouped_matmul_mxfp8fp4/README.md) | MXA8W4 | MXA8W4 权重量化分组矩阵乘 |
 
 ## 使用方式

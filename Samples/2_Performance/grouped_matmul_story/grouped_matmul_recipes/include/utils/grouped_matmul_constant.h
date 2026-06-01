@@ -48,5 +48,16 @@ inline uint64_t GetSizeWithDataTypeFp4(uint64_t shape)
 {
     return (shape + 1UL) >> 1;
 }
+
+enum class QuantMode : uint32_t
+{
+    DEFAULT = 0x0U,
+    PERTENSOR_MODE = 0x1U,
+    PERCHANNEL_MODE = 0x1U << 1,
+    PERTOKEN_MODE = 0x1U << 2,
+    MX_PERGROUP_MODE = 0x1U << 3,
+    PERBLOCK_MODE = 0x1U << 4,
+    PERGROUP_MODE = 0x1U << 5,
+};
 } // namespace GroupedMatmulRecipe
 
