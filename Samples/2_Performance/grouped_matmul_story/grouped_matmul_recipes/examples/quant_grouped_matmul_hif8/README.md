@@ -6,10 +6,10 @@
 
 当前目录提供以下能力：
 
-- `quant_grouped_matmul_hif8_split_m_tt`：基于M轴分组、采用T-T[量化模式](../../../../../../docs/zh/context/量化介绍.md)的分组量化矩阵乘示例。每个group一组FP32标量`pertoken_scale.bin` + `scale.bin`。
-- `quant_grouped_matmul_hif8_split_m_tc`：基于M轴分组、采用T-C[量化模式](../../../../../../docs/zh/context/量化介绍.md)的分组量化矩阵乘示例。每个group的N维`uint64` per-channel `scale.bin`。
-- `scripts/gen_data_tt.py`：生成T-T[量化模式](../../../../../../docs/zh/context/量化介绍.md)输入数据和CPU golden结果。
-- `scripts/gen_data_tc.py`：生成T-C[量化模式](../../../../../../docs/zh/context/量化介绍.md)输入数据和CPU golden结果。
+- `quant_grouped_matmul_hif8_split_m_tt`：基于M轴分组、采用T-T[量化模式](../../../docs/量化介绍.md)的分组量化矩阵乘示例。每个group一组FP32标量`pertoken_scale.bin` + `scale.bin`。
+- `quant_grouped_matmul_hif8_split_m_tc`：基于M轴分组、采用T-C[量化模式](../../../docs/量化介绍.md)的分组量化矩阵乘示例。每个group的N维`uint64` per-channel `scale.bin`。
+- `scripts/gen_data_tt.py`：生成T-T[量化模式](../../../docs/量化介绍.md)输入数据和CPU golden结果。
+- `scripts/gen_data_tc.py`：生成T-C[量化模式](../../../docs/量化介绍.md)输入数据和CPU golden结果。
 - `scripts/verify_result.py`：校验NPU输出与CPU golden是否一致。
 
 ## 使用约束
@@ -55,7 +55,7 @@ golden输入数据由对应的数据生成脚本生成。编译安装后请在`b
 
 ## 数据生成方式
 
-`scripts/gen_data_tt.py`（T-T[量化模式](../../../../../../docs/zh/context/量化介绍.md)）与`scripts/gen_data_tc.py`（T-C[量化模式](../../../../../../docs/zh/context/量化介绍.md)）支持以下两种调用方式：
+`scripts/gen_data_tt.py`（T-T[量化模式](../../../docs/量化介绍.md)）与`scripts/gen_data_tc.py`（T-C[量化模式](../../../docs/量化介绍.md)）支持以下两种调用方式：
 
 ### 方式一：显式指定`group_value_list`
 
@@ -121,7 +121,7 @@ cd build_out/2_Performance/grouped_matmul_story/grouped_matmul_recipes/quant_gro
 
 之后可按需执行以下命令：
 
-T-T[量化模式](../../../../../../docs/zh/context/量化介绍.md)：
+T-T[量化模式](../../../docs/量化介绍.md)：
 
 ```bash
 # 生成数据方式一：显式指定grouplist生成一组测试数据
@@ -138,7 +138,7 @@ python3 scripts/gen_data_tt.py group_list 64,80,96 256 128 256 false false
 ./quant_grouped_matmul_hif8_split_m_tt 3 256 128 256 false false
 ```
 
-T-C[量化模式](../../../../../../docs/zh/context/量化介绍.md)：
+T-C[量化模式](../../../docs/量化介绍.md)：
 
 ```bash
 # 生成数据方式一：显式指定grouplist生成一组测试数据
