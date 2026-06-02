@@ -9,16 +9,21 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(SUPPORTED_NPU_ARCHS dav-3510)
+file(RELATIVE_PATH SAMPLE_PATH ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
+    message(STATUS "Skip sample ${SAMPLE_PATH}: NPU_ARCH=${NPU_ARCH} is not supported")
+    return()
+endif()
 
-set(CMAKE_FOLDER "0_Introduction")
-add_subdirectory(0_Introduction)
+add_executable(simulation_based_vf_profiling main.asc)
 
-set(CMAKE_FOLDER "1_Features")
-add_subdirectory(1_Features)
+target_compile_options(simulation_based_vf_profiling PRIVATE
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
+    "$<$<COMPILE_LANGUAGE:ASC>:--cce-simd-vf-fusion=false>"
+)
 
-set(CMAKE_FOLDER "2_Performance")
-add_subdirectory(2_Performance)
-
-set(CMAKE_FOLDER "3_Utilities")
-add_subdirectory(3_Utilities)
+install(TARGETS simulation_based_vf_profiling
+    RUNTIME DESTINATION 3_Utilities/simulation-based-vf-profiling
+)
