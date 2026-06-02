@@ -95,7 +95,7 @@ public:
     using LayoutC = LayoutC_;
 
     static_assert(AscendC::Te::IsSatisfiedPtnFormatV<decltype(AscendC::Te::MakeTensor(
-                      AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>((__gm__ AType*)0), LayoutA{}(0UL, 0UL))),
+                      AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>((AType*)0), LayoutA{}(0UL, 0UL))),
                       AscendC::Te::NDExtLayoutPtn>);
 
     constexpr static int32_t C0_SIZE = AscendC::AuxGetC0Size<AType>();
