@@ -39,6 +39,9 @@ constexpr uint64_t SYNC_MODE4 = 4;
 
 constexpr uint64_t FLAG_ID_MAX = 16;
 
+// Host example launchers may run the kernel multiple times before synchronizing.
+constexpr int32_t EXAMPLE_KERNEL_RUN_COUNT = 2;
+
 inline uint64_t GetShapeWithDataTypeFp4(uint64_t shape)
 {
     return shape << 1;

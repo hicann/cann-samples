@@ -46,3 +46,6 @@ static constexpr uint64_t A_FULL_LOAD_MODE = 1UL;
 constexpr int64_t DOUBLE_BUFFER_COUNT = 2LL;
 constexpr int64_t OFFSET_4_8 = 2LL;
 
+// Host example launchers may run the kernel multiple times before synchronizing.
+constexpr int32_t EXAMPLE_KERNEL_RUN_COUNT = 2;
+

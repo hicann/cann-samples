@@ -104,6 +104,10 @@ constexpr uint16_t BLOCK_BASE_M = 256UL;
 constexpr uint16_t BLOCK_BASE_N = 256UL;
 constexpr uint64_t L1_ALIGN_SIZE = 32UL;
 constexpr uint64_t L2_ALIGN_SIZE = 128UL;
+
+// Host example launchers may run the kernel multiple times before synchronizing.
+constexpr int32_t EXAMPLE_KERNEL_RUN_COUNT = 2;
+
 namespace QuantBatchMatmul {
     enum class QuantMode : uint32_t {
         DEFAULT = 0U,

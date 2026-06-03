@@ -24,8 +24,13 @@ MSPROF_PROF_DIR_PREFIX = "PROF_"
 MSPROF_OP_SUMMARY_GLOB = "op_summary_*.csv"
 # Keep the display order aligned with the recommendation table. The displayed
 # MTE labels follow the sample's mte1/mte2 naming convention.
+KERNEL_TIME_COLUMN = "Task Duration(us)"
+# 0-based index into op_summary rows with Task Duration(us). Aligns with the 2nd kernel
+# launch when sample launchers use EXAMPLE_KERNEL_RUN_COUNT=2 (warmup + measured run).
+PROFILING_KERNEL_RUN_INDEX = 1
+
 PROFILE_METRIC_SPECS = (
-    ("kernel_time_us", "kernel(us)", "Task Duration(us)"),
+    ("kernel_time_us", "kernel(us)", KERNEL_TIME_COLUMN),
     ("mac_time_us", "mac(us)", "aic_mac_time(us)"),
     ("scalar_time_us", "scalar(us)", "aic_scalar_time(us)"),
     ("mte1_time_us", "mte1(us)", "aic_mte1_time(us)"),
@@ -321,19 +326,36 @@ def parse_metric_value(raw_value: Optional[str], column_name: str, csv_path: Pat
         raise ValueError(f"Failed to parse {column_name} value '{raw_value}' from {csv_path}") from error
 
 
+def select_profile_row(rows: List[dict], csv_path: Path) -> dict:
+    """Pick the profiling row for the measured kernel (2nd Task Duration by default)."""
+    kernel_rows = [
+        row
+        for row in rows
+        if row.get(KERNEL_TIME_COLUMN) is not None and str(row.get(KERNEL_TIME_COLUMN)).strip()
+    ]
+    required_rows = PROFILING_KERNEL_RUN_INDEX + 1
+    if len(kernel_rows) < required_rows:
+        raise ValueError(
+            f"Expected at least {required_rows} rows with {KERNEL_TIME_COLUMN} in {csv_path}, "
+            f"but found {len(kernel_rows)}."
+        )
+    return kernel_rows[PROFILING_KERNEL_RUN_INDEX]
+
+
 def parse_profile_metrics_from_csv(csv_path: Path) -> ProfileMetrics:
     with csv_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
         reader = csv.DictReader(csv_file)
         header = reader.fieldnames
-        first_row = next(reader, None)
+        rows = list(reader)
 
     if not header:
         raise ValueError(f"CSV header is missing in {csv_path}")
-    if not first_row:
+    if not rows:
         raise ValueError(f"CSV data row is missing in {csv_path}")
 
+    profile_row = select_profile_row(rows, csv_path)
     metric_values = {
-        field_name: parse_metric_value(first_row.get(column_name), column_name, csv_path)
+        field_name: parse_metric_value(profile_row.get(column_name), column_name, csv_path)
         for field_name, _display_name, column_name in PROFILE_METRIC_SPECS
     }
     metric_values["icache_miss_rate"] *= 100.0
