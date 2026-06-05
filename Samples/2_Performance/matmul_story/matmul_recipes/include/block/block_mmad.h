@@ -33,3 +33,4 @@ class BlockMmad {
 #include "quant_matmul_mx_block_mmad_swat_4_buffer.h"
 #include "quant_matmul_mx_block_mmad_a_full_load.h"
 #include "quant_matmul_hifp8_block_mmad_swat.h"
+#include "weight_quant_matmul_mxfp8fp4_block_mmad_swat.h"

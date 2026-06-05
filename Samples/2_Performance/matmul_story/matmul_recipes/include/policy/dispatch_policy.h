@@ -51,3 +51,12 @@ template <uint64_t FULL_LOAD_MODE_>
 struct MatmulWithScale {
     static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
+
+struct KernelMixMmadWithScaleMx {};
+
+template <uint64_t L1_BUF_NUM_>
+struct WeightQuantMatmulMxfp8Fp4DispatchPolicy {
+    using ScheduleType = KernelMixMmadWithScaleMx;
+    // L1 buffer count is fixed by the executable target.
+    static constexpr uint64_t l1BufNum = L1_BUF_NUM_;
+};

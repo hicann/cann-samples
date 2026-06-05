@@ -15,9 +15,31 @@
 
 #pragma once
 
+#include "include/tensor_api/tensor.h"
 #include "kernel_utils/common_utils.h"
+#include "constant.h"
 
 namespace MatmulRecipe {
+
+template <typename T>
+struct Weight4BitNzLayout {
+    __aicore__ inline decltype(auto) operator()(int64_t kSize, int64_t nSize)
+    {
+        // C0 follows the converted compute type; MXFP8FP4 passes FP8 here, so C0 is 32.
+        static constexpr int64_t C0 = AscendC::AuxGetC0Size<T>();
+        static constexpr int64_t Block = CUBE_BLOCK;
+        int64_t k1 = CeilDiv(kSize, C0);
+        int64_t n1 = CeilDiv(nSize, Block);
+
+        auto shape = AscendC::Te::MakeShape(
+            AscendC::Te::MakeShape(AscendC::Std::Int<C0>{}, k1),
+            AscendC::Te::MakeShape(AscendC::Std::Int<Block>{}, n1));
+        auto stride = AscendC::Te::MakeStride(
+            AscendC::Te::MakeStride(AscendC::Std::Int<1>{}, n1 * AscendC::Std::Int<Block>{} * AscendC::Std::Int<C0>{}),
+            AscendC::Te::MakeStride(AscendC::Std::Int<C0>{}, AscendC::Std::Int<Block>{} * AscendC::Std::Int<C0>{}));
+        return AscendC::Te::MakeLayout(shape, stride);
+    }
+};
 
 /// If \p T is \c AscendC::Te::FrameLayoutFormat<P, Trait>, yields \p P; otherwise yields \p T.
 template <typename T>

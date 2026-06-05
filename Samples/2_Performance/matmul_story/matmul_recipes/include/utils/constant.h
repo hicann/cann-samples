@@ -107,11 +107,13 @@ constexpr uint64_t L2_ALIGN_SIZE = 128UL;
 
 // Host example launchers may run the kernel multiple times before synchronizing.
 constexpr int32_t EXAMPLE_KERNEL_RUN_COUNT = 2;
+constexpr uint64_t L1_HALF_SIZE = BASIC_BLOCK_SIZE_256 * 1024UL;
 
 namespace QuantBatchMatmul {
-    enum class QuantMode : uint32_t {
-        DEFAULT = 0U,
-        PERCHANNEL_MODE = 1U,
-        PERTENSOR_MODE = 2U,
-    };
+enum class QuantMode : uint32_t
+{
+    DEFAULT = 0U,
+    PERCHANNEL_MODE = 1U,
+    PERTENSOR_MODE = 2U,
+};
 }

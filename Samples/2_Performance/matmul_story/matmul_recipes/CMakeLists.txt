@@ -55,10 +55,15 @@ add_matmul_recipe(quant_matmul_hifp8_tt
 add_matmul_recipe(quant_matmul_hifp8_tc
     quant_matmul_hifp8/quant_matmul_hifp8_tc.asc quant_matmul_hifp8)
 
+add_matmul_recipe(weight_quant_matmul_mxfp8fp4
+    weight_quant_matmul_mxfp8fp4/weight_quant_matmul_mxfp8fp4.asc weight_quant_matmul_mxfp8fp4)
+add_matmul_recipe(weight_quant_matmul_mxfp8fp4_swat_4_buffer
+    weight_quant_matmul_mxfp8fp4/weight_quant_matmul_mxfp8fp4_swat_4_buffer.asc weight_quant_matmul_mxfp8fp4)
+
 # Install helper scripts into the same directory as the executables. Host code
 # uses the executable directory as baseDir and runs `python3 verify_result.py`
 # there; gen_data.py is also documented as run from that cwd.
-set(RECIPE_VARIANTS quant_matmul_mxfp4 quant_matmul_mxfp8 matmul_a16w16 quant_matmul_hifp8)
+set(RECIPE_VARIANTS quant_matmul_mxfp4 quant_matmul_mxfp8 matmul_a16w16 quant_matmul_hifp8 weight_quant_matmul_mxfp8fp4)
 foreach(variant IN LISTS RECIPE_VARIANTS)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/examples/${variant}/scripts/
         DESTINATION ${MATMUL_INSTALL_PREFIX}/matmul_recipes/${variant}

@@ -1,0 +1,273 @@
+#!/usr/bin/python3
+# coding=utf-8
+
+# ----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------------------------------------
+
+import argparse
+import math
+import sys
+from pathlib import Path
+from typing import List, Sequence, Tuple
+
+import numpy as np
+
+POINT_ERROR_TOL = 1e-1
+RATIO_POINT_ERROR_TOL = 1e-3
+ERROR_RATIO_TOL = 1e-3
+DATA_TYPE = np.uint16
+DEFAULT_MAX_DETAIL_ROWS = 50
+DATA_TYPE_BYTES = np.dtype(DATA_TYPE).itemsize
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Verify NPU output against CPU golden for weight_quant_matmul_mxfp8fp4."
+    )
+    parser.add_argument("m", type=int, help="Rows in output tensor.")
+    parser.add_argument("n", type=int, help="Cols in output tensor.")
+    parser.add_argument(
+        "--max-detail-rows",
+        type=int,
+        default=DEFAULT_MAX_DETAIL_ROWS,
+        help=(
+            "Maximum mismatch rows to print in table. "
+            "Use -1 to print all mismatch rows. Default: %(default)s."
+        ),
+    )
+    return parser.parse_args()
+
+
+def validate_args(m: int, n: int, max_detail_rows: int) -> None:
+    if m < 0:
+        raise ValueError("m must be greater than or equal to 0")
+    if n <= 0:
+        raise ValueError("n must be greater than 0")
+    if max_detail_rows < -1:
+        raise ValueError("max_detail_rows must be -1 or >= 0")
+
+
+def format_float(value: float) -> str:
+    if math.isnan(value):
+        return "nan"
+    if math.isinf(value):
+        return "inf" if value > 0 else "-inf"
+    return f"{value:.7g}"
+
+
+def bf16_u16_to_fp32(values_u16: np.ndarray) -> np.ndarray:
+    return (values_u16.astype(np.uint32) << 16).view(np.float32)
+
+
+def compress_indices(indices: np.ndarray) -> List[Tuple[int, int]]:
+    if indices.size == 0:
+        return []
+    ranges: List[Tuple[int, int]] = []
+    start = int(indices[0])
+    prev = start
+    for idx in indices[1:]:
+        curr = int(idx)
+        if curr == prev + 1:
+            prev = curr
+            continue
+        ranges.append((start, prev))
+        start = curr
+        prev = curr
+    ranges.append((start, prev))
+    return ranges
+
+
+def render_index_ranges(ranges: Sequence[Tuple[int, int]], wrap: int = 120) -> str:
+    if not ranges:
+        return "[]"
+    tokens: List[str] = []
+    for start, end in ranges:
+        tokens.append(str(start) if start == end else f"{start}-{end}")
+    lines: List[str] = []
+    current = ""
+    for token in tokens:
+        next_chunk = token if not current else f"{current}, {token}"
+        if len(next_chunk) > wrap:
+            lines.append(current)
+            current = token
+        else:
+            current = next_chunk
+    if current:
+        lines.append(current)
+    return "\n".join(lines)
+
+
+def render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
+    if not rows:
+        return "(no rows)"
+    widths = [len(head) for head in headers]
+    for row in rows:
+        for idx, cell in enumerate(row):
+            widths[idx] = max(widths[idx], len(cell))
+
+    def _line() -> str:
+        return "+" + "+".join("-" * (w + 2) for w in widths) + "+"
+
+    def _row(cells: Sequence[str]) -> str:
+        return "| " + " | ".join(cells[i].ljust(widths[i]) for i in range(len(cells))) + " |"
+
+    parts: List[str] = [_line(), _row(headers), _line()]
+    parts.extend(_row(row) for row in rows)
+    parts.append(_line())
+    return "\n".join(parts)
+
+
+def verify_result(m: int, n: int, max_detail_rows: int) -> bool:
+    total_elem_count = m * n
+    expected_bytes = total_elem_count * DATA_TYPE_BYTES
+    output_path = Path("./output/npu_out.bin")
+    golden_path = Path("./output/cpu_output.bin")
+
+    output_bytes = output_path.stat().st_size
+    golden_bytes = golden_path.stat().st_size
+    if output_bytes != expected_bytes:
+        raise ValueError(f"npu_out.bin size mismatch: got {output_bytes}, expected {expected_bytes}")
+    if golden_bytes != expected_bytes:
+        raise ValueError(f"cpu_output.bin size mismatch: got {golden_bytes}, expected {expected_bytes}")
+
+    output = np.fromfile(output_path, dtype=DATA_TYPE, count=total_elem_count)
+    golden = np.fromfile(golden_path, dtype=DATA_TYPE, count=total_elem_count)
+
+    if output.size != golden.size:
+        raise ValueError("npu output size != cpu output size")
+    if output.size != total_elem_count:
+        raise ValueError(f"output element count {output.size} does not match m*n={total_elem_count}")
+
+    # Treat any non-finite value (NaN/Inf) as mismatch, even when bit patterns are equal.
+    output_non_finite = (output & np.uint16(0x7F80)) == np.uint16(0x7F80)
+    golden_non_finite = (golden & np.uint16(0x7F80)) == np.uint16(0x7F80)
+    non_finite_mask = output_non_finite | golden_non_finite
+    # Fast path: skip floating conversion only when all values are finite and bitwise equal.
+    candidate_idx = np.flatnonzero((output != golden) | non_finite_mask)
+    if candidate_idx.size == 0:
+        print(
+            f"[PASS] NPU results are consistent with CPU. "
+            f"(checked_rows={m}, checked_elements={total_elem_count}, mismatch_count=0)"
+        )
+        return True
+
+    output_candidate = output[candidate_idx]
+    golden_candidate = golden[candidate_idx]
+    output_candidate_fp32 = bf16_u16_to_fp32(output_candidate)
+    golden_candidate_fp32 = bf16_u16_to_fp32(golden_candidate)
+
+    abs_err_candidate = np.abs(output_candidate_fp32 - golden_candidate_fp32)
+    abs_golden_candidate = np.abs(golden_candidate_fp32)
+    rel_err_candidate = np.divide(
+        abs_err_candidate,
+        abs_golden_candidate,
+        out=np.full_like(abs_err_candidate, np.inf),
+        where=abs_golden_candidate > 0,
+    )
+    rel_err_candidate[(abs_golden_candidate == 0) & (abs_err_candidate == 0)] = 0.0
+    point_error_mask = (rel_err_candidate > POINT_ERROR_TOL) | non_finite_mask[candidate_idx]
+    ratio_error_mask = (abs_err_candidate > RATIO_POINT_ERROR_TOL) | non_finite_mask[candidate_idx]
+    mismatch_idx = candidate_idx[ratio_error_mask]
+
+    point_error_count = int(point_error_mask.sum())
+    mismatch_count = int(mismatch_idx.size)
+    total_checked = int(total_elem_count)
+    mismatch_ratio = mismatch_count / max(1, total_checked)
+    if point_error_count == 0 and mismatch_ratio <= ERROR_RATIO_TOL:
+        print(
+            f"[PASS] NPU results are consistent with CPU. "
+            f"(checked_rows={m}, checked_elements={total_checked}, "
+            f"point_error_count={point_error_count}, "
+            f"ratio_error_count={mismatch_count}, mismatch_ratio={mismatch_ratio:.6%})"
+        )
+        return True
+
+    print("[FAIL] NPU results differ from CPU.")
+    print(
+        f"summary: checked_rows={m}, checked_elements={total_checked}, "
+        f"point_error_count={point_error_count}, point_error_tol={POINT_ERROR_TOL}, "
+        f"ratio_error_count={mismatch_count}, ratio_point_error_tol={RATIO_POINT_ERROR_TOL}, "
+        f"mismatch_ratio={mismatch_ratio:.6%}, error_ratio_tol={ERROR_RATIO_TOL:.6%}"
+    )
+    point_error_idx = candidate_idx[point_error_mask]
+    point_error_ranges = render_index_ranges(compress_indices(point_error_idx))
+    print("point_error_flat_indices(compressed_ranges):")
+    print(point_error_ranges)
+
+    range_text = render_index_ranges(compress_indices(mismatch_idx))
+    print("mismatch_flat_indices(compressed_ranges):")
+    print(range_text)
+
+    mismatch_output_u16 = output[mismatch_idx]
+    mismatch_golden_u16 = golden[mismatch_idx]
+    mismatch_output_fp32 = bf16_u16_to_fp32(mismatch_output_u16)
+    mismatch_golden_fp32 = bf16_u16_to_fp32(mismatch_golden_u16)
+
+    abs_err = np.abs(mismatch_output_fp32 - mismatch_golden_fp32)
+    denom = np.maximum(np.abs(mismatch_golden_fp32), 1e-12)
+    rel_err = abs_err / denom
+
+    if max_detail_rows == -1:
+        show_count = mismatch_count
+    else:
+        show_count = min(mismatch_count, max_detail_rows)
+
+    detail_rows: List[List[str]] = []
+    for i in range(show_count):
+        flat_idx = int(mismatch_idx[i])
+        row = flat_idx // n
+        col = flat_idx % n
+        detail_rows.append(
+            [
+                str(i),
+                str(flat_idx),
+                str(row),
+                str(col),
+                format_float(float(mismatch_golden_fp32[i])),
+                format_float(float(mismatch_output_fp32[i])),
+                format_float(float(abs_err[i])),
+                format_float(float(rel_err[i])),
+                f"0x{int(mismatch_golden_u16[i]):04x}",
+                f"0x{int(mismatch_output_u16[i]):04x}",
+            ]
+        )
+
+    headers = [
+        "#",
+        "flat_idx",
+        "row",
+        "col",
+        "expected",
+        "actual",
+        "abs_err",
+        "rel_err",
+        "expected_u16",
+        "actual_u16",
+    ]
+    print("mismatch_details:")
+    print(render_table(headers, detail_rows))
+    if show_count < mismatch_count:
+        print(
+            f"detail rows truncated: showing {show_count}/{mismatch_count}. "
+            "Use --max-detail-rows -1 to print all."
+        )
+    return False
+
+
+if __name__ == "__main__":
+    try:
+        args = parse_args()
+        validate_args(args.m, args.n, args.max_detail_rows)
+        res = verify_result(args.m, args.n, args.max_detail_rows)
+        if not res:
+            raise ValueError("[ERROR] NPU results differ from CPU.")
+    except Exception as e:
+        print(e)
+        sys.exit(1)

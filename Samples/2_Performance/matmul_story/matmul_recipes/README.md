@@ -30,8 +30,15 @@ matmul_recipes/
     │       ├── gen_data_tt.py
     │       ├── gen_data_tc.py
     │       └── verify_result.py
-    └── matmul_a16w16/                  # A16W16 非量化矩阵乘样例
-        └── README.md
+    ├── matmul_a16w16/                # A16W16 非量化矩阵乘样例
+    │   └── README.md
+    └── weight_quant_matmul_mxfp8fp4/ # MXFP8FP4 量化矩阵乘样例
+        ├── README.md
+        ├── weight_quant_matmul_mxfp8fp4.asc
+        ├── weight_quant_matmul_mxfp8fp4_swat_4_buffer.asc
+        └── scripts/
+            ├── gen_data.py
+            └── verify_result.py
 ```
 
 ## 样例列表
@@ -42,6 +49,7 @@ matmul_recipes/
 | [quant_matmul_mxfp4](examples/quant_matmul_mxfp4/README.md) | MXFP4 | 4 位浮点量化矩阵乘，包含 SWAT 与 A 全载两种实现 |
 | [quant_matmul_mxfp8](examples/quant_matmul_mxfp8/README.md) | MXFP8 | 8 位浮点量化矩阵乘，包含 SWAT 与 A 全载两种实现 |
 | [quant_matmul_hifp8](examples/quant_matmul_hifp8/README.md) | HiFloat8（hifp8） | HiFloat8 输入、BF16 输出；DOUBLE_SCALE（`quant_matmul_hifp8_tt`）与 PER_CHANNEL（`quant_matmul_hifp8_tc`），见目录内 README |
+| [weight_quant_matmul_mxfp8fp4](examples/weight_quant_matmul_mxfp8fp4/README.md) | MXFP8 + MXFP4 | MXFP8FP4 量化矩阵乘 |
 
 ## 使用方式
 
