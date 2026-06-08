@@ -19,13 +19,13 @@ $$
 Attention(query， key， value， dequantScaleQuery， dequantScaleKey， dequantScaleValue) = 
 $$
 $$
-Softmax(\frac{(query * dequantScaleQuery) * (key * dequantScaleKey)^T}{\sqrt{d}})(value * dequantScaleValue)
+Softmax(\frac{(query * dequantScaleQuery) @ (key * dequantScaleKey)^T}{\sqrt{d}})@(value * dequantScaleValue)
 $$
 
 其中$(query * dequantScaleQuery)$和$(key * dequantScaleKey)^T$的乘积代表输入$x$的注意力，为避免该值变得过大，通常除以$d$的开根号进行缩放，并对每行进行softmax归一化，与$value * dequantScaleValue$相乘后得到一个$n*d$的矩阵。
 
 - **FIA per-block全量化介绍**  
-为了满足训练场景的低bit量化诉求，对标A3的FP8量化能力，设计了per-block全量化，兼顾进度与性能，实现业界通用量化形式对FP8/HIFP8的支持。
+为了满足训练场景的低bit量化诉求，对标A3的FP8量化能力，设计了per-block全量化，兼顾精度与性能，实现业界通用量化形式对FP8/HIFP8的支持。
 相比于per-tensor全量化，对于$query、key、value$矩阵采用同一个量化参数进行计算，per-block全量化要求根据block_size对输入分开进行量化，通常要求block_size的值，与算子tiling块一致。
 per-block全量化主要计算流程：
 
@@ -108,7 +108,7 @@ $$
 T_{mte2} = \frac{(M \times D  + 2 \times N \times D ) \times (1 \times sizeof(dtype))}{BandWidth_{mte2}}
 $$
 
-其中`M × D`表示query从GM到L1的搬运量，`2 x M × D`表示key、value从GM到L1的搬运量。由于$dequantScaleQuery、dequantScaleKey、dequantScaleValue$的size为$query、key、value$的128 * D分之1或者256 * D分之1，故忽略其从GM到L1的耗时。
+其中`M × D`表示query从GM到L1的搬运量，`2 x N × D`表示key、value从GM到L1的搬运量。由于$dequantScaleQuery、dequantScaleKey、dequantScaleValue$的size为$query、key、value$的128 * D分之1或者256 * D分之1，故忽略其从GM到L1的耗时。
 MTE2的综合带宽包含DDR带宽和L2带宽的共同作用，可简化为：
 
 $$
