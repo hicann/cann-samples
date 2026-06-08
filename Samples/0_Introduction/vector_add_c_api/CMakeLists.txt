@@ -27,6 +27,8 @@ target_link_libraries(vector_add_c_api
     PRIVATE
     m
     dl
+    platform
+    tiling_api
 )
 
 install(TARGETS vector_add_c_api
