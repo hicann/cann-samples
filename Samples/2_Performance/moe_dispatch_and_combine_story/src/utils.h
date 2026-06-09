@@ -28,7 +28,6 @@
 
 #define INFO_LOG(fmt, args...) do { \
     fprintf(stdout, "[INFO] " fmt "\n", ##args); \
-    fprintf(stdout, "[INFO] %s:%d " fmt "\n", __FILE__, __LINE__, ##args); \
     fflush(stdout); \
 } while(0)
 #define WARNING_LOG(fmt, args...) do { \
@@ -108,40 +107,45 @@ inline bool ReadFile(const std::string &filePath, void *buffer, size_t bufferSiz
 inline bool WriteFile(const std::string &filePath, const void *buffer, size_t size, size_t offset = 0)
 {
     if (buffer == nullptr) {
-        ERROR_LOG("Write file failed. Buffer is nullptr.");
+        std::cerr << "Write file failed. Buffer is nullptr." << std::endl;
         return false;
     }
 
     int fd = open(filePath.c_str(), O_RDWR | O_CREAT, 0666);
-    if (!fd) {
-        ERROR_LOG("Open file failed. path = %s", filePath.c_str());
+    if (fd == -1) {
+        int errsv = errno;
+        std::cerr << "Failed to open file: " << filePath << ", error: " << strerror(errsv) << std::endl;
         return false;
     }
 
     // lock
     if (flock(fd, LOCK_EX) == -1) {
-        std::cerr << "Failed to acquire lock: " << strerror(errno) << std::endl;
+        int errsv = errno;
+        std::cerr << "Failed to acquire lock: " << filePath << ", error: " << strerror(errsv) << std::endl;
         close(fd);
         return false;
     }
 
     // move ptr to specified offset
     if (lseek(fd, offset, SEEK_SET) == -1) {
-        std::cerr << "Failed to seek in file: " << strerror(errno) << std::endl;
+        int errsv = errno;
+        std::cerr << "Failed to seek in file: " << filePath << ", error: " << strerror(errsv) << std::endl;
         close(fd);
         return false;
     }
 
     // write data
+    bool returnVal = true;
     if (write(fd, static_cast<const char *>(buffer), size) != static_cast<ssize_t>(size)) {
-        std::cerr << "Failed to write to file: " << strerror(errno) << std::endl;
+        int errsv = errno;
+        std::cerr << "Failed to write to file: " << filePath << ", error: " << strerror(errsv) << std::endl;
+        returnVal = false;
     }
-
     // unlock
     flock(fd, LOCK_UN);
 
     close(fd);
-    return true;
+    return returnVal;
 }
 
 inline int32_t test_set_attr(int32_t my_pe, int32_t n_pes, uint64_t local_mem_size, const char *ip_port, aclshmemx_uniqueid_t default_flag_uid,
