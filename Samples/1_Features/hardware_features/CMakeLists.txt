@@ -10,5 +10,6 @@
 # ----------------------------------------------------------------------------
 
 add_subdirectory(vector_function)
+add_subdirectory(simd_vf_constraints)
 add_subdirectory(simt)
 add_subdirectory(hif8)
