@@ -177,10 +177,24 @@ inline void PrintUsageWeightNz(const char* program)
     std::cerr << "  m: row of matrix A" << std::endl;
     std::cerr << "  k: col of matrix A" << std::endl;
     std::cerr << "  n: col of matrix B" << std::endl;
-    std::cerr << "  transA (optional): 0/false, controls layoutA (false=ND)"
-              << std::endl;
-    std::cerr << "  transB (optional): 0/1/true/false, controls layoutB (false=NZ, true=ZN)"
-              << std::endl;
+    std::cerr << "  transA (optional): 0/false, controls layoutA (false=ND)" << std::endl;
+    std::cerr << "  transB (optional): 0/1/true/false, controls layoutB (false=NZ, true=ZN)" << std::endl;
+    std::cerr << "Example: " << program << " 2 256 4096 1024" << std::endl;
+    std::cerr << "Example: " << program << " 2 256 4096 1024 0 0" << std::endl;
+}
+
+inline void PrintUsageBscaleNz(const char* program)
+{
+    std::cerr << "Usage: " << program << " group_num m k n [transA transB]" << std::endl;
+    std::cerr << "Args:" << std::endl;
+    std::cerr << "  group_num: number of groups" << std::endl;
+    std::cerr << "  m: row of matrix A" << std::endl;
+    std::cerr << "  k: col of matrix A" << std::endl;
+    std::cerr << "  n: col of matrix B" << std::endl;
+    std::cerr << "  transA (optional): 0/false, controls layoutA (false=ND)" << std::endl;
+    std::cerr << "  transB (optional): 0/1/true/false, controls weight layout" << std::endl;
+    std::cerr << "                     false=weight ND, true=weight DN" << std::endl;
+    std::cerr << "                     ScaleB is always in scaleB private format (N1,Kg,16,2)" << std::endl;
     std::cerr << "Example: " << program << " 2 256 4096 1024" << std::endl;
     std::cerr << "Example: " << program << " 2 256 4096 1024 0 0" << std::endl;
 }

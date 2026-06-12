@@ -28,8 +28,10 @@ namespace Kernel {
 
 template <class ProblemShape, class BlockMmad, class BlockScheduler>
 class KernelQGmmMx {
-    static_assert(AscendC::Std::is_same_v<BlockScheduler, Block::BlockSchedulerGmmAswtWithTailSplit>,
+    static_assert(
+        AscendC::Std::is_same_v<BlockScheduler, Block::BlockSchedulerGmmAswtWithTailSplit>,
         "Only BlockSchedulerGmmAswtWithTailSplit is supported");
+
 public:
     using AType = typename BlockMmad::AType;
     using BType = typename BlockMmad::BType;
@@ -46,9 +48,11 @@ public:
                                    AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn>;
     static constexpr bool kWeightNzGm_ = AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn> ||
                                          AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::NZLayoutPtn>;
+    static constexpr int32_t SCALE_C0 = 2;
+    using ScaleBNzLayout = AscendC::Te::FrameLayoutFormat<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>;
+    static constexpr bool kBscaleNzGm_ = AscendC::Std::is_same_v<LayoutScaleB, ScaleBNzLayout>;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
-    static constexpr int32_t SCALE_C0 = 2;
     using BlockCoord = AscendC::Coord<int64_t, int64_t, int64_t, int64_t>;
     using BlockOffset = AscendC::Shape<int64_t, int64_t, int64_t, int64_t, int64_t>;
     using BlockMmadShape = typename BlockMmad::BlockShape;
@@ -95,7 +99,7 @@ private:
     __aicore__ inline int64_t GetScaleK(int64_t k) const
     {
         return CeilDiv(k, static_cast<int64_t>(GroupedMatmulRecipe::MX_DIVISOR_SIZE)) *
-               GroupedMatmulRecipe::MX_MULTI_SIZE;
+               static_cast<int64_t>(GroupedMatmulRecipe::MX_MULTI_SIZE);
     }
 
     __aicore__ inline int64_t GetWeightNzSize(int64_t n, int64_t k) const
@@ -104,6 +108,13 @@ private:
         constexpr int64_t nzN0 = transB ? AscendC::BLOCK_CUBE : C0_SIZE;
         constexpr int64_t nzK0 = transB ? C0_SIZE : AscendC::BLOCK_CUBE;
         return CeilDiv(n, nzN0) * nzN0 * CeilDiv(k, nzK0) * nzK0;
+    }
+
+    __aicore__ inline int64_t GetScaleBNzSize(int64_t n, int64_t k) const
+    {
+        int64_t n1 = CeilDiv(n, static_cast<int64_t>(AscendC::BLOCK_CUBE));
+        int64_t kg = CeilDiv(k, static_cast<int64_t>(GroupedMatmulRecipe::MX_DIVISOR_SIZE));
+        return n1 * kg * GroupedMatmulRecipe::CUBE_BLOCK * GroupedMatmulRecipe::MX_MULTI_SIZE;
     }
 
     __aicore__ static inline void SetSchedulerTailAlign(BlockScheduler& bs)
@@ -357,7 +368,11 @@ private:
             int64_t scaleK = CeilDiv(k, static_cast<int64_t>(GroupedMatmulRecipe::MX_DIVISOR_SIZE)) *
                              GroupedMatmulRecipe::MX_MULTI_SIZE;
             AscendC::Std::get<2>(baseOffset_) = (preGroupListSum_ - m) * scaleK;
-            AscendC::Std::get<3>(baseOffset_) = static_cast<int64_t>(groupIdx) * n * scaleK;
+            if constexpr (kBscaleNzGm_) {
+                AscendC::Std::get<3>(baseOffset_) = static_cast<int64_t>(groupIdx) * GetScaleBNzSize(n, k);
+            } else {
+                AscendC::Std::get<3>(baseOffset_) = static_cast<int64_t>(groupIdx) * n * scaleK;
+            }
             AscendC::Std::get<4>(baseOffset_) = (preGroupListSum_ - m) * n;
         } else {
             AscendC::Std::get<0>(baseOffset_) = (m * (preGroupListSum_ - k)) >> sizeShift;
@@ -461,5 +476,8 @@ using QuantGroupedMatmulMxfp8KernelSplitM = QuantGroupedMatmulMxKernelSplitM<Pro
 
 template <class ProblemShape, class BlockMmad, class BlockScheduler>
 using QuantGroupedMatmulMxfp8KernelWeightNz = QuantGroupedMatmulMxKernelSplitM<ProblemShape, BlockMmad, BlockScheduler>;
+
+template <class ProblemShape, class BlockMmad, class BlockScheduler>
+using QuantGroupedMatmulMxfp8KernelBscaleNz = QuantGroupedMatmulMxKernelSplitM<ProblemShape, BlockMmad, BlockScheduler>;
 
 } // namespace Kernel

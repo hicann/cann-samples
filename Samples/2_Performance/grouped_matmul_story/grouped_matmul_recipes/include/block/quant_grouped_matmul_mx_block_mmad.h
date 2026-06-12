@@ -95,9 +95,9 @@ public:
         AscendC::IsSameType<LayoutA, AscendC::Te::FrameLayoutFormat<AscendC::Te::DNExtLayoutPtn>>::value;
     using LayoutBPattern = AscendC::Te::GetLayoutPattern<decltype(LayoutB{}(0L, 0L))>;
     static constexpr bool transB = AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::DNExtLayoutPtn> ||
-                                   AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn>;
+                                    AscendC::Std::is_same_v<LayoutBPattern, AscendC::Te::ZNLayoutPtn>;
     // MXFP8: zero-pad L1 K tail to match NZ layout / ND2NZ path (see Tile::PadMxK*L1);
-    // MXFP4 keeps unpadded L1 views.
+    // MXFP4 keeps unpadded L1 Views.
     static constexpr bool needASetL1KZero = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t>;
     static constexpr bool needBSetL1KZero = AscendC::Std::is_one_of_v<AType, fp8_e5m2_t, fp8_e4m3fn_t> ||
                                             (AscendC::Std::is_one_of_v<AType, fp4x2_e2m1_t, fp4x2_e1m2_t> && !transB);
@@ -336,7 +336,8 @@ private:
         auto tensorBlockScaleAL1 = tensorScaleAL1.Slice(
             AscendC::Te::MakeCoord(0, scaleBaseA), AscendC::Te::MakeShape(curM, GetScaleSpan(curGmAKL1)));
         auto tensorBlockScaleBL1 = tensorScaleBL1.Slice(
-            AscendC::Te::MakeCoord(scaleBaseB, 0), AscendC::Te::MakeShape(GetScaleSpan(curGmBKL1), curN));
+            AscendC::Te::MakeCoord(scaleBaseB, 0),
+            AscendC::Te::MakeShape(GetScaleSpan(curGmBKL1), curN));
 
         auto CopyL12L0A = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0A{});
         auto CopyL12L0B = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0B{});

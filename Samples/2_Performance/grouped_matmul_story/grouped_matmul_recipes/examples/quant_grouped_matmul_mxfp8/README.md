@@ -9,9 +9,11 @@
 - `quant_grouped_matmul_mxfp8_split_m`：基于m轴分组、权重按ND（包括**NDExtLayout/DNExtLayout**，下面仅用ND统称）逻辑组织的分组量化矩阵乘示例。
 - `quant_grouped_matmul_mxfp8_split_m_3buffer`：基于m轴分组、权重按ND逻辑组织的3buffer分组量化矩阵乘示例，其它示例均为2buffer。
 - `quant_grouped_matmul_mxfp8_split_m_weight_nz`：基于m轴分组、权重按GM上NZ（包括**NZLayout/ZNLayout**，下面仅用NZ统称）存储的分组量化矩阵乘示例。
+- `quant_grouped_matmul_mxfp8_split_m_scale_b_nz`：基于m轴分组、权重按ND逻辑组织、ScaleB按GM上scaleB私有格式 （仅包括**NNLayout**，下面仅用NZ统称）`(N1, Kg, 16, 2)` 存储的分组量化矩阵乘示例。其中N1=ceil(N/16)，Kg=ceil(K/64)。ScaleB私有格式与transB无关，只有上述一种。
 - `quant_grouped_matmul_mxfp8_split_k`：基于K轴分组、权重按ND逻辑组织的分组量化矩阵乘示例，仅支持`transA=true, transB=false`场景。
 - `gen_data.py`：生成ND权重输入数据和CPU golden结果。
 - `gen_data_weight_nz.py`：生成NZ权重输入数据和CPU golden结果。
+- `gen_data_scale_b_nz.py`：生成ND权重+NZ ScaleB输入数据和CPU golden结果。
 - `verify_result.py`：校验NPU输出与CPU golden是否一致。
 
 ## 使用约束
@@ -19,8 +21,8 @@
 当前样例需要满足以下约束条件：
 
 - 当前支持`transA=false，transB=true`,`transA=false，transB=false`和`transA=true，transB=false`3种转置组合和M/K轴分组，其对应约束为:
-  - 当M轴分组且`transA=false，transB=true`时，A的形状为`[M, K]`，B ND/NZ的形状为`[E, N, K]`/`[E, K1, N1, N0, K0]`，N0=16，K0=32，N1=ceil(N/N0)，K1=ceil(K/K0)。
-  - 当M轴分组且`transA=false，transB=false`时，A的形状为`[M, K]`，B ND/NZ的形状为`[E, K, N]`/`[E, N1, K1, K0, N0]`，K0=16，N0=32，K1=ceil(K/K0)，N1=ceil(N/N0)。
+  - 当M轴分组且`transA=false，transB=true`时，A的形状为`[M, K]`，B ND/NZ的形状为`[E, N, K]`/`[E, K1, N1, N0, K0]`，N0=16，K0=32，N1=ceil(N/N0)，K1=ceil(K/K0)。ScaleB ND/NZ的形状为`[E, N, Kg, SCALE_C0=2]/[E, N1, Kg, N0, SCALE_C0=2]`，N0=16，SCALE_C0=2，Kg=ceil(K/64)，N1=ceil(N/16)。
+  - 当M轴分组且`transA=false，transB=false`时，A的形状为`[M, K]`，B ND/NZ的形状为`[E, K, N]`/`[E, N1, K1, K0, N0]`，K0=16，N0=32，K1=ceil(K/K0)，N1=ceil(N/N0)。ScaleB ND/NZ的形状为`[E, Kg, N, SCALE_C0=2]/[E, N1, Kg, N0, SCALE_C0=2]`，N0=16，SCALE_C0=2，Kg=ceil(K/64)，N1=ceil(N/16)。
   - 当K轴分组即`transA=true，transB=false`时，A的形状为`[K, M]`，B ND的形状为`[K, N]`。
 
 ## 支持架构
@@ -49,13 +51,13 @@ NPU ARCH 3510
 
 `transA`和`transB`需要同时省略或同时指定，取值支持`0/1/true/false`。
 
-其中实际参与计算的`group_value_list`由数据生成脚本（`gen_data.py`或`gen_data_weight_nz.py`）生成，并写入`input/input_groupList.bin`。当前文件中保存的是每个分组各自的`分组值大小，允许某些组为`0`。
+其中实际参与计算的`group_value_list`由数据生成脚本（`gen_data.py`、`gen_data_weight_nz.py`或`gen_data_scale_b_nz.py`）生成，并写入`input/input_groupList.bin`。当前文件中保存的是每个分组各自的`分组值大小，允许某些组为`0`。
 
 golden输入数据由对应的数据生成脚本生成。编译安装后请在`build_out`下的本示例目录中执行该脚本。
 
 ## 数据生成方式
 
-`gen_data.py`（ND权重）与`gen_data_weight_nz.py`（NZ权重）支持以下两种调用方式，仅将脚本名替换即可：
+`gen_data.py`（ND权重）、`gen_data_weight_nz.py`（NZ权重）与`gen_data_scale_b_nz.py`（ND权重+NZ ScaleB）支持以下两种调用方式，仅将脚本名替换即可：
 
 ### 方式一：显式指定`group_value_list`
 
@@ -70,6 +72,9 @@ python3 <gen_script>.py group_list group_value_list m k n [transA transB]
 python3 gen_data.py group_list 128,128,0 384 256 256 false false
 # NZ权重(仅支持M轴分组)
 python3 gen_data_weight_nz.py group_list 128,128,0 384 256 256 false false
+
+# NZ ScaleB(仅支持M轴分组，权重仍为ND)
+python3 gen_data_scale_b_nz.py group_list 128,128,0 384 256 256 false false
 ```
 
 含义如下：
@@ -93,6 +98,9 @@ python3 <gen_script>.py expect_m_per_group group_num expect_m_per_group m k n [t
 python3 gen_data.py expect_m_per_group 3 128 384 256 256 false false
 # NZ权重(仅支持M轴分组)
 python3 gen_data_weight_nz.py expect_m_per_group 3 128 384 256 256 false false
+
+# NZ ScaleB(仅支持M轴分组，权重仍为ND)
+python3 gen_data_scale_b_nz.py expect_m_per_group 3 128 384 256 256 false false
 ```
 
 含义如下：
@@ -165,6 +173,23 @@ python3 gen_data_weight_nz.py expect_m_per_group 3 128 384 256 256
 # 运行transA=false, transB=false场景（显式指定transA/transB）
 python3 gen_data_weight_nz.py group_list 128,128,0 384 256 256 false false
 ./quant_grouped_matmul_mxfp8_split_m_weight_nz 3 384 256 256 false false
+```
+
+NZ ScaleB(仅支持M轴分组，权重仍为ND)：
+
+```bash
+# 生成数据方式一：显式指定grouplist生成一组测试数据
+python3 gen_data_scale_b_nz.py group_list 128,128,0 384 256 256
+
+# 生成数据方式二：按专家数和平均M随机生成grouplist
+python3 gen_data_scale_b_nz.py expect_m_per_group 3 128 384 256 256
+
+# 运行可执行文件并校验结果（默认transA=false,transB=true）
+./quant_grouped_matmul_mxfp8_split_m_scale_b_nz 3 384 256 256
+
+# 运行transA=false, transB=false场景（显式指定transA/transB）
+python3 gen_data_scale_b_nz.py group_list 128,128,0 384 256 256 false false
+./quant_grouped_matmul_mxfp8_split_m_scale_b_nz 3 384 256 256 false false
 ```
 
 ```bash
