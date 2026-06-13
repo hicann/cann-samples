@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<svg width="1260" height="520" viewBox="0 0 1260 520" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      text { font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif; }
+      .title { font-size: 15px; font-weight: bold; fill: #1f2733; }
+      .label { font-size: 12px; fill: #333; }
+      .leaf { font-size: 12px; font-weight: bold; fill: #1956b3; }
+      .desc { font-size: 10.5px; fill: #666; }
+      .edge-label { font-size: 10.5px; fill: #555; }
+      .decision { fill: #fff8e1; stroke: #ec9a0e; stroke-width: 1.5; rx: 6; }
+      .leaf-box { fill: #e8f0fe; stroke: #3b7de0; stroke-width: 1.4; rx: 5; }
+      .root-box { fill: #eef2f6; stroke: #6b7b8d; stroke-width: 1.6; rx: 8; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#888"/>
+    </marker>
+  </defs>
+
+  <!-- ===== Root ===== -->
+  <rect x="490" y="12" width="280" height="38" class="root-box"/>
+  <text x="630" y="36" text-anchor="middle" class="title">VF 内数据搬运场景</text>
+
+  <!-- ===== Root → 3 sub-trees (staggered y to avoid overlap) ===== -->
+
+  <!-- Root → Sub-tree 1  from left side of root box -->
+  <path d="M 490 31 L 260 31 L 260 100" fill="none" stroke="#888" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="375" y="26" text-anchor="middle" class="edge-label">数据排布是否需要形变？</text>
+
+  <!-- Root → Sub-tree 2  horizontal at y=78 -->
+  <path d="M 630 50 L 630 78 L 760 78 L 760 100" fill="none" stroke="#888" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="695" y="73" text-anchor="middle" class="edge-label">UB 读写位置是否连续？</text>
+
+  <!-- Root → Sub-tree 3  from right side of root box -->
+  <path d="M 770 31 L 1100 31 L 1100 100" fill="none" stroke="#888" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="935" y="26" text-anchor="middle" class="edge-label">写出地址是否对齐？</text>
+
+  <!-- ============================================================ -->
+  <!-- Sub-tree 1: 排布形变   x: 10 – 580                            -->
+  <!-- ============================================================ -->
+
+  <!-- D1 -->
+  <rect x="160" y="100" width="200" height="44" class="decision"/>
+  <text x="260" y="127" text-anchor="middle" class="label">排布形变？</text>
+
+  <!-- D1 → 常规搬运 -->
+  <path d="M 160 122 L 95 122 L 95 190" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="128" y="115" text-anchor="middle" class="edge-label">无需</text>
+
+  <rect x="10" y="193" width="170" height="50" class="leaf-box"/>
+  <text x="95" y="214" text-anchor="middle" class="leaf">常规搬运 DIST_NORM</text>
+  <text x="95" y="232" text-anchor="middle" class="desc">elemwise：加减乘、激活</text>
+
+  <!-- D1 → D2 -->
+  <path d="M 360 122 L 400 122 L 400 180" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="408" y="157" class="edge-label">需要形变</text>
+
+  <!-- D2 -->
+  <rect x="310" y="183" width="200" height="44" class="decision"/>
+  <text x="410" y="210" text-anchor="middle" class="label">形变类型？</text>
+
+  <!-- D2 → 变位宽  horizontal at y=250 -->
+  <path d="M 340 227 L 340 250 L 160 250 L 160 303" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="250" y="245" text-anchor="middle" class="edge-label">VF 升精度计算</text>
+
+  <rect x="80" y="303" width="160" height="48" class="leaf-box"/>
+  <text x="160" y="323" text-anchor="middle" class="leaf">变位宽搬运</text>
+  <text x="160" y="341" text-anchor="middle" class="desc">半精度存储→单精度计算</text>
+
+  <!-- D2 → 广播搬入  horizontal at y=264 -->
+  <path d="M 395 227 L 395 264 L 305 264 L 305 303" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="350" y="259" text-anchor="middle" class="edge-label">标量↔向量</text>
+
+  <rect x="250" y="303" width="110" height="48" class="leaf-box"/>
+  <text x="305" y="323" text-anchor="middle" class="leaf">广播搬入 BRC</text>
+  <text x="305" y="341" text-anchor="middle" class="desc">broadcast：如Adds</text>
+
+  <!-- D2 → 标量搬出  horizontal at y=278 -->
+  <path d="M 430 227 L 430 278 L 420 278 L 420 303" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="435" y="270" class="edge-label">归约写标</text>
+
+  <rect x="370" y="303" width="100" height="48" class="leaf-box"/>
+  <text x="420" y="323" text-anchor="middle" class="leaf">标量搬出</text>
+  <text x="420" y="341" text-anchor="middle" class="desc">reduce：如Sum</text>
+
+  <!-- D2 → 交织拆合  from right side of D2 -->
+  <path d="M 510 205 L 570 205 L 570 303" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="570" y="258" text-anchor="end" class="edge-label">复数分离</text>
+
+  <rect x="520" y="303" width="110" height="48" class="leaf-box"/>
+  <text x="575" y="323" text-anchor="middle" class="leaf">交织拆合</text>
+  <text x="575" y="341" text-anchor="middle" class="desc">如复数计算、旋转编码</text>
+
+  <!-- ============================================================ -->
+  <!-- Sub-tree 2: UB 连续性   x: 610 – 900                         -->
+  <!-- ============================================================ -->
+
+  <!-- D3 -->
+  <rect x="650" y="100" width="220" height="50" class="decision"/>
+  <text x="760" y="121" text-anchor="middle" class="label">UB 读写位置</text>
+  <text x="760" y="139" text-anchor="middle" class="label">是否连续？</text>
+
+  <!-- D3 → 连续 -->
+  <path d="M 650 125 L 605 125" fill="none" stroke="#888" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="600" y="119" text-anchor="end" class="edge-label">连续 → 常规搬运</text>
+
+  <!-- D3 → 等间距跳写 -->
+  <path d="M 720 150 L 720 200" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="708" y="180" text-anchor="end" class="edge-label">等间距跳写</text>
+
+  <rect x="620" y="203" width="200" height="48" class="leaf-box"/>
+  <text x="720" y="223" text-anchor="middle" class="leaf">非连续 · 跳跃搬出</text>
+  <text x="720" y="241" text-anchor="middle" class="desc">索引类：如Gather</text>
+
+  <!-- D3 → 按索引离散取数 -->
+  <path d="M 830 150 L 830 175 L 880 175 L 880 270 L 760 270 L 760 293" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="892" y="227" class="edge-label">按索引离散取数</text>
+
+  <rect x="660" y="296" width="200" height="48" class="leaf-box"/>
+  <text x="760" y="316" text-anchor="middle" class="leaf">非连续 · 索引取数</text>
+  <text x="760" y="334" text-anchor="middle" class="desc">索引类：如Gather</text>
+
+  <!-- ============================================================ -->
+  <!-- Sub-tree 3: 对齐性   x: 940 – 1250                            -->
+  <!-- ============================================================ -->
+
+  <!-- D4 -->
+  <rect x="1000" y="100" width="210" height="50" class="decision"/>
+  <text x="1105" y="121" text-anchor="middle" class="label">写出地址</text>
+  <text x="1105" y="139" text-anchor="middle" class="label">是否 32B 对齐？</text>
+
+  <!-- D4 → 对齐 -->
+  <path d="M 1000 125 L 960 125" fill="none" stroke="#888" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="955" y="119" text-anchor="end" class="edge-label">对齐 → 常规搬运</text>
+
+  <!-- D4 → 非对齐 -->
+  <path d="M 1105 150 L 1105 200" fill="none" stroke="#888" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="1120" y="180" class="edge-label">非对齐 / 变长</text>
+
+  <rect x="1000" y="203" width="210" height="40" class="leaf-box"/>
+  <text x="1105" y="228" text-anchor="middle" class="leaf">非对齐搬运</text>
+
+  <!-- ===== Bottom note ===== -->
+  <rect x="180" y="470" width="900" height="32" fill="#fafbfc" stroke="#d4dce6" stroke-width="1" rx="4"/>
+  <text x="630" y="490" text-anchor="middle" class="desc">寻址模式（地址如何推进）和 mask（哪些 lane 生效）是与上述选择正交的两个维度，任何搬运方式都需配置</text>
+</svg>
