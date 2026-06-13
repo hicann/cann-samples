@@ -21,7 +21,7 @@
 
 #include "tiling/platform/platform_ascendc.h"
 
-struct MatmulA16W16PlatformInfo {
+struct MatmulPlatformInfo {
     uint32_t aicNum{0};
     uint32_t aivNum{0};
     uint64_t ubSize{0};
@@ -34,13 +34,15 @@ struct MatmulA16W16PlatformInfo {
     platform_ascendc::SocVersion socVersion{0};
 };
 
-struct MatmulA16W16Args {
+struct MatmulArgs {
     uint64_t m{0};
     uint64_t n{0};
     uint64_t k{0};
+    uint64_t dataTypeSize{0};
     bool hasBias{false};
     bool isATrans{false};
     bool isBTrans{false};
+    bool isHf32{false};
 };
 
 struct MatMulV3TailInfo {
@@ -51,7 +53,7 @@ struct MatMulV3TailInfo {
     uint64_t nTailMain = 0UL;
 };
 
-struct MatmulA16W16RunInfo {
+struct MatmulRunInfo {
     uint64_t baseM{1};
     uint64_t baseN{1};
     uint64_t baseK{1};

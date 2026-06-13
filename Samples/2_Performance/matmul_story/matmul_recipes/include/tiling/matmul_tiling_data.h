@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file matmul_a16w16_tiling_data.h
+ * \file matmul_tiling_data.h
  * \brief Serialized tiling data passed from host launcher to kernel.
  */
 
@@ -22,7 +22,7 @@
 #include "kernel_tiling/kernel_tiling.h"
 
 #pragma pack(push, 8)
-struct alignas(8) MatmulA16W16TilingData {
+struct alignas(8) MatmulTilingData {
     uint32_t usedCoreNum{0};
     uint32_t m{0};
     uint32_t n{0};
@@ -40,6 +40,7 @@ struct alignas(8) MatmulA16W16TilingData {
     uint32_t nBaseTailSplitCnt{1};
     uint32_t mTailMain{0};
     uint32_t nTailMain{0};
+    bool isHf32{0};
     uint8_t l1BufferNum{0};
     uint8_t l0cDB{1};
 };

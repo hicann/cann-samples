@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file matmul_a16w16_block_epilogue_streamk.h
- * \brief Block-level A16W16 accumulation operation in the Vector Core for StreamK path.
+ * \file matmul_block_epilogue_streamk.h
+ * \brief Block-level  accumulation operation in the Vector Core for StreamK path.
  */
 
 #pragma once

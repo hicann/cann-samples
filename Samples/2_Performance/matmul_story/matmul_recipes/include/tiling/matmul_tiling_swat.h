@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file matmul_a16w16_tiling_swat.h
- * \brief SWAT tiling specialization for A16W16 non-full-load path.
+ * \file matmul_tiling_swat.h
+ * \brief SWAT tiling specialization for  non-full-load path.
  */
 
 #pragma once
@@ -19,13 +19,13 @@
 #include <cmath>
 #include <tuple>
 #include <vector>
-#include "tiling/matmul_a16w16_tiling_base.h"
+#include "tiling/matmul_tiling_base.h"
 #include "host_utils/common_utils.h"
 
-class MatmulA16W16TilingSwat : public MatmulA16W16TilingBase {
+class MatmulTilingSwat : public MatmulTilingBase {
 public:
-    MatmulA16W16TilingSwat() = default;
-    ~MatmulA16W16TilingSwat() override = default;
+    MatmulTilingSwat() = default;
+    ~MatmulTilingSwat() override = default;
 
 protected:
     const char* TilingName() const override
@@ -33,22 +33,19 @@ protected:
         return "swat";
     }
 
-    void DoOpTiling(MatmulA16W16TilingData& tilingData) override
+    void DoOpTiling(MatmulTilingData& tilingData) override
     {
-        ResetBase();
-        FormulateBasicBlock();
-        OptimizeEdgeBasicBlock();
-        CalcTailBasicBlock();
-        CalL1Tiling();
         ResetBase();
         FormulateLoadBalanceBlock();
         if (runInfo_.baseM == BASIC_BLOCK_SIZE_256 && runInfo_.baseN == BASIC_BLOCK_SIZE_256) {
             OptimizeEdgeBasicBlock();
         }
+        CalcTailBasicBlock();
+        CalL1Tiling();
         uint64_t remainSizeForAL1BL1 =
             args_.hasBias ? (platformInfo_.l1Size - BIAS_TABLE_NUM * DATA_SIZE_FP32) : platformInfo_.l1Size;
         runInfo_.stepKa =
-            remainSizeForAL1BL1 / NUM_TWO / ((runInfo_.baseM + runInfo_.baseN) * runInfo_.baseK) / DATA_SIZE_FP16;
+            remainSizeForAL1BL1 / NUM_TWO / ((runInfo_.baseM + runInfo_.baseN) * runInfo_.baseK) / args_.dataTypeSize;
         runInfo_.stepKb = runInfo_.stepKa; // has bias, adjust stepK to suitable value
         runInfo_.depthA1 = runInfo_.stepKa * DB_SIZE;
         runInfo_.depthB1 = runInfo_.stepKb * DB_SIZE;
@@ -62,7 +59,7 @@ private:
         runInfo_.usedCoreNum = platformInfo_.aicNum;
         runInfo_.baseM = BASIC_BLOCK_SIZE_256;
         runInfo_.baseN = BASIC_BLOCK_SIZE_256; // 256 is better base
-        runInfo_.baseK = BASIC_BLOCK_SIZE_128 / DATA_SIZE_FP16;
+        runInfo_.baseK = BASIC_BLOCK_SIZE_128 / args_.dataTypeSize;
         runInfo_.stepM = 1;
         runInfo_.stepN = 1;
         runInfo_.iterateOrder = 0;
@@ -91,7 +88,7 @@ private:
         runInfo_.usedCoreNum = mCore * nCore;
         uint64_t kValueAlign = Align(args_.k, BASIC_BLOCK_SIZE_16);
         uint64_t kValueMax = FloorAlign(
-            platformInfo_.l0aSize / DB_SIZE / DATA_SIZE_FP16 / std::max(runInfo_.baseM, runInfo_.baseN),
+            platformInfo_.l0aSize / DB_SIZE / args_.dataTypeSize / std::max(runInfo_.baseM, runInfo_.baseN),
             BASIC_BLOCK_SIZE_16);
         runInfo_.baseK = std::min(kValueAlign, kValueMax);
     }
@@ -140,10 +137,13 @@ private:
         mCore = CeilDiv(args_.m, runInfo_.baseM);
         nCore = CeilDiv(args_.n, runInfo_.baseN);
         runInfo_.usedCoreNum = std::min(mCore * nCore, static_cast<uint64_t>(platformInfo_.aicNum));
-        uint64_t kValueAlign = Align(args_.k, BASIC_BLOCK_SIZE_16);
+        uint64_t baseKAlignValue = !args_.isATrans && args_.isBTrans && args_.dataTypeSize == DATA_SIZE_FP32 ?
+                                   BLOCK_BYTE_SIZE / args_.dataTypeSize :
+                                   BASIC_BLOCK_SIZE_16;
+        uint64_t kValueAlign = Align(args_.k, baseKAlignValue);
         uint64_t kValueMax = FloorAlign(
-            platformInfo_.l0aSize / DB_SIZE / DATA_SIZE_FP16 / std::max(runInfo_.baseM, runInfo_.baseN),
-            BASIC_BLOCK_SIZE_16);
+            platformInfo_.l0aSize / DB_SIZE / args_.dataTypeSize / std::max(runInfo_.baseM, runInfo_.baseN),
+            baseKAlignValue);
         runInfo_.baseK = std::min(kValueAlign, kValueMax);
     }
 
@@ -202,6 +202,17 @@ private:
         }
     }
 
+    uint64_t GetAswWindowLen() const
+    {
+        uint64_t sqrtNum = static_cast<uint64_t>(sqrt(platformInfo_.aicNum));
+        for (uint64_t factor = sqrtNum; factor >= 1UL; --factor) {
+            if (platformInfo_.aicNum % factor == 0UL) {
+                return factor;
+            }
+        }
+        return 1UL;
+    }
+
     void GetOuterAxisTailCnt(bool nLoadBalance, uint32_t& baseTailSplitCnt, uint64_t& tailMain)
     {
         uint64_t aicNum = platformInfo_.aicNum;
@@ -220,9 +231,10 @@ private:
         uint64_t yCnt = CeilDiv(y, baseY);
         uint64_t xTail = x % baseX;
 
+        uint64_t aswWindowLen = GetAswWindowLen();
         uint64_t totalWindows = CeilDiv(xCnt * yCnt, aicNum);
         uint64_t mainWindows = CeilDiv((xCnt - 1UL) * yCnt + yCnt % aicNum, aicNum);
-        if (yCnt % aicNum == 0UL && (xCnt % WINDOW_LEN == 0UL || WINDOW_LEN % xCnt == 0UL)) {
+        if (yCnt % aicNum == 0UL && (xCnt % aswWindowLen == 0UL || aswWindowLen % xCnt == 0UL)) {
             mainWindows = totalWindows;
         }
         uint64_t tailWindows = totalWindows - mainWindows;
@@ -274,11 +286,11 @@ private:
     {
         uint64_t totalL1Size = platformInfo_.l1Size;
         uint64_t reserveBTSize = args_.hasBias ? BASIC_BLOCK_SIZE_256 * DATA_SIZE_FP32 : 0UL;
-        runInfo_.depthA1 = totalL1Size / NUM_TWO / runInfo_.baseM / runInfo_.baseK / DATA_SIZE_FP16; // 2: half of l1
-        runInfo_.depthB1 = totalL1Size / NUM_TWO / runInfo_.baseN / runInfo_.baseK / DATA_SIZE_FP16; // 2: half of l1
+        runInfo_.depthA1 = totalL1Size / NUM_TWO / runInfo_.baseM / runInfo_.baseK / args_.dataTypeSize; // 2: half of l1
+        runInfo_.depthB1 = totalL1Size / NUM_TWO / runInfo_.baseN / runInfo_.baseK / args_.dataTypeSize; // 2: half of l1
 
-        uint64_t depthASize = runInfo_.depthA1 * runInfo_.baseM * runInfo_.baseK * DATA_SIZE_FP16;
-        uint64_t depthBSize = runInfo_.depthB1 * runInfo_.baseN * runInfo_.baseK * DATA_SIZE_FP16;
+        uint64_t depthASize = runInfo_.depthA1 * runInfo_.baseM * runInfo_.baseK * args_.dataTypeSize;
+        uint64_t depthBSize = runInfo_.depthB1 * runInfo_.baseN * runInfo_.baseK * args_.dataTypeSize;
         if (depthASize + depthBSize > totalL1Size - reserveBTSize) {
             if (runInfo_.baseM <= runInfo_.baseN) {
                 runInfo_.depthA1 = std::max(runInfo_.depthA1 / NUM_TWO, 1UL); // 2: adjust deptch for l1 buffer
@@ -398,18 +410,18 @@ private:
     {
         if (isMLarger) {
             runInfo_.baseN = minMN;
-            runInfo_.baseM = platformInfo_.l0cSize / runInfo_.dbL0c / runInfo_.baseN;
+            runInfo_.baseM = platformInfo_.l0cSize / runInfo_.dbL0c / runInfo_.baseN / DATA_SIZE_FP32;
             runInfo_.baseM = Floor(runInfo_.baseM, BASIC_BLOCK_SIZE_16);
-            CalcLargeSingleSide(maxMN, runInfo_.baseM, isMLarger);
+            CalcLargeSingleSide(minMN, maxMN, runInfo_.baseM, isMLarger);
         } else {
             runInfo_.baseM = minMN;
-            runInfo_.baseN = platformInfo_.l0cSize / runInfo_.dbL0c / runInfo_.baseM;
+            runInfo_.baseN = platformInfo_.l0cSize / runInfo_.dbL0c / runInfo_.baseM / DATA_SIZE_FP32;
             runInfo_.baseN = Floor(runInfo_.baseN, BLOCK_BYTE_SIZE);
-            CalcLargeSingleSide(maxMN, runInfo_.baseN, isMLarger);
+            CalcLargeSingleSide(minMN, maxMN, runInfo_.baseN, isMLarger);
         }
     }
 
-    void CalcLargeSingleSide(uint64_t maxMN, uint64_t& targetBase, bool isMLarger)
+    void CalcLargeSingleSide(uint64_t minMN, uint64_t maxMN, uint64_t& targetBase, bool isMLarger)
     {
         uint64_t minCoreNum = (platformInfo_.aicNum + 1UL) * NUM_NINE / NUM_TEN;
         for (uint64_t tmpCoreNum = platformInfo_.aicNum; tmpCoreNum >= minCoreNum; tmpCoreNum--) {
@@ -417,7 +429,8 @@ private:
             while (loop <= MAX_LOOP_NUM) {
                 uint64_t baseBlock = CeilDiv(maxMN, tmpCoreNum * loop);
                 baseBlock = UpdateBaseBlock(baseBlock, isMLarger);
-                if (baseBlock >= MIN_BASE_BLOCK && baseBlock <= MAX_BASE_BLOCK) {
+                uint64_t tileSize = baseBlock * minMN * DATA_SIZE_FP32;
+                if (baseBlock >= MIN_BASE_BLOCK && baseBlock <= MAX_BASE_BLOCK && tileSize <= platformInfo_.l0cSize) {
                     targetBase = baseBlock;
                     return;
                 }
@@ -430,7 +443,11 @@ private:
     uint64_t UpdateBaseBlock(uint64_t baseBlock, bool isMLarger)
     {
         if (!isMLarger) {
-            return Align(baseBlock, BASIC_BLOCK_SIZE_128 / DATA_SIZE_FP16);
+            if (!args_.isBTrans || args_.k <= BASIC_BLOCK_SIZE_256) {
+                return Align(baseBlock, BASIC_BLOCK_SIZE_128 / args_.dataTypeSize);
+            } else {
+                return Align(baseBlock, BASIC_BLOCK_SIZE_64 / args_.dataTypeSize);
+            }
         } else {
             return Align(baseBlock, BASIC_BLOCK_SIZE_16);
         }
@@ -445,7 +462,7 @@ private:
             runInfo_.defaultBalance,
             BASIC_BLOCK_SIZE_256,
             BASIC_BLOCK_SIZE_256,
-            BASIC_BLOCK_SIZE_128 / DATA_SIZE_FP16};
+            BASIC_BLOCK_SIZE_128 / args_.dataTypeSize};
         if (CalcBestBalance(params1, isMLarger)) {
             return;
         }
@@ -456,7 +473,7 @@ private:
                               runInfo_.defaultBalance,
                               BASIC_BLOCK_SIZE_256,
                               BASIC_BLOCK_SIZE_256,
-                              BASIC_BLOCK_SIZE_128 / DATA_SIZE_FP16};
+                              BASIC_BLOCK_SIZE_128 / args_.dataTypeSize};
         if (CalcBestBalance(params2, isMLarger)) {
             return;
         }
@@ -508,10 +525,10 @@ private:
                 // If n is the inner axis or k<=256, align n to 128B, otherwise 64B; if m is the inner axis, align to
                 // 128B, otherwise 64B
                 bool nNotAligned = !args_.isBTrans || args_.k <= BASIC_BLOCK_SIZE_256 ?
-                                       currentBaseN * DATA_SIZE_FP16 % BASIC_BLOCK_SIZE_128 != 0UL :
-                                       currentBaseN * DATA_SIZE_FP16 % BASIC_BLOCK_SIZE_64 != 0UL;
-                bool mNotAligned = args_.isATrans ? currentBaseM * DATA_SIZE_FP16 % BASIC_BLOCK_SIZE_128 != 0UL :
-                                                    currentBaseM * DATA_SIZE_FP16 % BASIC_BLOCK_SIZE_64 != 0UL;
+                                       currentBaseN * args_.dataTypeSize % BASIC_BLOCK_SIZE_128 != 0UL :
+                                       currentBaseN * args_.dataTypeSize % BASIC_BLOCK_SIZE_64 != 0UL;
+                bool mNotAligned = args_.isATrans ? currentBaseM * args_.dataTypeSize % BASIC_BLOCK_SIZE_128 != 0UL :
+                                                    currentBaseM * args_.dataTypeSize % BASIC_BLOCK_SIZE_64 != 0UL;
                 if (mNotAligned || nNotAligned) {
                     continue;
                 }
@@ -612,7 +629,7 @@ private:
         {128, 272, 48, 1.242, 1.126}, {128, 256, 64, 1.267, 1},     {128, 240, 64, 1.295, 1},
         {112, 336, 48, 1.287, 1.126}};
 
-    void BuildTilingData(MatmulA16W16TilingData& tilingData) const
+    void BuildTilingData(MatmulTilingData& tilingData) const
     {
         tilingData = {};
         tilingData.m = static_cast<uint32_t>(args_.m);
@@ -634,6 +651,7 @@ private:
         tilingData.mTailMain = runInfo_.tailInfo.mTailMain;
         tilingData.nTailMain = runInfo_.tailInfo.nTailMain;
         tilingData.usedCoreNum = static_cast<uint32_t>(runInfo_.usedCoreNum);
+        tilingData.isHf32 = args_.isHf32;
         tilingData.l1BufferNum = static_cast<uint8_t>(runInfo_.l1BufferNum);
         tilingData.l0cDB = static_cast<uint8_t>(runInfo_.dbL0c);
     }

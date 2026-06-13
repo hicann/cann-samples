@@ -9,29 +9,29 @@
  */
 
 /*!
- * \file matmul_a16w16_tiling_base.h
- * \brief Base tiling class for A16W16 matmul.
+ * \file matmul_tiling_base.h
+ * \brief Base tiling class for  matmul.
  */
 
 #pragma once
 
 #include <cstdint>
 #include <memory>
-#include "tiling/matmul_a16w16_tiling_data.h"
-#include "tiling/matmul_a16w16_tiling_common.h"
+#include "tiling/matmul_tiling_data.h"
+#include "tiling/matmul_tiling_common.h"
 #include "utils/constant.h"
 #include "platform/platform_ascendc.h"
 
-class MatmulA16W16TilingBase {
+class MatmulTilingBase {
 public:
-    MatmulA16W16TilingBase() = default;
-    virtual ~MatmulA16W16TilingBase() = default;
+    MatmulTilingBase() = default;
+    virtual ~MatmulTilingBase() = default;
 
     virtual void GetTilingData(
-        uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, MatmulA16W16TilingData& tilingData)
+        uint64_t m, uint64_t n, uint64_t k, uint64_t dataTypeSize, bool transA, bool transB, MatmulTilingData& tilingData)
     {
         InitCompileInfo();
-        InitShapeArgs(m, n, k, transA, transB);
+        InitShapeArgs(m, n, k, dataTypeSize, transA, transB);
         DoOpTiling(tilingData);
         PrintTilingData(tilingData);
     };
@@ -43,12 +43,12 @@ public:
     };
 
 protected:
-    MatmulA16W16PlatformInfo platformInfo_;
-    MatmulA16W16Args args_;
-    MatmulA16W16RunInfo runInfo_;
+    MatmulPlatformInfo platformInfo_;
+    MatmulArgs args_;
+    MatmulRunInfo runInfo_;
 
     virtual const char* TilingName() const = 0;
-    virtual void DoOpTiling(MatmulA16W16TilingData& tilingData) = 0;
+    virtual void DoOpTiling(MatmulTilingData& tilingData) = 0;
 
 private:
     void InitCompileInfo()
@@ -66,17 +66,19 @@ private:
         ascendcPlatform->GetCoreMemSize(platform_ascendc::CoreMemType::BT, platformInfo_.btSize);
     }
 
-    void InitShapeArgs(uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, bool hasBias = false)
+    void InitShapeArgs(uint64_t m, uint64_t n, uint64_t k, uint64_t dataTypeSize, bool transA, bool transB, bool isHf32 = true, bool hasBias = false)
     {
         args_.m = m;
         args_.n = n;
         args_.k = k;
         args_.isATrans = transA;
         args_.isBTrans = transB;
+        args_.dataTypeSize = dataTypeSize;
+        args_.isHf32 = dataTypeSize == DATA_SIZE_FP32 ? isHf32 : false;
         args_.hasBias = hasBias;
     }
 
-    void PrintTilingData(const MatmulA16W16TilingData& tilingData) const
+    void PrintTilingData(const MatmulTilingData& tilingData) const
     {
         printf("[Matmul Strategy]\n");
         printf("  strategy           : %s\n", TilingName());
@@ -98,6 +100,7 @@ private:
         printf("  nBaseTailSplitCnt  : %u\n", tilingData.nBaseTailSplitCnt);
         printf("  mTailMain          : %u\n", tilingData.mTailMain);
         printf("  nTailMain          : %u\n", tilingData.nTailMain);
+        printf("  isHf32             : %u\n", tilingData.isHf32);
         printf("  l1BufferNum        : %u\n", tilingData.l1BufferNum);
         printf("  l0cDB              : %u\n", tilingData.l0cDB);
     }

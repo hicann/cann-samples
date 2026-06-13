@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file matmul_a16w16_tiling_streamk.h
- * \brief StreamK tiling specialization for A16W16.
+ * \file matmul_tiling_streamk.h
+ * \brief StreamK tiling specialization for .
  */
 
 #pragma once
@@ -18,13 +18,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include "tiling/matmul_a16w16_tiling_base.h"
+#include "tiling/matmul_tiling_base.h"
 #include "host_utils/common_utils.h"
 
-class MatmulA16W16TilingStreamK : public MatmulA16W16TilingBase {
+class MatmulTilingStreamK : public MatmulTilingBase {
 public:
-    MatmulA16W16TilingStreamK() = default;
-    ~MatmulA16W16TilingStreamK() override = default;
+    MatmulTilingStreamK() = default;
+    ~MatmulTilingStreamK() override = default;
 
 protected:
     const char* TilingName() const override
@@ -32,7 +32,7 @@ protected:
         return "streamk";
     }
 
-    void DoOpTiling(MatmulA16W16TilingData& tilingData) override
+    void DoOpTiling(MatmulTilingData& tilingData) override
     {
         IsCapable();
         ResetBase();
@@ -65,12 +65,16 @@ private:
     {
         constexpr uint64_t STREAM_K_MIN_K_THRESHOLD = 8192UL;
         uint64_t kThreshold =
-            std::max(STREAM_K_MIN_K_THRESHOLD, platformInfo_.aicNum * BASIC_BLOCK_SIZE_256) / DATA_SIZE_FP16;
+            std::max(STREAM_K_MIN_K_THRESHOLD, platformInfo_.aicNum * BASIC_BLOCK_SIZE_256) / args_.dataTypeSize;
         if (Align(args_.k, BASIC_BLOCK_SIZE_256) < kThreshold) {
             return false;
         }
-        uint64_t mCnt = CeilDiv(args_.m, BASIC_BLOCK_SIZE_256);
-        uint64_t nCnt = CeilDiv(args_.n, BASIC_BLOCK_SIZE_256);
+        uint64_t alignValue = BASIC_BLOCK_SIZE_256;
+        if (args_.dataTypeSize == DATA_SIZE_FP32 && !args_.isHf32) {
+            alignValue = BLOCK_BYTE_SIZE;
+        }
+        uint64_t mCnt = CeilDiv(args_.m, alignValue);
+        uint64_t nCnt = CeilDiv(args_.n, alignValue);
         return (mCnt * nCnt <= platformInfo_.aicNum / NUM_TWO);
     }
 
@@ -81,7 +85,7 @@ private:
             return false;
         }
         uint64_t kThreshold =
-            std::max(STREAM_K_MIN_K_THRESHOLD, platformInfo_.aicNum * BASIC_BLOCK_SIZE_128) / DATA_SIZE_FP16;
+            std::max(STREAM_K_MIN_K_THRESHOLD, platformInfo_.aicNum * BASIC_BLOCK_SIZE_128) / args_.dataTypeSize;
         if (args_.k < kThreshold) {
             return false;
         }
@@ -97,7 +101,7 @@ private:
         runInfo_.usedCoreNum = platformInfo_.aicNum;
         runInfo_.baseM = BASIC_BLOCK_SIZE_256;
         runInfo_.baseN = BASIC_BLOCK_SIZE_256;
-        runInfo_.baseK = BASIC_BLOCK_SIZE_128 / DATA_SIZE_FP16;
+        runInfo_.baseK = BASIC_BLOCK_SIZE_128 / args_.dataTypeSize;
         runInfo_.stepM = 1;
         runInfo_.stepN = 1;
         runInfo_.iterateOrder = 0;
@@ -140,9 +144,9 @@ private:
     void CalBaseK()
     {
         uint64_t baseKAlignValue =
-            (!args_.isATrans || args_.isBTrans) ? BASIC_BLOCK_SIZE_128 / DATA_SIZE_FP16 : BASIC_BLOCK_SIZE_16;
+            (!args_.isATrans || args_.isBTrans) ? BASIC_BLOCK_SIZE_128 / args_.dataTypeSize : BASIC_BLOCK_SIZE_16;
         uint64_t kValueMax = FloorAlign(
-            platformInfo_.l0aSize / DB_SIZE / DATA_SIZE_FP16 / std::max(runInfo_.baseM, runInfo_.baseN),
+            platformInfo_.l0aSize / DB_SIZE / args_.dataTypeSize / std::max(runInfo_.baseM, runInfo_.baseN),
             baseKAlignValue);
         runInfo_.baseK = std::min(runInfo_.singleCoreK, kValueMax);
     }
@@ -151,11 +155,11 @@ private:
     {
         uint64_t totalL1Size = platformInfo_.l1Size;
         uint64_t reserveBTSize = args_.hasBias ? BASIC_BLOCK_SIZE_256 * DATA_SIZE_FP32 : 0UL;
-        runInfo_.depthA1 = totalL1Size / NUM_TWO / runInfo_.baseM / runInfo_.baseK / DATA_SIZE_FP16; // 2: half of l1
-        runInfo_.depthB1 = totalL1Size / NUM_TWO / runInfo_.baseN / runInfo_.baseK / DATA_SIZE_FP16; // 2: half of l1
+        runInfo_.depthA1 = totalL1Size / NUM_TWO / runInfo_.baseM / runInfo_.baseK / args_.dataTypeSize; // 2: half of l1
+        runInfo_.depthB1 = totalL1Size / NUM_TWO / runInfo_.baseN / runInfo_.baseK / args_.dataTypeSize; // 2: half of l1
 
-        uint64_t depthASize = runInfo_.depthA1 * runInfo_.baseM * runInfo_.baseK * DATA_SIZE_FP16;
-        uint64_t depthBSize = runInfo_.depthB1 * runInfo_.baseN * runInfo_.baseK * DATA_SIZE_FP16;
+        uint64_t depthASize = runInfo_.depthA1 * runInfo_.baseM * runInfo_.baseK * args_.dataTypeSize;
+        uint64_t depthBSize = runInfo_.depthB1 * runInfo_.baseN * runInfo_.baseK * args_.dataTypeSize;
         if (depthASize + depthBSize > totalL1Size - reserveBTSize) {
             if (runInfo_.baseM <= runInfo_.baseN) {
                 runInfo_.depthA1 = std::max(runInfo_.depthA1 / NUM_TWO, 1UL); // 2: adjust deptch for l1 buffer
@@ -205,7 +209,7 @@ private:
         }
     }
 
-    void BuildTilingData(MatmulA16W16TilingData& tilingData) const
+    void BuildTilingData(MatmulTilingData& tilingData) const
     {
         tilingData = {};
         tilingData.m = static_cast<uint32_t>(args_.m);
@@ -228,6 +232,7 @@ private:
         tilingData.mTailMain = runInfo_.tailInfo.mTailMain;
         tilingData.nTailMain = runInfo_.tailInfo.nTailMain;
         tilingData.usedCoreNum = static_cast<uint32_t>(runInfo_.usedCoreNum);
+        tilingData.isHf32 = args_.isHf32;
         tilingData.l1BufferNum = static_cast<uint8_t>(runInfo_.l1BufferNum);
         tilingData.l0cDB = static_cast<uint8_t>(runInfo_.dbL0c);
     }

@@ -30,22 +30,22 @@ struct QuantMatmulMxMultiBlockWithSwat {
 };
 
 /**
- * @brief Dispatch tag for MatmulA16W16 matmul kernels that use the SWAT
+ * @brief Dispatch tag for Matmul matmul kernels that use the SWAT
  *        scheduling family.
  * @tparam SingleCoreShape Placeholder for the per-core tile shape recorded
  *         in the dispatch traits.
  * @tparam FULL_LOAD_MODE_ Selects the SWAT variant: streaming or A-full-load or B-full-load.
  */
 template <uint64_t FULL_LOAD_MODE_>
-struct MatmulA16W16MultiBlockWithSwat {
+struct MatmulMultiBlockWithSwat {
     static constexpr uint64_t fullLoadMode = FULL_LOAD_MODE_;
 };
 
 /**
- * @brief Dispatch tag for MatmulA16W16 matmul kernels that use the StreamK
+ * @brief Dispatch tag for Matmul matmul kernels that use the StreamK
  *        scheduling family.
  */
-struct MatmulA16W16MultiBlockWithStreamK {};
+struct MatmulMultiBlockWithStreamK {};
 
 template <uint64_t FULL_LOAD_MODE_>
 struct MatmulWithScale {

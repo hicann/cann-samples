@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file matmul_a16w16_block_mmad_swat.h
- * \brief Block-level A16W16 MMAD pipeline for SWAT non-full-load path.
+ * \file matmul_block_mmad_swat.h
+ * \brief Block-level  MMAD pipeline for SWAT non-full-load path.
  */
 
 #pragma once
@@ -28,7 +28,7 @@ template <
 class BlockMmad<
     DispatchPolicy_, TypeA_, LayoutA_, TypeB_, LayoutB_, TypeC_, LayoutC_,
     AscendC::Std::enable_if_t<
-        AscendC::Std::is_base_of_v<MatmulA16W16MultiBlockWithSwat<NO_FULL_LOAD_MODE>, DispatchPolicy_>>> {
+        AscendC::Std::is_base_of_v<MatmulMultiBlockWithSwat<NO_FULL_LOAD_MODE>, DispatchPolicy_>>> {
 public:
     using TypeA = TypeA_;
     using TypeB = TypeB_;

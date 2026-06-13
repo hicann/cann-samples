@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file matmul_a16w16_block_mmad_streamk.h
- * \brief Block-level A16W16 MMAD pipeline for StreamK path.
+ * \file matmul_block_mmad_streamk.h
+ * \brief Block-level  MMAD pipeline for StreamK path.
  */
 
 #pragma once
@@ -27,7 +27,7 @@ template <
     class DispatchPolicy_, class TypeA_, class LayoutA_, class TypeB_, class LayoutB_, class TypeC_, class LayoutC_>
 class BlockMmad<
     DispatchPolicy_, TypeA_, LayoutA_, TypeB_, LayoutB_, TypeC_, LayoutC_,
-    AscendC::Std::enable_if_t<AscendC::Std::is_base_of_v<MatmulA16W16MultiBlockWithStreamK, DispatchPolicy_>>> {
+    AscendC::Std::enable_if_t<AscendC::Std::is_base_of_v<MatmulMultiBlockWithStreamK, DispatchPolicy_>>> {
 public:
     using TypeA = TypeA_;
     using TypeB = TypeB_;

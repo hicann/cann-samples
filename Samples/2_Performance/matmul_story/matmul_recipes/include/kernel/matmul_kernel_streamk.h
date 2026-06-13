@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file matmul_a16w16_kernel_streamk.h
- * \brief Kernel-side StreamK A16W16 implementation.
+ * \file matmul_kernel_streamk.h
+ * \brief Kernel-side StreamK  implementation.
  */
 
 #pragma once
@@ -25,18 +25,18 @@
 #include "kernel_utils/common_utils.h"
 #include "include/tensor_api/tensor.h"
 
-#include "../block/matmul_a16w16_block_mmad_streamk.h"
-#include "../block/matmul_a16w16_block_scheduler_streamk.h"
+#include "../block/matmul_block_mmad_streamk.h"
+#include "../block/matmul_block_scheduler_streamk.h"
 #include "../utils/constant.h"
 
 namespace Kernel {
 
 template <class ProblemShape, class BlockMmad, class BlockScheduler, class BlockEpilogue>
-class MatmulA16W16KernelStreamK {
+class MatmulKernelStreamK {
 public:
-    __aicore__ inline MatmulA16W16KernelStreamK()
+    __aicore__ inline MatmulKernelStreamK()
     {}
-    __aicore__ inline ~MatmulA16W16KernelStreamK()
+    __aicore__ inline ~MatmulKernelStreamK()
     {}
 
     static constexpr bool transA = BlockMmad::transA;
@@ -71,6 +71,7 @@ public:
         uint32_t baseN;
         uint32_t baseK;
         uint32_t usedCoreNum;
+        bool isHf32;
     };
 
     struct Params {
@@ -83,6 +84,12 @@ public:
 
 public:
     __aicore__ inline void operator()(const Params& params);
+
+    __aicore__ inline void UnsetHf32(bool isHf32) {
+        if (isHf32) {
+            AscendC::SetHF32Mode(0);
+        }
+    }
 
 private:
     __aicore__ inline TupleShape ToShapeTuple(const ProblemShape& problemShape)
@@ -97,7 +104,7 @@ private:
 };
 
 template <class ProblemShape, class BlockMmad, class BlockScheduler, class BlockEpilogue>
-__aicore__ inline void MatmulA16W16KernelStreamK<ProblemShape, BlockMmad, BlockScheduler, BlockEpilogue>::operator()(
+__aicore__ inline void MatmulKernelStreamK<ProblemShape, BlockMmad, BlockScheduler, BlockEpilogue>::operator()(
     const Params& params)
 {
     usedCoreNum_ = params.kernelParams.usedCoreNum;
@@ -124,6 +131,11 @@ __aicore__ inline void MatmulA16W16KernelStreamK<ProblemShape, BlockMmad, BlockS
             AscendC::CrossCoreSetFlag<AIC_SYNC_AIV_MODE_4, PIPE_FIX>(AIC_SYNC_AIV_FLAG);
             AscendC::CrossCoreSetFlag<AIC_SYNC_AIV_MODE_4, PIPE_FIX>(AIC_SYNC_AIV_FLAG + FLAG_ID_MAX);
             return;
+        }
+        // enbale Hf32
+        if (params.kernelParams.isHf32) {
+            AscendC::SetHF32Mode(1);
+            AscendC::SetHF32TransMode(1);
         }
         AscendC::SetMMLayoutTransform(true);
         BlockMmad blockMmadOp(problemShape_, tileL1, tileL0);
@@ -187,6 +199,7 @@ __aicore__ inline void MatmulA16W16KernelStreamK<ProblemShape, BlockMmad, BlockS
             }
         }
         AscendC::SetMMLayoutTransform(false);
+        UnsetHf32(params.kernelParams.isHf32);
     }
     if ASCEND_IS_AIV {
         uint64_t lastLoopTotalCnt = (mTileNum * nTileNum % usedCoreNum_) * skKTileNum;

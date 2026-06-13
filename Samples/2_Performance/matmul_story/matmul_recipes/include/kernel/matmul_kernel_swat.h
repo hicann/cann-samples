@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file matmul_a16w16_kernel_swat.h
- * \brief Kernel-side SWAT A16W16 implementation for the non-full-load path.
+ * \file matmul_kernel_swat.h
+ * \brief Kernel-side SWAT  implementation for the non-full-load path.
  */
 
 #pragma once
@@ -25,18 +25,18 @@
 #include "kernel_utils/common_utils.h"
 #include "include/tensor_api/tensor.h"
 
-#include "../block/matmul_a16w16_block_mmad_swat.h"
-#include "../block/matmul_a16w16_block_scheduler_swat.h"
+#include "../block/matmul_block_mmad_swat.h"
+#include "../block/matmul_block_scheduler_swat.h"
 #include "../utils/constant.h"
 
 namespace Kernel {
 
 template <class ProblemShape, class BlockMmad, class BlockScheduler>
-class MatmulA16W16KernelSwat {
+class MatmulKernelSwat {
 public:
-    __aicore__ inline MatmulA16W16KernelSwat()
+    __aicore__ inline MatmulKernelSwat()
     {}
-    __aicore__ inline ~MatmulA16W16KernelSwat()
+    __aicore__ inline ~MatmulKernelSwat()
     {}
 
     static constexpr bool transA = BlockMmad::transA;
@@ -67,6 +67,7 @@ public:
         uint32_t baseM;
         uint32_t baseN;
         uint32_t baseK;
+        bool isHf32;
         uint8_t dbL0C;
     };
 
@@ -80,6 +81,12 @@ public:
 public:
     __aicore__ inline void operator()(const Params& params);
 
+    __aicore__ inline void UnsetHf32(bool isHf32) {
+        if (isHf32) {
+            AscendC::SetHF32Mode(0);
+        }
+    }
+
 private:
     __aicore__ inline TupleShape ToShapeTuple(const ProblemShape& problemShape)
     {
@@ -92,7 +99,7 @@ private:
 };
 
 template <class ProblemShape, class BlockMmad, class BlockScheduler>
-__aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockScheduler>::operator()(const Params& params)
+__aicore__ inline void MatmulKernelSwat<ProblemShape, BlockMmad, BlockScheduler>::operator()(const Params& params)
 {
     if ASCEND_IS_AIV {
         return;
@@ -109,8 +116,13 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
     if (curBlockIdx >= realBlockNum) {
         return;
     }
-    AscendC::SetMMLayoutTransform(true);
     bool l0cDB = params.kernelParams.dbL0C > 1;
+    // enbale Hf32
+    if (params.kernelParams.isHf32) {
+        AscendC::SetHF32Mode(1);
+        AscendC::SetHF32TransMode(1);
+    }
+    AscendC::SetMMLayoutTransform(true);
     // Instantiate mmadOp
     BlockMmad blockMmadOp(problemShape_, tileL1, tileL0, l0cDB);
 
@@ -148,6 +160,7 @@ __aicore__ inline void MatmulA16W16KernelSwat<ProblemShape, BlockMmad, BlockSche
     }
 
     AscendC::SetMMLayoutTransform(false);
+    UnsetHf32(params.kernelParams.isHf32);
 }
 
 } // namespace Kernel

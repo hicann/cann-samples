@@ -9,21 +9,21 @@
  */
 
 /*!
- * \file matmul_a16w16_block_scheduler_swat.h
- * \brief SWAT block scheduler for *A16W16 non-full-load path.
+ * \file matmul_block_scheduler_swat.h
+ * \brief SWAT block scheduler for * non-full-load path.
  */
 
 #pragma once
 
 #include "kernel_utils/common_utils.h"
 #include "utils/constant.h"
-#include "tiling/matmul_a16w16_tiling_data.h"
+#include "tiling/matmul_tiling_data.h"
 #include "./block_scheduler_utils.h"
 
 namespace Block {
 
 template <class ProblemShape_>
-class BlockSchedulerA16W16Swat {
+class BlockSchedulerSwat {
 public:
     int64_t mTileNum_{0};
     int64_t nTileNum_{0};
@@ -85,7 +85,7 @@ public:
     };
 
 public:
-    __aicore__ inline BlockSchedulerA16W16Swat(
+    __aicore__ inline BlockSchedulerSwat(
         const ProblemShape& shape, int64_t blockIdx, int64_t blockNum, const Params& params)
         : blockIdx_(blockIdx), blockNum_(blockNum)
     {
@@ -225,7 +225,7 @@ private:
 };
 
 template <class ProblemShape_, bool TransA_, bool TransB_>
-struct BlockSchedulerSelector<ProblemShape_, MatmulA16W16SwatScheduler<NO_FULL_LOAD_MODE>, TransA_, TransB_> {
-    using SchedulerOp = BlockSchedulerA16W16Swat<ProblemShape_>;
+struct BlockSchedulerSelector<ProblemShape_, MatmulSwatScheduler<NO_FULL_LOAD_MODE>, TransA_, TransB_> {
+    using SchedulerOp = BlockSchedulerSwat<ProblemShape_>;
 };
 } // namespace Block
