@@ -106,7 +106,7 @@ cd ./build_out/1_Features/memory_optimization/swat/
 如需单独编译当前样例，可使用以下指令：
 ```shell
 cmake --build build --target swat
-cp ./Samples/1_Features/memory_optimization/slide_window_adaptive_template/scripts/profile_matmul.py ./build/Samples/1_Features/memory_optimization/slide_window_adaptive_template/
+cp ./Samples/1_Features/memory_optimization/slide_window_adaptive_template/scripts/* ./build/Samples/1_Features/memory_optimization/slide_window_adaptive_template/
 cd ./build/Samples/1_Features/memory_optimization/slide_window_adaptive_template/
 ```
 
@@ -116,13 +116,32 @@ cd ./build/Samples/1_Features/memory_optimization/slide_window_adaptive_template
 ```shell
 ./swat 1024 2048 4096
 ```
-打印如下执行结果，证明样例执行成功。
-```shell
-matmul run successfully!
+运行成功后，终端将打印如下类似信息：
+```txt
+Data generated successfully!
+
+[verify] shape(1024, 4096), elements=4194304 - summary (large matrix, full tensors omitted)
+  abs_err: max=2.560000e+02, mean=6.591797e-03, rmse=1.299038e+00
+  rel_err: max=6.410256e-03
+  count(|abs_err| > 0.001): 108 / 4194304
+  cpu golden (top-left 4x4):
+tensor([[40448., 41728., 41472., 41984.],
+        [39680., 40704., 40448., 40960.],
+        [40192., 41472., 41472., 41984.],
+        [40960., 41984., 41728., 42240.]], dtype=torch.bfloat16)
+  npu out (top-left 4x4):
+tensor([[40448., 41728., 41472., 41984.],
+        [39680., 40704., 40448., 40960.],
+        [40192., 41472., 41472., 41984.],
+        [40960., 41984., 41728., 42240.]], dtype=torch.bfloat16)
+max abs diff: 256.0
+point error count(>0.1): 0/4194304
+ratio error count(>0.001): 108/4194304, error ratio: 0.0000026
+[PASS] NPU results are consistent with CPU.
 ```
 如果存在精度问题，则会打印错误数据，并显示如下结果。
-```shell
-matmul run failed!
+```txt
+[ERROR] NPU results differ from CPU.
 ```
 
 3. 测试性能

@@ -128,7 +128,7 @@ cd ./build_out/1_Features/memory_optimization/full_load/
 如需单独编译当前样例，可使用以下指令：
 ```shell
 cmake --build build --target full_load
-cp ./Samples/1_Features/memory_optimization/full_load/scripts/profile_matmul.py ./build/Samples/1_Features/memory_optimization/full_load/
+cp ./Samples/1_Features/memory_optimization/full_load/scripts/* ./build/Samples/1_Features/memory_optimization/full_load/
 cd ./build/Samples/1_Features/memory_optimization/full_load/
 ```
 
@@ -138,13 +138,32 @@ cd ./build/Samples/1_Features/memory_optimization/full_load/
 ```shell
 ./full_load 64 256 9000
 ```
-打印如下执行结果，证明样例执行成功。
-```shell
-matmul run successfully!
+运行成功后，终端将打印如下类似信息：
+```txt
+Data generated successfully!
+
+[verify] shape(64, 9000), elements=576000 - summary (large matrix, full tensors omitted)
+  abs_err: max=3.200000e+01, mean=5.555556e-05, rmse=4.21637e-02
+  rel_err: max=6.410256e-03
+  count(|abs_err| > 0.001): 1 / 576000
+  cpu golden (top-left 4x4):
+tensor([[5152., 5184., 5056., 5216.],
+        [5024., 4896., 4832., 5024.],
+        [5184., 5344., 5184., 5440.],
+        [5184., 5120., 4960., 5152.]], dtype=torch.bfloat16)
+  npu out (top-left 4x4):
+tensor([[5152., 5184., 5056., 5216.],
+        [5024., 4896., 4832., 5024.],
+        [5184., 5344., 5184., 5440.],
+        [5184., 5120., 4960., 5152.]], dtype=torch.bfloat16)
+max abs diff: 32.0
+point error count(>0.1): 0/576000
+ratio error count(>0.001): 1/576000, error ratio: 0.000002
+[PASS] NPU results are consistent with CPU.
 ```
 如果存在精度问题，则会打印错误数据，并显示如下结果。
-```shell
-matmul run failed!
+```txt
+[ERROR] NPU results differ from CPU.
 ```
 
 3. 测试性能

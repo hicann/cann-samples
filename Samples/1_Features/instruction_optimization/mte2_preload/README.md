@@ -191,7 +191,7 @@ cd ./build_out/1_Features/instruction_optimization/mte2_preload/
 如需单独编译当前样例，可使用以下指令：
 ```shell
 cmake --build build --target mte2_preload
-cp ./Samples/1_Features/instruction_optimization/mte2_preload/scripts/profile_matmul.py ./build/Samples/1_Features/instruction_optimization/mte2_preload/
+cp ./Samples/1_Features/instruction_optimization/mte2_preload/scripts/* ./build/Samples/1_Features/instruction_optimization/mte2_preload/
 cd ./build/Samples/1_Features/instruction_optimization/mte2_preload/
 ```
 
@@ -201,13 +201,32 @@ cd ./build/Samples/1_Features/instruction_optimization/mte2_preload/
 ```shell
 ./mte2_preload 1024 2048 4096
 ```
-打印如下执行结果，证明样例执行成功。
-```shell
-matmul run successfully!
+运行成功后，终端将打印如下类似信息：
+```txt
+Data generated successfully!
+
+[verify] shape(1024, 4096), elements=4194304 - summary (large matrix, full tensors omitted)
+  abs_err: max=2.560000e+02, mean=6.103516e-03, rmse=1.250000e+00
+  rel_err: max=6.410256e-03
+  count(|abs_err| > 0.001): 100 / 4194304
+  cpu golden (top-left 4x4):
+tensor([[41728., 42240., 41216., 41216.],
+        [40960., 41728., 40704., 40960.],
+        [40960., 41472., 40704., 40448.],
+        [40704., 41246., 40192., 39680.]], dtype=torch.bfloat16)
+  npu out (top-left 4x4):
+tensor([[41728., 42240., 41216., 41216.],
+        [40960., 41728., 40704., 40960.],
+        [40960., 41472., 40704., 40448.],
+        [40704., 41246., 40192., 39680.]], dtype=torch.bfloat16)
+max abs diff: 256.0
+point error count(>0.1): 0/4194304
+ratio error count(>0.001): 100/4194304, error ratio: 0.000024
+[PASS] NPU results are consistent with CPU.
 ```
 如果存在精度问题，则会打印错误数据，并显示如下结果。
-```shell
-matmul run failed!
+```txt
+[ERROR] NPU results differ from CPU.
 ```
 
 3. 测试性能

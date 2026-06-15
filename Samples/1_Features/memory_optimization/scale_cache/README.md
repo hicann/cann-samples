@@ -133,13 +133,22 @@ cd ./build/Samples/1_Features/memory_optimization/scale_cache/
 ```shell
 ./scale_cache 1024 2048 4096
 ```
-打印如下执行结果，证明样例执行成功。
-```shell
-matmul run successfully!
+运行成功后，终端将打印如下类似信息：
+```txt
+tensor([[5152., 5184., 5056., 5216.],
+        [5024., 4896., 4832., 5024.],
+        [5184., 5344., 5184., 5440.],
+        [5184., 5120., 4960., 5152.]], dtype=torch.bfloat16)
+  npu out (top-left 4x4):
+tensor([[5152., 5184., 5056., 5216.],
+        [5024., 4896., 4832., 5024.],
+        [5184., 5344., 5184., 5440.],
+        [5184., 5120., 4960., 5152.]], dtype=torch.bfloat16)
+[PASS] NPU results are consistent with CPU.
 ```
 如果存在精度问题，则会打印错误数据，并显示如下结果。
-```shell
-matmul run failed!
+```txt
+[ERROR] NPU results differ from CPU.
 ```
 
 3. 测试性能
