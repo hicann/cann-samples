@@ -19,3 +19,6 @@
 
 ### [moe_dispatch_and_combine_story](./moe_dispatch_and_combine_story)
 围绕 moe dispatch/combine 通信算子给出性能优化实践，包含构建运行命令、测试数据生成与精度校验流程。
+
+### [kv_rms_norm_rope_cache_story](./kv_rms_norm_rope_cache_story)
+围绕 Ascend 950 上的 KvRmsNormRopeCache full-load 路径给出 MemBase 与 RegBase 两个 BF16 直调样例，展示 RMSNorm、interleave RoPE 与 Norm cache 更新的融合实现，以及从 MemBase 到 RegBase 的寄存器化优化点。
