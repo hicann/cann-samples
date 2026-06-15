@@ -6,13 +6,13 @@
 
 ## 适用场景
 
-算子的数据计算链路为 `GM → UB → 寄存器 → UB → GM`，本指南聚焦其中 `UB → 寄存器 → UB` 这一跳的不同数据搬运方式。对于不同的计算场景，使用的搬运方式也存在差异，本文将重点描述不同场景下的搬运指令使用。
+算子的数据计算链路为 `GM → UB → 寄存器 → UB → GM`，本指南聚焦其中 `UB → 寄存器 → UB` 这一跳。计算场景不同，搬运方式也不同，下文按场景说明各自该用哪条指令。
 
 ![数据搬运在矢量计算流程中的位置](images/sel-architecture.svg)
 
 ## 场景划分与选型
 
-根据计算场景的特点，通过以下决策树确定应使用的搬运方式（蓝色框对应下文详细章节）：
+下面的决策树按计算场景特点确定该用哪种搬运方式（蓝色框对应下文详细章节）：
 
 ![场景选型决策树](images/sel-decision-tree.svg)
 
@@ -75,7 +75,7 @@ __simd_vf__ inline void Scene1Vf(__ubuf__ T* xAddr, __ubuf__ T* yAddr,
 [scene1] tail: z[148]=111.000000 z[149]=111.750000 | z[150]= -1.000000 z[151]= -1.000000 (sentinel -1)
 ```
 
-示例计算逻辑：x[i]=i·0.5，y[i]=i·0.25，z=x+y。前两轮各写出 64 个元素，第三轮通过 `UpdateMask<float>(count)` 将 count 从 64 递减到 22，只写出 22 个 lane，仅写出 z[128..149]，z[150] 起不会被脏写。
+示例计算逻辑：x[i]=i·0.5，y[i]=i·0.25，z=x+y。前两轮各写出 64 个元素，第三轮通过 `UpdateMask<float>(count)` 将 count 从 64 递减到 22，只写出 z[128..149] 这 22 个元素，z[150] 起不会被脏写。
 
 > 完整源码：[`src/scene1_dist_norm.asc`](src/scene1_dist_norm.asc)
 
@@ -83,7 +83,7 @@ __simd_vf__ inline void Scene1Vf(__ubuf__ T* xAddr, __ubuf__ T* yAddr,
 
 ## 变位宽搬运 `UNPACK` ↔ `PACK`
 
-> **用于**VF 内需要进行 Cast 改变精度的场景：例如 UB 中存储 bf16/fp16 数据，VF 内需提升至 fp32 计算，计算完成后再降回 bf16/fp16 写出。搬入时通过 `UNPACK` 将连续的 b16 数据展开到 32 位宽，搬出时通过 `PACK` 将 32 位宽压缩回连续 b16。两者互为逆操作，通常成对使用。
+> **用于**VF 内需要用 Cast 改变精度的场景：例如 UB 中存储 bf16/fp16 数据，VF 内需提升至 fp32 计算，计算完成后再降回 bf16/fp16 写出。搬入时通过 `UNPACK` 将连续的 b16 数据展开到 32 位宽，搬出时通过 `PACK` 将 32 位宽压缩回连续 b16。两者互为逆操作，通常成对使用。
 
 > 搬入（UNPACK 升位宽）：
 > ```cpp
@@ -198,7 +198,7 @@ __simd_vf__ inline void Scene4Vf(__ubuf__ float* xAddr, __ubuf__ float* yAddr,
 [scene4] out: y[0]= 64.000000 y[1]=128.000000 y[2]=192.000000 | y[3]= -1.000000 (sentinel -1)
 ```
 
-标量搬出的 mask 使用 `MaskPattern::VL1`，只开启第 0 个 lane，与 `FIRST_ELEMENT` 只写出首 lane 的语义一致。输出偏移为 `yAddr + i`（逐元素推进），而非 `yAddr + i * VL`——每轮只写出 1 个标量，偏移按元素步进。
+标量搬出的 mask 使用 `MaskPattern::VL1`，只开启第 0 个 lane，与 `FIRST_ELEMENT` 只写出首 lane 的语义一致。输出偏移为 `yAddr + i`（逐元素推进），而非 `yAddr + i * VL`：每轮只写出 1 个标量，偏移按元素步进。
 
 以下示例演示广播搬入场景（N=150，fp32），通过 `BRC` 从 UB 读入 bias 标量并广播填满寄存器，与向量数据相加后写出：
 
@@ -236,15 +236,15 @@ __simd_vf__ inline void Scene5Vf(__ubuf__ float* xAddr, __ubuf__ float* biasAddr
 [scene5] tail: y[149]=174.500000 | y[150]= -1.000000 (sentinel -1)
 ```
 
-广播搬入时 `biasAddr` 每轮不变，每轮从同一地址读取同一个标量并广播到整条寄存器。
+广播搬入时 `biasAddr` 每轮不变，始终从同一地址读取同一个标量并广播到整条寄存器。
 
 > 完整源码：[`src/scene4_first_element.asc`](src/scene4_first_element.asc)　[`src/scene5_brc_b32.asc`](src/scene5_brc_b32.asc)
 
 ---
 
-## 非连续存取 `DATA_BLOCK_COPY` + `Gather` / `E2B`
+## 非连续存取 `DATA_BLOCK_COPY` + `Gather`
 
-> **用于**gather 类离散读取和等间距跳写场景：一是按照一块 UB 中存储的索引，通过 `Gather` + `E2B` 从另一块 UB 中离散读取数据到寄存器；二是按照固定 stride，通过 `DATA_BLOCK_COPY` 将寄存器中的数据间隔写到 UB 中。
+> **用于**gather 类离散读取和等间距跳写场景：一是按索引通过 `Gather` 从一块 UB 中离散读取数据到寄存器，索引可用 `Arange` 在寄存器内直接生成；二是按照固定 stride，通过 `DATA_BLOCK_COPY` 将寄存器中的数据间隔写到 UB 中。
 
 ### 跳跃搬运 `DATA_BLOCK_COPY`
 
@@ -294,33 +294,24 @@ __simd_vf__ inline void Scene6Vf(__ubuf__ float* xAddr, __ubuf__ float* yAddr,
 
 stride=2 的效果：每块 8 个 fp32 元素写出后跳过 8 个位置（32 字节），块 k 落在 y[16k..16k+7]，块间的 8 个预填值原样保留。mask=20 的效果：只写出前 20 个元素，y2[16..19] 有效写入，y2[20..23] 保持预填值不变，说明 mask 按元素粒度精确截断，不受块边界限制。
 
-### 按索引取数 `Gather` + `DIST_E2B_B32`
+### 按索引取数 `Gather`
 
-> 索引广播到 32B 搬入（E2B）：
-> ```cpp
-> template <typename T, LoadDist dist = LoadDist::DIST_E2B_B32, typename U>
-> __simd_callee__ inline void LoadAlign(U& dstReg, __ubuf__ T* srcAddr);
-> ```
 > 按索引离散读取（Gather）：
 > ```cpp
 > template <typename T, typename U, typename IdxT>
 > __simd_callee__ inline void Gather(U& dstReg, __ubuf__ T* srcAddr, RegTensor<IdxT>& idxReg, MaskReg& mask);
 > ```
 
-E2B 将 UB 中连续的索引转换为按块排布：每个索引控制一整块 32B 数据（8 个 b32 lane），而不是一个元素对应一个索引。单轮只展开前 8 个 b32 索引，块内 8 个 lane 重复同一索引值，Gather 后输出也按块重复——`out[8k..8k+7]` 全部等于 `data[idx[k]]`。
+`Gather` 按逐 lane 寻址：`out[lane] = dataAddr[idx[lane]]`，索引是一个普通的 uint32 寄存器，每个 lane 一个独立索引，64 个 lane 各取各的、互不重复。索引位宽随数据类型选择（b32/b64 数据用 u32 索引，b8/b16 用 u16），可以从 UB 读入，也可以在寄存器内直接生成。下例用 `Arange` 直接生成一段倒序索引来填它。
 
-- **索引位宽**：随数据类型选择，b32/b64 数据用 u32 索引，b8/b16 用 u16。
-- **mask**：按索引类型生成。
+![Gather 逐 lane 取数](images/sel-gather.svg)
 
-![Gather 四步流水](images/sel-gather.svg)
-
-以下示例演示按索引取数（fp32），通过 E2B 将倒序索引广播到 32B后由 Gather 离散收集数据：
+以下示例演示按索引取数（fp32），用 `Arange` 在寄存器内直接生成倒序索引 `idx[i]=63-i`，再由 `Gather` 逐 lane 离散收集，得到 data 的逆序拷贝：
 
 ```cpp
-__simd_vf__ inline void Scene7Vf(__ubuf__ uint32_t* idxAddr, __ubuf__ float* dataAddr,
-                                 __ubuf__ float* outAddr)
+__simd_vf__ inline void Scene7Vf(__ubuf__ float* dataAddr, __ubuf__ float* outAddr)
 {
-    uint32_t VL = AscendC::VECTOR_REG_WIDTH / sizeof(uint32_t);
+    uint32_t VL = AscendC::VECTOR_REG_WIDTH / sizeof(uint32_t);   // 64
     AscendC::Reg::RegTensor<uint32_t> idxReg;
     AscendC::Reg::RegTensor<float> vregOut;
     AscendC::Reg::MaskReg preg;
@@ -328,26 +319,27 @@ __simd_vf__ inline void Scene7Vf(__ubuf__ uint32_t* idxAddr, __ubuf__ float* dat
 
     preg = AscendC::Reg::UpdateMask<uint32_t>(count);
 
-    AscendC::Reg::LoadAlign<uint32_t, AscendC::Reg::LoadDist::DIST_E2B_B32>(
-        idxReg, idxAddr);                                  // 前 8 个连续索引 → 每索引一块
+    // 寄存器内直接生成倒序索引 idx[i]=63-i，免去 UB 索引与 E2B 展开
+    AscendC::Reg::Arange<int32_t, AscendC::Reg::IndexOrder::DECREASE_ORDER>(
+        (AscendC::Reg::RegTensor<int32_t>&)idxReg, 0);     // 标量取最小值 0 → idx[i]=63-i
 
-    AscendC::Reg::Gather<float, float, uint32_t>(vregOut, dataAddr, idxReg, preg);   // 离散收集
+    AscendC::Reg::Gather<float, float, uint32_t>(vregOut, dataAddr, idxReg, preg);   // 逐 lane 离散收集
 
     AscendC::Reg::StoreAlign<float, AscendC::Reg::StoreDist::DIST_NORM>(
         outAddr, vregOut, preg);                           // 连续写出
 }
 ```
 
-实测输出（data[i]=i，倒序索引 idx[j]=63-j）：
+实测输出（data[i]=i，倒序索引 idx[i]=63-i）：
 
 ```text
-[scene7] idx[0..3]=63 62 61 60  data[0..3]=0.000000 1.000000 2.000000 3.000000
-[scene7] out[0..3]=63.000000 63.000000 63.000000 63.000000 | out[7]=63.000000 out[8]=62.000000 | out[63]=56.000000
+[scene7] data[0..3]=0.000000 1.000000 2.000000 3.000000 (data[i]=i)
+[scene7] out[0..3]=63.000000 62.000000 61.000000 60.000000 | out[62]=1.000000 out[63]=0.000000 (idx[i]=63-i)
 ```
 
-64 lane 输出只消费了 idx[0..7]=63..56，每索引重复 8 次，体现了 E2B 的「广播到 32B」语义：索引 63 被复制到 out[0..7]，索引 62 被复制到 out[8..15]，依此类推。
+每个 lane 独立寻址 `out[i]=data[idx[i]]=data[63-i]`，64 个输出互不重复，整体是 data 的逆序拷贝：out[0]=data[63]=63，out[63]=data[0]=0。
 
-> 完整源码：[`src/scene6_block_copy.asc`](src/scene6_block_copy.asc)　[`src/scene7_gather_e2b.asc`](src/scene7_gather_e2b.asc)
+> 完整源码：[`src/scene6_block_copy.asc`](src/scene6_block_copy.asc)　[`src/scene7_gather_arange.asc`](src/scene7_gather_arange.asc)
 
 ---
 
@@ -488,13 +480,13 @@ AscendC::Reg::StoreUnAlignPost(yAddr, ureg, 0);           // ③ 刷尾，漏掉
 | `POST_MODE_UPDATE` | **2551** | 循环内多个地址同步线性前进 | 地址按引用被改写，**不能再手动 `+offset`** |
 | `AddrReg` | 483 | 多维 / 不连续偏移、gather | `CreateAddrReg` 在寄存器内算偏移，多占一个地址寄存器 |
 
-`POST_MODE_UPDATE` 用量 2551，比任何单个 `dist` 都高——生产代码里基本是默认做法。最常见的坑是用了它之后又手动 `yAddr + i*VL`，地址被推进两次导致错位：**用了 UPDATE 就别再手动加偏移。**
+`POST_MODE_UPDATE` 用量 2551，比任何单个 `dist` 都高，生产代码里基本是默认做法。最常见的坑是用了它之后又手动 `yAddr + i*VL`，地址被推进两次导致错位：**用了 UPDATE 就别再手动加偏移。**
 
 ---
 
 ## 注意事项与常见误区
 
-各模式的坑已在对应小节展开，跨模式的共性规律汇总于此。除对齐违例当场抛 507035 外，其余条目的共同点是静默出错——编译通过、运行不崩，只有结果不对。标注「实测」的条目在 `src/` 对应示例中有复现：
+各模式的坑已在对应小节展开，跨模式的共性规律汇总于此。除对齐违例当场抛 507035 外，其余条目的共同点是静默出错：编译通过、运行不崩，只有结果不对。标注「实测」的条目在 `src/` 对应示例中有复现：
 
 | 误区 | 后果 | 正解 | 验证 |
 |---|---|---|---|
@@ -505,7 +497,6 @@ AscendC::Reg::StoreUnAlignPost(yAddr, ureg, 0);           // ③ 刷尾，漏掉
 | `FIRST_ELEMENT` 输出偏移按 VL 推进 | 输出稀疏、归并读到零 | 偏移 `+i` 逐元素推进 | 实测（scene4） |
 | `dataBlockStride` 按字节/元素填 | 写到错误位置 | 单位是 32 B 块 | 实测（scene6） |
 | 当作 BLOCK_COPY 的 mask 按块算 | 半块按整块处理、多写或少写 | mask 是逐元素粒度 | 实测（scene6） |
-| 按 64 索引规划单轮 E2B+Gather | 只消费前 8 个索引、输出块内重复 | 以 8 索引为步长多轮 | 实测（scene7） |
 | `POST_MODE_UPDATE` 后再手动加偏移 | 地址双重推进、错位 | UPDATE 与手动偏移二选一 | — |
 | `StoreUnAlign` 漏 `StoreUnAlignPost` | 尾部残余丢失 | 三件套配齐，重载配对 | scene10 尾段由 Post 刷出 |
 | 同地址存 mask 后立即读回 | 概率性读到全 0 | 插 `LocalMemBar<VEC_STORE, VEC_LOAD>` | 实测（scene9） |
@@ -551,4 +542,4 @@ cmake --build build --parallel        # 或 --target scene1_dist_norm
 ./build/Samples/1_Features/memory_optimization/reg_data_movement/scene1_dist_norm
 ```
 
-10 个示例（scene1–scene10）一一对应正文场景，结构一致：`__simd_vf__` 函数承载搬运指令，kernel 桥接 GM ↔ UB 并以 `AscendC::PRINTF` 打印关键数据，host 侧用确定性输入与预填校验值做逐元素校验，输出 `PASSED` / `FAILED`。
+10 个示例（scene1~scene10）一一对应正文场景，结构一致：`__simd_vf__` 函数承载搬运指令，kernel 桥接 GM ↔ UB 并以 `AscendC::PRINTF` 打印关键数据，host 侧用确定性输入与预填校验值做逐元素校验，输出 `PASSED` / `FAILED`。

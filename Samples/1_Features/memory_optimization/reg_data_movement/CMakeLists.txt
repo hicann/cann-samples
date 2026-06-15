@@ -23,7 +23,7 @@ set(REG_DM_SCENES
     scene4_first_element
     scene5_brc_b32
     scene6_block_copy
-    scene7_gather_e2b
+    scene7_gather_arange
     scene8_dintlv_intlv
     scene9_mask_dist
     scene10_unalign
