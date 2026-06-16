@@ -65,12 +65,6 @@ inline T FloorAlign(T a, T b)
     return a / b * b;
 }
 
-enum class DataType
-{
-    FP4,
-    FP8
-};
-
 inline uint64_t ParsePositiveUint64(const char* arg, const char* name)
 {
     std::string value(arg);
