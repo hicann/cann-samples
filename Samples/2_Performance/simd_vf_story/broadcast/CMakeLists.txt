@@ -9,11 +9,4 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(matmul_story)
-add_subdirectory(grouped_matmul_story)
-add_subdirectory(rms_norm_quant_story)
-add_subdirectory(full_quant_fused_infer_attention_score_story)
-add_subdirectory(moe_init_routing_story)
-add_subdirectory(moe_dispatch_and_combine_story)
-add_subdirectory(kv_rms_norm_rope_cache_story)
-add_subdirectory(simd_vf_story)
+add_simd_vf_story_case(broadcast)
