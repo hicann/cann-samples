@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1340" height="660" viewBox="0 0 1340 660" font-family="PingFang SC, Noto Sans CJK SC, sans-serif">
+<text x="670" y="38" font-size="23" fill="#3D3D3A" font-weight="800" text-anchor="middle">乱序执行：无依赖的指令可以重叠，相邻迭代之间尤其明显</text>
+<text x="670" y="64" font-size="14" fill="#73726C" font-weight="400" text-anchor="middle">循环体 out = exp(a) × √b + c —— 先 Load a/b，Exp、Sqrt 互不依赖，Mul 等两者、Add 等 Mul，末尾 Store 回写</text>
+
+<!-- divider -->
+<line x1="450" y1="92" x2="450" y2="628" stroke="#ECEBE7" stroke-width="1.6"/>
+
+<!-- ================= LEFT: DAG of one iteration ================= -->
+<text x="235" y="112" font-size="17" fill="#3D3D3A" font-weight="700" text-anchor="middle">一次迭代的指令依赖（DAG）</text>
+
+<!-- Load nodes (memory ops, gray) -->
+<rect x="60" y="126" width="110" height="40" rx="9" fill="#F0EFEA" stroke="#A8A79F" stroke-width="1.8"/>
+<text x="115" y="151" font-size="15" fill="#5A594F" font-weight="700" text-anchor="middle">Load a</text>
+<rect x="280" y="126" width="110" height="40" rx="9" fill="#F0EFEA" stroke="#A8A79F" stroke-width="1.8"/>
+<text x="335" y="151" font-size="15" fill="#5A594F" font-weight="700" text-anchor="middle">Load b</text>
+
+<!-- independence bracket over Exp / Sqrt -->
+<rect x="48" y="200" width="374" height="60" rx="10" fill="none" stroke="#C77400" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="235" y="282" font-size="13" fill="#C77400" font-weight="700" text-anchor="middle">两条链各读各的输入，互不依赖 → 可并行</text>
+
+<!-- Exp / Sqrt nodes -->
+<rect x="60" y="208" width="110" height="46" rx="9" fill="#EAE8FB" stroke="#534AB7" stroke-width="2"/>
+<text x="115" y="230" font-size="16" fill="#3C3489" font-weight="700" text-anchor="middle">Exp</text>
+<text x="115" y="246" font-size="11" fill="#6258C4" text-anchor="middle">e = exp(a)</text>
+
+<rect x="280" y="208" width="110" height="46" rx="9" fill="#EAE8FB" stroke="#534AB7" stroke-width="2"/>
+<text x="335" y="230" font-size="16" fill="#3C3489" font-weight="700" text-anchor="middle">Sqrt</text>
+<text x="335" y="246" font-size="11" fill="#6258C4" text-anchor="middle">s = √b</text>
+
+<!-- Mul node -->
+<rect x="170" y="306" width="130" height="46" rx="9" fill="#EAE8FB" stroke="#534AB7" stroke-width="2.4"/>
+<text x="235" y="328" font-size="16" fill="#3C3489" font-weight="700" text-anchor="middle">Mul</text>
+<text x="235" y="344" font-size="11" fill="#6258C4" text-anchor="middle">m = e × s</text>
+
+<!-- Add node -->
+<rect x="170" y="402" width="130" height="46" rx="9" fill="#EAE8FB" stroke="#534AB7" stroke-width="2.4"/>
+<text x="235" y="424" font-size="16" fill="#3C3489" font-weight="700" text-anchor="middle">Add</text>
+<text x="235" y="440" font-size="11" fill="#6258C4" text-anchor="middle">out = m + c</text>
+<text x="318" y="429" font-size="12" fill="#A8A79F" text-anchor="start">+ c</text>
+
+<!-- Store node (memory op, gray) -->
+<rect x="170" y="498" width="130" height="40" rx="9" fill="#F0EFEA" stroke="#A8A79F" stroke-width="1.8"/>
+<text x="235" y="523" font-size="15" fill="#5A594F" font-weight="700" text-anchor="middle">Store out</text>
+
+<!-- edges Load->Exp, Load->Sqrt -->
+<line x1="115" y1="166" x2="115" y2="204" stroke="#A8A79F" stroke-width="1.8"/>
+<polygon points="115,208 110,198 120,198" fill="#A8A79F"/>
+<line x1="335" y1="166" x2="335" y2="204" stroke="#A8A79F" stroke-width="1.8"/>
+<polygon points="335,208 330,198 340,198" fill="#A8A79F"/>
+
+<!-- edges Exp->Mul, Sqrt->Mul -->
+<line x1="120" y1="254" x2="205" y2="304" stroke="#534AB7" stroke-width="2" stroke-linecap="round"/>
+<polygon points="208,306 198,303 203,296" fill="#534AB7"/>
+<line x1="330" y1="254" x2="265" y2="304" stroke="#534AB7" stroke-width="2" stroke-linecap="round"/>
+<polygon points="262,306 272,296 267,303" fill="#534AB7"/>
+<!-- edge Mul->Add -->
+<line x1="235" y1="352" x2="235" y2="398" stroke="#534AB7" stroke-width="2" stroke-linecap="round"/>
+<polygon points="235,402 230,392 240,392" fill="#534AB7"/>
+<!-- edge Add->Store -->
+<line x1="235" y1="448" x2="235" y2="494" stroke="#A8A79F" stroke-width="1.8" stroke-linecap="round"/>
+<polygon points="235,498 230,488 240,488" fill="#A8A79F"/>
+<text x="312" y="378" font-size="12" fill="#73726C" font-weight="700" text-anchor="start">依赖链</text>
+
+<!-- ================= RIGHT: execution pipeline ================= -->
+<text x="895" y="112" font-size="17" fill="#3D3D3A" font-weight="700" text-anchor="middle">两轮迭代的执行流水（按周期）</text>
+
+<!-- legend (stacked, in the blank space to the right of the plot) -->
+<rect x="1180" y="150" width="16" height="14" rx="3" fill="#EAE8FB" stroke="#534AB7" stroke-width="2"/>
+<text x="1202" y="162" font-size="13" fill="#3D3D3A" text-anchor="start">第一轮迭代</text>
+<rect x="1180" y="180" width="16" height="14" rx="3" fill="#DDF1E9" stroke="#0F8A66" stroke-width="2"/>
+<text x="1202" y="192" font-size="13" fill="#3D3D3A" text-anchor="start">第二轮迭代</text>
+<rect x="1180" y="210" width="16" height="14" rx="3" fill="#F0EFEA" stroke="#A8A79F" stroke-width="2"/>
+<text x="1202" y="222" font-size="13" fill="#3D3D3A" text-anchor="start">访存 Load/Store</text>
+
+<!-- cycle gridlines: x0=600, 26px/cycle, c0..c22 -->
+<line x1="600" y1="128" x2="600" y2="558" stroke="#ECEBE7" stroke-width="1.3"/><text x="600" y="577" font-size="12" fill="#73726C" text-anchor="middle">0</text>
+<line x1="652" y1="128" x2="652" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="652" y="577" font-size="12" fill="#73726C" text-anchor="middle">2</text>
+<line x1="704" y1="128" x2="704" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="704" y="577" font-size="12" fill="#73726C" text-anchor="middle">4</text>
+<line x1="756" y1="128" x2="756" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="756" y="577" font-size="12" fill="#73726C" text-anchor="middle">6</text>
+<line x1="808" y1="128" x2="808" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="808" y="577" font-size="12" fill="#73726C" text-anchor="middle">8</text>
+<line x1="860" y1="128" x2="860" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="860" y="577" font-size="12" fill="#73726C" text-anchor="middle">10</text>
+<line x1="912" y1="128" x2="912" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="912" y="577" font-size="12" fill="#73726C" text-anchor="middle">12</text>
+<line x1="964" y1="128" x2="964" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="964" y="577" font-size="12" fill="#73726C" text-anchor="middle">14</text>
+<line x1="1016" y1="128" x2="1016" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="1016" y="577" font-size="12" fill="#73726C" text-anchor="middle">16</text>
+<line x1="1068" y1="128" x2="1068" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="1068" y="577" font-size="12" fill="#73726C" text-anchor="middle">18</text>
+<line x1="1120" y1="128" x2="1120" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="1120" y="577" font-size="12" fill="#73726C" text-anchor="middle">20</text>
+<line x1="1172" y1="128" x2="1172" y2="558" stroke="#F2F1ED" stroke-width="1.1"/><text x="1172" y="577" font-size="12" fill="#73726C" text-anchor="middle">22</text>
+<text x="1205" y="577" font-size="13" fill="#73726C" font-weight="700" text-anchor="start">周期 →</text>
+
+<!-- ===== iteration 1 bars (indigo; memory ops gray) ===== -->
+<!-- Load a1 c0-2 -->
+<rect x="600" y="132" width="52" height="24" rx="6" fill="#F0EFEA" stroke="#A8A79F" stroke-width="2"/>
+<text x="626" y="149" font-size="12" fill="#5A594F" font-weight="700" text-anchor="middle">Lda₁</text>
+<!-- Load b1 c1-3 -->
+<rect x="626" y="162" width="52" height="24" rx="6" fill="#F0EFEA" stroke="#A8A79F" stroke-width="2"/>
+<text x="652" y="179" font-size="12" fill="#5A594F" font-weight="700" text-anchor="middle">Ldb₁</text>
+<!-- Exp1 c2-6 -->
+<rect x="652" y="192" width="104" height="24" rx="6" fill="#EAE8FB" stroke="#534AB7" stroke-width="2"/>
+<text x="704" y="209" font-size="13" fill="#3C3489" font-weight="700" text-anchor="middle">Exp₁</text>
+<!-- Sqrt1 c3-7 -->
+<rect x="678" y="222" width="104" height="24" rx="6" fill="#EAE8FB" stroke="#534AB7" stroke-width="2"/>
+<text x="730" y="239" font-size="13" fill="#3C3489" font-weight="700" text-anchor="middle">Sqrt₁</text>
+<!-- Mul1 c7-11 -->
+<rect x="782" y="252" width="104" height="24" rx="6" fill="#EAE8FB" stroke="#534AB7" stroke-width="2.4"/>
+<text x="834" y="269" font-size="13" fill="#3C3489" font-weight="700" text-anchor="middle">Mul₁</text>
+<!-- Add1 c11-15 -->
+<rect x="886" y="282" width="104" height="24" rx="6" fill="#EAE8FB" stroke="#534AB7" stroke-width="2.4"/>
+<text x="938" y="299" font-size="13" fill="#3C3489" font-weight="700" text-anchor="middle">Add₁</text>
+<!-- Store1 c15-17 -->
+<rect x="990" y="312" width="52" height="24" rx="6" fill="#F0EFEA" stroke="#A8A79F" stroke-width="2"/>
+<text x="1016" y="329" font-size="12" fill="#5A594F" font-weight="700" text-anchor="middle">St₁</text>
+
+<!-- row labels iter1 -->
+<text x="592" y="149" font-size="12" fill="#73726C" text-anchor="end">Load a₁</text>
+<text x="592" y="179" font-size="12" fill="#73726C" text-anchor="end">Load b₁</text>
+<text x="592" y="209" font-size="12" fill="#73726C" text-anchor="end">Exp₁</text>
+<text x="592" y="239" font-size="12" fill="#73726C" text-anchor="end">Sqrt₁</text>
+<text x="592" y="269" font-size="12" fill="#73726C" text-anchor="end">Mul₁</text>
+<text x="592" y="299" font-size="12" fill="#73726C" text-anchor="end">Add₁</text>
+<text x="592" y="329" font-size="12" fill="#73726C" text-anchor="end">Store₁</text>
+
+<!-- iter1 dependency arrows (the chain that stalls) -->
+<line x1="652" y1="156" x2="652" y2="191" stroke="#9A93D8" stroke-width="1.4"/>
+<line x1="678" y1="186" x2="678" y2="221" stroke="#9A93D8" stroke-width="1.4"/>
+<line x1="756" y1="204" x2="782" y2="252" stroke="#9A93D8" stroke-width="1.4"/>
+<line x1="782" y1="234" x2="782" y2="251" stroke="#9A93D8" stroke-width="1.4"/>
+<line x1="886" y1="264" x2="886" y2="281" stroke="#9A93D8" stroke-width="1.4"/>
+<polygon points="886,282 881,274 891,274" fill="#9A93D8"/>
+<line x1="990" y1="294" x2="990" y2="311" stroke="#9A93D8" stroke-width="1.4"/>
+<polygon points="990,312 985,304 995,304" fill="#9A93D8"/>
+
+<!-- ===== iteration 2 bars (teal; memory ops gray) ===== -->
+<!-- Load a2 c4-6 -->
+<rect x="704" y="348" width="52" height="24" rx="6" fill="#F0EFEA" stroke="#A8A79F" stroke-width="2"/>
+<text x="730" y="365" font-size="12" fill="#5A594F" font-weight="700" text-anchor="middle">Lda₂</text>
+<!-- Load b2 c5-7 -->
+<rect x="730" y="378" width="52" height="24" rx="6" fill="#F0EFEA" stroke="#A8A79F" stroke-width="2"/>
+<text x="756" y="395" font-size="12" fill="#5A594F" font-weight="700" text-anchor="middle">Ldb₂</text>
+<!-- Exp2 c6-10 -->
+<rect x="756" y="408" width="104" height="24" rx="6" fill="#DDF1E9" stroke="#0F8A66" stroke-width="2"/>
+<text x="808" y="425" font-size="13" fill="#0B5A45" font-weight="700" text-anchor="middle">Exp₂</text>
+<!-- Sqrt2 c7-11 -->
+<rect x="782" y="438" width="104" height="24" rx="6" fill="#DDF1E9" stroke="#0F8A66" stroke-width="2"/>
+<text x="834" y="455" font-size="13" fill="#0B5A45" font-weight="700" text-anchor="middle">Sqrt₂</text>
+<!-- Mul2 c11-15 -->
+<rect x="886" y="468" width="104" height="24" rx="6" fill="#DDF1E9" stroke="#0F8A66" stroke-width="2.4"/>
+<text x="938" y="485" font-size="13" fill="#0B5A45" font-weight="700" text-anchor="middle">Mul₂</text>
+<!-- Add2 c15-19 -->
+<rect x="990" y="498" width="104" height="24" rx="6" fill="#DDF1E9" stroke="#0F8A66" stroke-width="2.4"/>
+<text x="1042" y="515" font-size="13" fill="#0B5A45" font-weight="700" text-anchor="middle">Add₂</text>
+<!-- Store2 c19-21 -->
+<rect x="1094" y="528" width="52" height="24" rx="6" fill="#F0EFEA" stroke="#A8A79F" stroke-width="2"/>
+<text x="1120" y="545" font-size="12" fill="#5A594F" font-weight="700" text-anchor="middle">St₂</text>
+
+<!-- row labels iter2 -->
+<text x="696" y="365" font-size="12" fill="#73726C" text-anchor="end">Load a₂</text>
+<text x="722" y="395" font-size="12" fill="#73726C" text-anchor="end">Load b₂</text>
+<text x="592" y="425" font-size="12" fill="#73726C" text-anchor="end">Exp₂</text>
+<text x="592" y="455" font-size="12" fill="#73726C" text-anchor="end">Sqrt₂</text>
+<text x="592" y="485" font-size="12" fill="#73726C" text-anchor="end">Mul₂</text>
+<text x="592" y="515" font-size="12" fill="#73726C" text-anchor="end">Add₂</text>
+<text x="592" y="545" font-size="12" fill="#73726C" text-anchor="end">Store₂</text>
+
+<!-- ===== in-order reference marker + "提前" arrow ===== -->
+<line x1="1042" y1="340" x2="1042" y2="486" stroke="#0F8A66" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="1052" y="404" font-size="12" fill="#0F8A66" font-weight="700" text-anchor="start">顺序执行下</text>
+<text x="1052" y="420" font-size="12" fill="#0F8A66" font-weight="700" text-anchor="start">第二轮在此才发射</text>
+<!-- arrow from the marker line to where Load a2 actually starts -->
+<polyline points="1042,352 736,352 714,346" fill="none" stroke="#0F8A66" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="708,348 719,343 717,351" fill="#0F8A66"/>
+<text x="880" y="344" font-size="13" fill="#0F8A66" font-weight="800" text-anchor="middle">乱序把第二轮提前发射</text>
+
+<text x="890" y="612" font-size="14" fill="#73726C" text-anchor="middle">第二轮的 Load、Exp、Sqrt 与第一轮无依赖，趁第一轮卡在 Mul₁ → Add₁ → Store₁ 链上时提前发射，填满本会空等的周期。</text>
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="430" viewBox="0 0 1360 430" font-family="PingFang SC, Noto Sans CJK SC, sans-serif">
+<text x="680" y="78" font-size="24" fill="#3D3D3A" font-weight="800" text-anchor="middle">MemBase 写法：Vector 占用率 &gt; 95%，看似满负荷</text>
+<text x="680" y="120" font-size="20" fill="#73726C" font-weight="400" text-anchor="middle">但这段「忙碌」拆开看分三段——只有中间在真正计算</text>
+
+<!-- stage 1: read (data movement) -->
+<rect x="130" y="175" width="298" height="96" rx="12" fill="#FBE7DD" stroke="#D85A30" stroke-width="2.4"/>
+<text x="279" y="212" font-size="20" fill="#B5471F" font-weight="700" text-anchor="middle">UB → Reg</text>
+<text x="279" y="240" font-size="15" fill="#B5471F" font-weight="400" text-anchor="middle">读入 · 数据搬运</text>
+
+<!-- stage 2: compute (the real work) -->
+<rect x="432" y="175" width="466" height="96" rx="12" fill="#EEEDFE" stroke="#534AB7" stroke-width="2.4"/>
+<text x="665" y="212" font-size="21" fill="#3C3489" font-weight="700" text-anchor="middle">VALU 计算（Reg → Reg）· 真正在算</text>
+<text x="665" y="240" font-size="16" fill="#3C3489" font-weight="400" text-anchor="middle">mul · tanh · scale</text>
+
+<!-- stage 3: write (data movement) -->
+<rect x="902" y="175" width="328" height="96" rx="12" fill="#FBE7DD" stroke="#D85A30" stroke-width="2.4"/>
+<text x="1066" y="212" font-size="20" fill="#B5471F" font-weight="700" text-anchor="middle">Reg → UB</text>
+<text x="1066" y="240" font-size="15" fill="#B5471F" font-weight="400" text-anchor="middle">写回 · 数据搬运</text>
+
+<!-- callout bracket pointing at the two movement stages -->
+<line x1="279" y1="335" x2="1066" y2="335" stroke="#D85A30" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="279" y1="335" x2="279" y2="294" stroke="#D85A30" stroke-width="3.2" stroke-linecap="round"/>
+<polygon points="279,281 285,294 273,294" fill="#D85A30"/>
+<line x1="1066" y1="335" x2="1066" y2="294" stroke="#D85A30" stroke-width="3.2" stroke-linecap="round"/>
+<polygon points="1066,281 1072,294 1060,294" fill="#D85A30"/>
+<line x1="672" y1="335" x2="672" y2="352" stroke="#D85A30" stroke-width="3.2" stroke-linecap="round"/>
+<text x="672" y="382" font-size="19" fill="#D85A30" font-weight="700" text-anchor="middle">RegBase 要拿掉的，正是前后这两段搬运</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="500" viewBox="0 0 1360 500" font-family="PingFang SC, Noto Sans CJK SC, sans-serif">
+<!-- column headers -->
+<text x="370" y="92" font-size="17" fill="#73726C" font-weight="700" text-anchor="middle">① device 侧 kernel：准备数据 · 发起调用</text>
+<text x="1030" y="92" font-size="17" fill="#73726C" font-weight="700" text-anchor="middle">② VF：在寄存器上完成计算</text>
+
+<!-- left panel: kernel -->
+<rect x="60" y="116" width="620" height="320" rx="14" fill="#F7F7F5" stroke="#C9C8C3" stroke-width="2"/>
+<text x="84" y="160" font-size="20" fill="#3D3D3A" font-weight="800" text-anchor="start">Kernel：pure_vf_kernel</text>
+<text x="84" y="184" font-size="13.5" fill="#73726C" font-weight="400" text-anchor="start">__global__  __aicore__  __vector__</text>
+
+<rect x="84" y="202" width="572" height="56" rx="10" fill="#E1F5EE" stroke="#0F6E56" stroke-width="2"/>
+<text x="370" y="236" font-size="17" fill="#085041" font-weight="700" text-anchor="middle">在 UB 上准备数据：xLocal · yLocal · zLocal</text>
+
+<rect x="84" y="272" width="572" height="62" rx="10" fill="#F0F0EF" stroke="#B9B8B3" stroke-width="1.8"/>
+<text x="370" y="299" font-size="15.5" fill="#3D3D3A" font-weight="600" text-anchor="middle">loopNum = (total + vectorLength - 1) / vectorLength</text>
+<text x="370" y="321" font-size="13" fill="#73726C" font-weight="400" text-anchor="middle">向上取整：不能整除就多跑一轮，尾块交给 mask</text>
+
+<rect x="84" y="348" width="572" height="72" rx="10" fill="#FFFFFF" stroke="#534AB7" stroke-width="1.8"/>
+<text x="370" y="372" font-size="13.5" fill="#73726C" font-weight="700" text-anchor="middle">通过 asc_vf_call 发起调用</text>
+<text x="104" y="402" font-size="13" text-anchor="start" font-family="ui-monospace, 'DejaVu Sans Mono', monospace"><tspan fill="#73726C" font-weight="600">asc_vf_call&lt;</tspan><tspan fill="#534AB7" font-weight="800">muladd_vf</tspan><tspan fill="#73726C" font-weight="600">&gt;(xLocal, yLocal, zLocal, total, loopNum)</tspan></text>
+
+<!-- call arrow -->
+<line x1="688" y1="276" x2="745" y2="276" stroke="#73726C" stroke-width="2.8" stroke-linecap="round"/>
+<polygon points="758,276 745,282 745,270" fill="#73726C"/>
+<text x="720" y="262" font-size="14" fill="#73726C" font-weight="700" text-anchor="middle">调用</text>
+
+<!-- right panel: VF -->
+<rect x="770" y="116" width="530" height="320" rx="14" fill="#EEEDFE" stroke="#534AB7" stroke-width="2.4"/>
+<text x="796" y="166" font-size="22" fill="#3C3489" font-weight="800" text-anchor="start">VF：muladd_vf</text>
+<text x="796" y="192" font-size="14" fill="#73726C" font-weight="400" text-anchor="start">用 __simd_vf__ 标记的函数</text>
+<line x1="796" y1="212" x2="1274" y2="212" stroke="#534AB7" stroke-width="1" stroke-opacity="0.35"/>
+<text x="796" y="252" font-size="17" fill="#3D3D3A" font-weight="700" text-anchor="start">在 Vector 寄存器上逐轮执行：</text>
+
+<!-- loop body container -->
+<rect x="782" y="270" width="506" height="82" rx="12" fill="none" stroke="#534AB7" stroke-width="1.8" stroke-dasharray="6 5"/>
+<!-- legend straddling the top border -->
+<rect x="928" y="262" width="212" height="16" fill="#EEEDFE"/>
+<text x="1034" y="275" font-size="13.5" fill="#3C3489" font-weight="700" text-anchor="middle"><tspan font-size="16">↻</tspan>  循环体 · 重复 loopNum 轮</text>
+
+<!-- execution chips -->
+<rect x="796" y="286" width="150" height="46" rx="10" fill="#FBE7DD" stroke="#D85A30" stroke-width="2.2"/>
+<text x="871" y="315" font-size="14.5" fill="#B5471F" font-weight="700" text-anchor="middle">Load UB→Reg</text>
+<line x1="950" y1="309" x2="966" y2="309" stroke="#73726C" stroke-width="2.4" stroke-linecap="round"/>
+<polygon points="976,309 966,313.6 966,304.4" fill="#73726C"/>
+<rect x="980" y="286" width="120" height="46" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="2.2"/>
+<text x="1040" y="315" font-size="14.5" fill="#3C3489" font-weight="700" text-anchor="middle">Mul · Add</text>
+<line x1="1104" y1="309" x2="1120" y2="309" stroke="#73726C" stroke-width="2.4" stroke-linecap="round"/>
+<polygon points="1130,309 1120,313.6 1120,304.4" fill="#73726C"/>
+<rect x="1134" y="286" width="140" height="46" rx="10" fill="#FBE7DD" stroke="#D85A30" stroke-width="2.2"/>
+<text x="1204" y="315" font-size="14.5" fill="#B5471F" font-weight="700" text-anchor="middle">Store Reg→UB</text>
+
+<text x="796" y="378" font-size="14" fill="#73726C" font-weight="400" text-anchor="start">尾块（最后一轮）由 mask 自适应（数据流见第五节）</text>
+
+<!-- captions -->
+<text x="680" y="464" font-size="14" fill="#73726C" font-weight="400" text-anchor="middle">“&lt; &gt;” 里是模板参数（指定调用哪个 VF）， “( )” 里是运行时实参（数据地址与循环次数）</text>
+<text x="680" y="488" font-size="13.5" fill="#8A897F" font-weight="400" text-anchor="middle">示例把数据直接声明在 UB 上，省去了 GM ↔ UB 搬运；生产算子还需处理这层。</text>
+</svg>

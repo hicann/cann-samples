@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="440" viewBox="0 0 1360 440" font-family="PingFang SC, Noto Sans CJK SC, sans-serif">
+<!-- UB bar -->
+<rect x="150" y="56" width="1060" height="64" rx="12" fill="#E1F5EE" stroke="#0F6E56" stroke-width="2.4"/>
+<text x="680" y="96" font-size="24" fill="#085041" font-weight="700" text-anchor="middle">UB (Unified Buffer)</text>
+
+<!-- step boxes -->
+<rect x="325" y="310" width="150" height="58" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="2.2"/>
+<text x="400" y="346" font-size="21" fill="#3C3489" font-weight="700" text-anchor="middle">步骤 1</text>
+<rect x="605" y="310" width="150" height="58" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="2.2"/>
+<text x="680" y="346" font-size="21" fill="#3C3489" font-weight="700" text-anchor="middle">步骤 2</text>
+<rect x="885" y="310" width="150" height="58" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="2.2"/>
+<text x="960" y="346" font-size="21" fill="#3C3489" font-weight="700" text-anchor="middle">步骤 3</text>
+<text x="1075" y="346" font-size="22" fill="#73726C" font-weight="700" text-anchor="start">…</text>
+
+<!-- step1 Load (down) + Store (up) -->
+<line x1="365" y1="120" x2="365" y2="295" stroke="#D85A30" stroke-width="3.0" stroke-linecap="round"/>
+<polygon points="365,307 359.5,295 370.5,295" fill="#D85A30"/>
+<circle cx="365" cy="120" r="6" fill="#D85A30"/>
+<line x1="435" y1="310" x2="435" y2="132" stroke="#D85A30" stroke-width="3.0" stroke-linecap="round"/>
+<polygon points="435,120 440.5,132 429.5,132" fill="#D85A30"/>
+<circle cx="435" cy="310" r="6" fill="#D85A30"/>
+<text x="352" y="222" font-size="15" fill="#D85A30" font-weight="700" text-anchor="end">取数</text>
+<text x="448" y="222" font-size="15" fill="#D85A30" font-weight="700" text-anchor="start">写回</text>
+
+<!-- step2 Load (down) + Store (up) -->
+<line x1="645" y1="120" x2="645" y2="295" stroke="#D85A30" stroke-width="3.0" stroke-linecap="round"/>
+<polygon points="645,307 639.5,295 650.5,295" fill="#D85A30"/>
+<circle cx="645" cy="120" r="6" fill="#D85A30"/>
+<line x1="715" y1="310" x2="715" y2="132" stroke="#D85A30" stroke-width="3.0" stroke-linecap="round"/>
+<polygon points="715,120 720.5,132 709.5,132" fill="#D85A30"/>
+<circle cx="715" cy="310" r="6" fill="#D85A30"/>
+
+<!-- step3 Load (down) + Store (up) -->
+<line x1="925" y1="120" x2="925" y2="295" stroke="#D85A30" stroke-width="3.0" stroke-linecap="round"/>
+<polygon points="925,307 919.5,295 930.5,295" fill="#D85A30"/>
+<circle cx="925" cy="120" r="6" fill="#D85A30"/>
+<line x1="995" y1="310" x2="995" y2="132" stroke="#D85A30" stroke-width="3.0" stroke-linecap="round"/>
+<polygon points="995,120 1000.5,132 989.5,132" fill="#D85A30"/>
+<circle cx="995" cy="310" r="6" fill="#D85A30"/>
+
+<text x="680" y="416" font-size="17" fill="#D85A30" font-weight="700" text-anchor="middle">每一步运算都要往返 UB —— 中间结果反复落地，搬运开销大</text>
+</svg>
