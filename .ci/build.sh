@@ -32,6 +32,7 @@ fi
 # 清理旧的构建产物
 rm -rf build
 rm -rf build_out
+rm -f build_out_*.zip
 
 # CMake 配置
 cmake -S . -B build -DNPU_ARCH="${NPU_ARCH}"
