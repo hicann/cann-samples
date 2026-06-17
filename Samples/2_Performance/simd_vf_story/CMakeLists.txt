@@ -16,8 +16,10 @@ if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
     return()
 endif()
 
+# Build one executable per <case>/src/*.asc file, plus a simd_vf_story_<case> aggregate target.
+# All targets are defined here; no per-case CMakeLists is needed.
 function(add_simd_vf_story_case CASE_NAME)
-    file(GLOB ASC_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.asc)
+    file(GLOB ASC_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${CASE_NAME}/src/*.asc)
 
     set(CASE_TARGETS "")
     foreach(ASC_FILE ${ASC_FILES})
@@ -25,6 +27,10 @@ function(add_simd_vf_story_case CASE_NAME)
         set(TARGET_NAME "simd_vf_story_${CASE_NAME}_${TARGET_SUFFIX}")
 
         add_executable(${TARGET_NAME} ${ASC_FILE})
+        # Keep the per-case output layout: build/.../simd_vf_story/<case>/<target>
+        set_target_properties(${TARGET_NAME} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CASE_NAME}
+        )
         target_compile_options(${TARGET_NAME} PRIVATE
             "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
             "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
@@ -54,10 +60,15 @@ function(add_simd_vf_story_case CASE_NAME)
 endfunction()
 
 set_property(GLOBAL PROPERTY SIMD_VF_STORY_CASE_TARGETS "")
-file(GLOB CHILD_CMAKES CONFIGURE_DEPENDS */CMakeLists.txt)
-foreach(CHILD_CMAKE ${CHILD_CMAKES})
-    get_filename_component(CHILD_DIR ${CHILD_CMAKE} DIRECTORY)
-    add_subdirectory(${CHILD_DIR})
+
+# Each subdirectory that owns a src/ folder is a case (broadcast / elemwise / reduce).
+file(GLOB CASE_SRC_DIRS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*/src)
+foreach(CASE_SRC_DIR ${CASE_SRC_DIRS})
+    if(IS_DIRECTORY ${CASE_SRC_DIR})
+        get_filename_component(CASE_DIR ${CASE_SRC_DIR} DIRECTORY)
+        get_filename_component(CASE_NAME ${CASE_DIR} NAME)
+        add_simd_vf_story_case(${CASE_NAME})
+    endif()
 endforeach()
 
 get_property(SIMD_VF_STORY_CASE_TARGETS GLOBAL PROPERTY SIMD_VF_STORY_CASE_TARGETS)
