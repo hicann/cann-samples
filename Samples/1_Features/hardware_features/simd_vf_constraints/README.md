@@ -99,8 +99,6 @@ __simd_vf__ inline void ManyFloatArgs008VF(__ubuf__ float* xUbAddr, __ubuf__ flo
 
 示例源码：`src/args_count.asc::ManyFloatArgs008VF`
 
-![8 floats](images/args_8float.png)
-
 #### 反例
 
 **不推荐：** 传入 32 个及以上 `float` 参数。功能可以运行，但 `PUSH_PB` 数量增加，SIMD VF 启动延迟变大。
@@ -128,10 +126,6 @@ __simd_vf__ inline void ManyFloatArgs032VF(__ubuf__ float* xUbAddr, __ubuf__ flo
 SIMD VF 内标量寄存器溢出导致的大量 `SLDI` 指令：
 
 ![64 floats](images/args_64float_sldi.png)
-
-示例源码：`src/args_count.asc::ManyFloatArgs128VF`, `src/args_count.asc::ManyFloatArgs256VF`，流水图：
-
-![128 floats](images/args_128float.png)
 
 #### 编译运行
 
@@ -338,6 +332,16 @@ for (uint16_t i = 0; i < bound; ++i) {
     bound = nextBound;
 }
 ```
+
+按照标准写法一般不会退化为 Software Loop，但对于“可能退化”的场景，就要看编译器的优化能力了。若怀疑性能差是由于 Hardware Loop 退化为 Software Loop，通常需要通过仿真流水来分析。
+
+先看标准 Hardware Loop 的流水作为对照。`RVECSU` 泳道（Aux Scalar）几乎没有控制流指令，循环由 `VLOOPv2` 驱动：
+
+![hwloop_good_standard](images/hwloop_good_standard.png)
+
+再看退化为 Software Loop 的现象。如下流水图所示，`VLOOPv2` 指令缺失，`RVECSU` 泳道出现 `RV_SCBZI`、`RV_SJUMPI` 等控制流指令：
+
+![hwloop_bad_continue](images/hwloop_bad_continue.png)
 
 #### 编译运行
 

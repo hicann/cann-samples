@@ -8,5 +8,8 @@
 ### [vector_function](./vector_function)
 演示 Vector Function 编程概念，通过 GeLU 激活函数展示传统实现与 VF 优化实现的性能对比，揭示计算融合的优势。
 
+### [simd_vf_constraints](./simd_vf_constraints)
+汇总 Ascend950 上 SIMD VF 的常见编程约束，涵盖函数定义与入参、`asc_vf_call` 调用、Hardware Loop、LocalMemBar 流水保序，以及寄存器、标量、地址与数据访问等硬件资源限制，每条约束均提供对应的正例与反例。
+
 ### [hif8](./hif8)
 演示 HiFloat8（HIF8）量化数据类型的应用，展示 Quantize 算子的实现，支持 8 位浮点格式以优化存储和计算效率。
