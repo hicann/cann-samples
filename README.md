@@ -1,19 +1,15 @@
 # cann-samples
 
-## 🔥Latest News
-
-- [2026/05] ops-samples在matmul_story新增[matmul_a16w16](Samples/2_Performance/matmul_story/matmul_recipes/examples/matmul_a16w16/README.md) streamK等高性能example，并在既有quant_matmul_mxfp4、quant_matmul_mxfp8 MX量化矩阵乘中支持Weight NZ。
-- [2026/05] ops-samples在grouped_matmul_story新增[weight_quant_grouped_matmul_mxfp8fp4](Samples/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/weight_quant_grouped_matmul_mxfp8fp4/README.md) MXA8W4量化example，并在既有quant_grouped_matmul_mxfp4、quant_grouped_matmul_mxfp8分组矩阵乘中支持Weight NZ。
-- [2026/04] ops-samples新增[matmul_story](Samples/2_Performance/matmul_story/README.md)、[grouped_matmul_story](Samples/2_Performance/grouped_matmul_story/README.md)：matmul_story提供MX矩阵乘分步教程（matmul_tutorials）与matmul_recipes高性能算子样例（MXFP4/MXFP8/A16W16等）；grouped_matmul_story提供分组矩阵乘grouped_matmul_recipes样例（MXFP4/MXFP8）及配套性能文档。
-- [2026/04] ops-samples中矩阵乘类example更新，引入ops-tensor子模块，涉及兼容性，详见[兼容性声明](#兼容性声明)。
-- [2026/03] ops-samples更名为cann-samples。
-- [2026/02] ops-samples项目上线，提供算子领域高性能实战演进样例与体系化调优知识库。
-
 ## 🚀概述
 
 `cann-samples` 是 [CANN](https://hiascend.com/software/cann)（Compute Architecture for Neural Networks）算子领域的实战样例仓库，提供高性能实现示例与体系化调优知识库。
 
 本仓已集成代码仓库智能体，点击 [![Zread](https://img.shields.io/badge/Zread-Ask_AI-_.svg?style=flat&color=0052D9&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/hicann/cann-samples) 徽章，进入其专属页面，开启在线智能代码学习与知识问答体验！
+
+## 🔥Latest News
+
+- [2026/05] cann-samples在matmul_story新增[matmul_a16w16](Samples/2_Performance/matmul_story/matmul_recipes/examples/matmul_a16w16/README.md) streamK等高性能example，并在既有quant_matmul_mxfp4、quant_matmul_mxfp8 MX量化矩阵乘中支持Weight NZ。
+- [2026/05] cann-samples在grouped_matmul_story新增[weight_quant_grouped_matmul_mxfp8fp4](Samples/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/weight_quant_grouped_matmul_mxfp8fp4/README.md) MXA8W4量化example，并在既有quant_grouped_matmul_mxfp4、quant_grouped_matmul_mxfp8分组矩阵乘中支持Weight NZ。
 
 ## 📝环境部署
 
@@ -29,7 +25,7 @@
 
 ### 兼容性声明
 
-ops-samples中矩阵乘类example更新，引入ops-tensor子模块。涉及Tensor API的样例需使用上表中已验证通过的 Toolkit 版本构建，并按下文[ops-tensor子模块与Toolkit约束](#ops-tensor子模块与toolkit约束)初始化子模块、配置环境变量。
+cann-samples中矩阵乘类example更新，引入ops-tensor子模块。涉及Tensor API的样例需使用上表中已验证通过的 Toolkit 版本构建，并按下文[ops-tensor子模块与Toolkit约束](#ops-tensor子模块与toolkit约束)初始化子模块、配置环境变量。
 
 toolkit 安装包文件名格式如下：
 
