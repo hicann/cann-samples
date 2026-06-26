@@ -62,6 +62,7 @@ toolkit 安装包文件名格式如下：
    - python >= 3.8.0
    - zip
    - git
+   - python三方库依赖：通过`pip3 install -r requirements.txt`安装
 
 4. **ops-tensor子模块与Toolkit约束**
 
