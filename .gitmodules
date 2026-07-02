@@ -1,7 +1,7 @@
 [submodule "third_party/shmem"]
 	path = third_party/shmem
 	url = https://gitcode.com/cann/shmem.git
-[submodule "third_party/tensor_api"]
-	path = third_party/tensor_api
+[submodule "third_party/ops-tensor"]
+	path = third_party/ops-tensor
 	url = https://gitcode.com/cann/ops-tensor.git
 	branch = master

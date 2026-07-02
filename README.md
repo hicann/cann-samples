@@ -66,13 +66,13 @@ toolkit 安装包文件名格式如下：
 
 4. **ops-tensor子模块与Toolkit约束**
 
-   - **仓库与路径**：子模块路径为`third_party/tensor_api`，对应上游仓库[ops-tensor](https://gitcode.com/cann/ops-tensor)（默认跟踪`master`，见仓库根目录`.gitmodules`）。
+   - **仓库与路径**：子模块路径为`third_party/ops-tensor`，对应上游仓库[ops-tensor](https://gitcode.com/cann/ops-tensor)（默认跟踪`master`，见仓库根目录`.gitmodules`）。
    - **获取源码**：克隆本仓库时建议执行 `git clone --recurse-submodules <仓库 URL>`；若已克隆未带子模块，在仓库根目录执行：
      ```bash
-     git submodule update --init --recursive third_party/tensor_api
+     git submodule update --init --recursive third_party/ops-tensor
      ```
      若未提前初始化子模块，CMake在构建依赖`cann_samples::tensor_api`的目标时也会尝试执行上述子模块更新命令。
-   - **Toolkit要求**：Tensor API相关样例会使用`third_party/tensor_api/include/tensor_api`以及Toolkit中的Ascend C头文件，因此必须安装完整的CANN Toolkit并先执行`source ${install_path}/ascend-toolkit/set_env.sh`。当前请使用上表中已验证通过的版本构建；Toolkit版本过旧、仅安装Run包或环境变量未生效时，可能出现头文件缺失、符号未定义或编译选项报错。
+   - **Toolkit要求**：Tensor API相关样例会使用`third_party/ops-tensor/include/tensor_api`以及Toolkit中的Ascend C头文件，因此必须安装完整的CANN Toolkit并先执行`source ${install_path}/ascend-toolkit/set_env.sh`。当前请使用上表中已验证通过的版本构建；Toolkit版本过旧、仅安装Run包或环境变量未生效时，可能出现头文件缺失、符号未定义或编译选项报错。
    - **NPU架构**：`matmul_story`、`grouped_matmul_story`额外要求`NPU_ARCH=dav-3510`（Ascend 950）；使用`dav-2201`全量配置工程时，这两项样例会被跳过，属预期行为。
 
 ## ⚡️快速入门
@@ -161,7 +161,7 @@ toolkit 安装包文件名格式如下：
 │   │   └── ...                              # 其它性能调优样例
 │   └── CMakeLists.txt
 ├── third_party                              # 外部依赖（Git 子模块）
-│   ├── tensor_api                           # ops-tensor：Ascend C Tensor API 头文件
+│   ├── ops-tensor                          # ops-tensor：Ascend C Tensor API 头文件
 │   ├── shmem                                # 共享内存相关组件
 │   └── ...                                  # 其它第三方依赖
 ├── cmake                                    # 工程编译配置
