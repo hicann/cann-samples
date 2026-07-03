@@ -66,7 +66,7 @@ auto tensorBgm = AscendC::Te::MakeTensor(AscendC::Te::MakeGMmemPtr(reinterpret_c
 
 1. 编译样例
 
-从项目根目录启动构建，参考项目[README.md](../../../README.md)
+从项目根目录启动构建，参考项目[README.md](../../../../README.md)
 
 在仓库根目录下完成编译和安装后，进入当前样例目录：
 ```shell
