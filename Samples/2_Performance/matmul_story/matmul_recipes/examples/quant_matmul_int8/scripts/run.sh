@@ -1,0 +1,158 @@
+# ----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------------------------------------
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+find_repo_root() {
+    local dir="$SCRIPT_DIR"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -f "$dir/.ci/build.sh" ]]; then
+            echo "$dir"
+            return 0
+        fi
+        dir="$(dirname "$dir")"
+    done
+    return 1
+}
+
+REPO_ROOT="$(find_repo_root || true)"
+if [[ -z "$REPO_ROOT" ]]; then
+    echo "ERROR: cannot locate repo root containing .ci/build.sh"
+    exit 1
+fi
+
+INSTALL_DIR="${REPO_ROOT}/build_out/2_Performance/matmul_story/matmul_recipes/quant_matmul_int8"
+TARGET="quant_matmul_int8"
+SKIP_BUILD=false
+M=""
+K=""
+N=""
+TRANSA=""
+TRANSB=""
+
+usage() {
+    cat <<'EOF'
+Usage: bash run.sh [OPTIONS] m k n [transA transB]
+
+Options:
+  --skip-build       Skip build/install stage.
+  -h, --help         Show this help.
+
+Arguments:
+  m k n              Matrix dimensions (required).
+  transA             Transpose matrix A (optional, default: false).
+  transB             Transpose matrix B (optional, default: true).
+                     transA/transB must be both provided or both omitted.
+                     Supported values: 0/1/true/false/t/f.
+
+Examples:
+  bash run.sh 1024 2048 4096
+  bash run.sh 1024 2048 4096 false true
+  bash run.sh --skip-build 1024 2048 4096 true true
+EOF
+}
+
+normalize_transpose_flag() {
+    local raw="$1"
+    local name="$2"
+    local normalized="${raw,,}"
+    case "$normalized" in
+        0|false|f) echo "false" ;;
+        1|true|t) echo "true" ;;
+        *)
+            echo "ERROR: ${name} must be one of 0/1/true/false/t/f"
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --skip-build)
+            SKIP_BUILD=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "ERROR: unknown option: $1"
+            usage
+            exit 1
+            ;;
+        *)
+            if [[ -z "$M" ]]; then
+                M="$1"
+            elif [[ -z "$K" ]]; then
+                K="$1"
+            elif [[ -z "$N" ]]; then
+                N="$1"
+            elif [[ -z "$TRANSA" ]]; then
+                TRANSA="$1"
+            elif [[ -z "$TRANSB" ]]; then
+                TRANSB="$1"
+            else
+                echo "ERROR: unexpected argument: $1"
+                usage
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$M" || -z "$K" || -z "$N" ]]; then
+    echo "ERROR: m k n are required"
+    usage
+    exit 1
+fi
+
+if [[ -n "$TRANSA" && -z "$TRANSB" ]]; then
+    echo "ERROR: transA/transB must be both provided or both omitted"
+    usage
+    exit 1
+fi
+
+if [[ -z "$TRANSA" && -z "$TRANSB" ]]; then
+    TRANSA="false"
+    TRANSB="true"
+else
+    TRANSA="$(normalize_transpose_flag "$TRANSA" "transA")"
+    TRANSB="$(normalize_transpose_flag "$TRANSB" "transB")"
+fi
+
+if [[ "$SKIP_BUILD" != true ]]; then
+    bash "${REPO_ROOT}/.ci/build.sh" dav-3510
+fi
+
+if [[ ! -d "$INSTALL_DIR" ]]; then
+    echo "ERROR: install dir not found: $INSTALL_DIR"
+    echo "Hint: remove --skip-build for full build/install."
+    exit 1
+fi
+
+cd "$INSTALL_DIR"
+
+if [[ ! -x "./$TARGET" ]]; then
+    echo "ERROR: executable not found: $INSTALL_DIR/$TARGET"
+    exit 1
+fi
+
+echo ""
+echo "[run.sh] Running ${TARGET} with m=${M} k=${K} n=${N} transA=${TRANSA} transB=${TRANSB}"
+echo ""
+
+python3 gen_data.py "$M" "$K" "$N" "$TRANSA" "$TRANSB"
+
+"./$TARGET" "$M" "$K" "$N" "$TRANSA" "$TRANSB"

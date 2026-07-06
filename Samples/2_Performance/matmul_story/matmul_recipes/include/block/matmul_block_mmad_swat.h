@@ -37,6 +37,7 @@ public:
     using LayoutB = LayoutB_;
     using LayoutC = LayoutC_;
     using DispatchPolicy = DispatchPolicy_;
+    using L0CType = typename AscendC::Std::conditional<AscendC::IsSameType<TypeA, int8_t>::value, int32_t, float>::type;
     using TupleShape = AscendC::Shape<int64_t, int64_t, int64_t>;
     using BlockShape = AscendC::Shape<int64_t, int64_t, int64_t, int64_t>;
     static constexpr bool transA =
@@ -142,7 +143,7 @@ public:
         // LoC move out
         auto layoutL0C = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(curM, curN);
         auto tensorL0C =
-            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(l0cOffset), layoutL0C);
+            AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, L0CType>(l0cOffset), layoutL0C);
 
         kL1Iter_ = CeilDiv(k_, kL1_); // k_ >= kL1_
         // Loop of k in L1
