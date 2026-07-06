@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "blaze/utils/common_utils.h"
+#include "blaze/gemm/utils/common_utils.h"
 
 namespace Kernel {
 

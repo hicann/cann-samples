@@ -153,7 +153,7 @@ private:
         constexpr uint32_t UB_ALIGN_SIZE = 32;
         constexpr uint32_t MAX_REPEAT_TIMES = 255;
         constexpr uint32_t ONE_BLK_SIZE = 32;
-        uint64_t usedBlockNum = AscendC::GetBlockNum() * AscendC::GetTaskRation();
+        uint64_t usedBlockNum = AscendC::GetBlockNum() * AscendC::GetTaskRatio();
 
         // Calculate init buffer size in elements
         uint64_t ySize = static_cast<uint64_t>(m) * n;

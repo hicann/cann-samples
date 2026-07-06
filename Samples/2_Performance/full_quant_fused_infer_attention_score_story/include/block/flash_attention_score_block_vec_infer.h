@@ -577,7 +577,7 @@ __aicore__ inline void FABlockVecInfer<TEMPLATE_ARGS>::InitOutputSingleCore(Cons
 TEMPLATES_DEF_NO_DEFAULT
 __aicore__ inline void FABlockVecInfer<TEMPLATE_ARGS>::InitLseOutputSingleCore(ConstInfo<isInfer, hasRope> &constInfo)
 {
-    int64_t coreNum = GetBlockNum() * GetTaskRation();
+    int64_t coreNum = GetBlockNum() * GetTaskRatio();
     auto &initParams = this->tilingData->initOutputParams;
     if (coreNum != 0 && constInfo.aivIdx < coreNum) {
         int64_t singleCoreLseSize = initParams.totalSoftMaxLseOutputSize / coreNum;

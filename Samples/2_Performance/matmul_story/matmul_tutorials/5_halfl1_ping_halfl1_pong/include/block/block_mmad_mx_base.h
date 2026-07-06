@@ -224,9 +224,7 @@ public:
                 auto tensorBlockScaleAL1 = tensorScaleAL1.Slice(AscendC::Te::MakeCoord(0, coordScaleKL1),
                     AscendC::Te::MakeShape(curM, CeilDiv(kL1_, MXFP_DIVISOR_SIZE_LOCAL) * MXFP_MULTI_BASE_SIZE_LOCAL));
                 auto CopyL12L0MxScaleA = AscendC::Te::MakeCopy(::Tile::CopyL12L0MxScaleA3510{});
-                AscendC::Te::Copy(
-                    CopyL12L0MxScaleA, tensorScaleAL0, tensorBlockScaleAL1,
-                    AscendC::Te::MakeCoord(0, kL0Offset));
+                CopyL12L0MxScaleA.Call(tensorScaleAL0, tensorBlockScaleAL1, AscendC::Te::MakeCoord(0, kL0Offset));
 
                 auto layoutScaleBL0 = AscendC::Te::MakeFrameLayout<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
                     CeilDiv(curKL0, MXFP_DIVISOR_SIZE_LOCAL) * MXFP_MULTI_BASE_SIZE_LOCAL, curN);
@@ -239,9 +237,7 @@ public:
                 auto tensorBlockScaleBL1 = tensorScaleBL1.Slice(AscendC::Te::MakeCoord(coordScaleKL1, 0),
                     AscendC::Te::MakeShape(CeilDiv(kL1_, MXFP_DIVISOR_SIZE_LOCAL) * MXFP_MULTI_BASE_SIZE_LOCAL, curN));
                 auto CopyL12L0MxScaleB = AscendC::Te::MakeCopy(::Tile::CopyL12L0MxScaleB3510{});
-                AscendC::Te::Copy(
-                    CopyL12L0MxScaleB, tensorScaleBL0, tensorBlockScaleBL1,
-                    AscendC::Te::MakeCoord(kL0Offset, 0));
+                CopyL12L0MxScaleB.Call(tensorScaleBL0, tensorBlockScaleBL1, AscendC::Te::MakeCoord(kL0Offset, 0));
 
                 AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(l0PingPong_ & 0x1);
                 AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(l0PingPong_ & 0x1);
@@ -275,7 +271,7 @@ AscendC::Te::Mmad(
         }
 
         auto CopyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
-        AscendC::Te::Copy(CopyL0C2GM, gmC, tensorL0C, AscendC::Te::FixpipeParams{FINAL_ACCUMULATION});
+        AscendC::Te::Copy(CopyL0C2GM.with(AscendC::Te::FixpipeParams{FINAL_ACCUMULATION}), gmC, tensorL0C);
 
         if (enableL0cPingPong_) {
             l0cPingPong_++;

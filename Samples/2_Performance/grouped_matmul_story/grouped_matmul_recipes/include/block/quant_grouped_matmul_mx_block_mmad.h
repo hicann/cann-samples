@@ -368,17 +368,13 @@ private:
                 AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, fp8_e8m0_t>(l0Offset),
                 AscendC::Te::MakeFrameLayout<AscendC::Te::ZZLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
                     curM, CeilDiv(curKL0, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE));
-            AscendC::Te::Copy(
-                CopyL12L0MxScaleA3510, tensorScaleAL0, tensorBlockScaleAL1,
-                AscendC::Te::MakeCoord(0, kaL1Offset + kL0Offset));
+            CopyL12L0MxScaleA3510.Call(tensorScaleAL0, tensorBlockScaleAL1, AscendC::Te::MakeCoord(0, kaL1Offset + kL0Offset));
 
             auto tensorScaleBL0 = AscendC::Te::MakeTensor(
                 AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, fp8_e8m0_t>(l0Offset),
                 AscendC::Te::MakeFrameLayout<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
                     CeilDiv(curKL0, GroupedMatmulRecipe::MX_DIVISOR_SIZE) * GroupedMatmulRecipe::MX_MULTI_SIZE, curN));
-            AscendC::Te::Copy(
-                CopyL12L0MxScaleB3510, tensorScaleBL0, tensorBlockScaleBL1,
-                AscendC::Te::MakeCoord(kbL1Offset + kL0Offset, 0));
+            CopyL12L0MxScaleB3510.Call(tensorScaleBL0, tensorBlockScaleBL1, AscendC::Te::MakeCoord(kbL1Offset + kL0Offset, 0));
 
             AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(l0PingPong_ & 0x1);
             AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(l0PingPong_ & 0x1);
@@ -488,8 +484,7 @@ private:
 
         // Single fixpipe for this block's C tile (bf16 out); L0C ping-pong only when enabled by tiling.
         auto CopyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
-        AscendC::Te::Copy(
-            CopyL0C2GM, gmC, tensorL0C, AscendC::Te::FixpipeParams{GroupedMatmulRecipe::FINAL_ACCUMULATION});
+        AscendC::Te::Copy(CopyL0C2GM.with(AscendC::Te::FixpipeParams{GroupedMatmulRecipe::FINAL_ACCUMULATION}), gmC, tensorL0C);
         if (enableL0cPingPong_) {
             l0cPingPong_++;
         }

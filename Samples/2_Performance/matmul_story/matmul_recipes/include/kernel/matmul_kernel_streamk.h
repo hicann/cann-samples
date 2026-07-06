@@ -204,7 +204,7 @@ __aicore__ inline void MatmulKernelStreamK<ProblemShape, BlockMmad, BlockSchedul
     if ASCEND_IS_AIV {
         uint64_t lastLoopTotalCnt = (mTileNum * nTileNum % usedCoreNum_) * skKTileNum;
         uint64_t curBlockIdxInAiv = AscendC::GetBlockIdx();
-        if (curBlockIdxInAiv >= lastLoopTotalCnt * AscendC::GetTaskRation()) {
+        if (curBlockIdxInAiv >= lastLoopTotalCnt * AscendC::GetTaskRatio()) {
             AscendC::CrossCoreWaitFlag<AIC_SYNC_AIV_MODE_4, PIPE_MTE3>(AIC_SYNC_AIV_FLAG);
             AscendC::SyncAll();
             return;

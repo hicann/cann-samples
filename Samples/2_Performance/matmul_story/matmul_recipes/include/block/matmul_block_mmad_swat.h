@@ -219,8 +219,9 @@ public:
 
                 // Pass custom Trait type in mmad
                 AscendC::Te::Mmad(
-                    AscendC::Te::MmadAtom<AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, MmadMmTraitConfig>>{},
-                    tensorL0C, tensorAL0, tensorBL0, mmadParams);
+                    AscendC::Te::MmadAtom<AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, MmadMmTraitConfig>>{}
+                        .with(mmadParams),
+                    tensorL0C, tensorAL0, tensorBL0);
 
                 AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(static_cast<uint16_t>(mte1Flag));
                 l0PingPong_++;
@@ -237,7 +238,7 @@ public:
         AscendC::Te::FixpipeParams fixpParams;
         fixpParams.unitFlag = enableL0cPingPong_ ? 0 : FINAL_ACCUMULATION;
         auto copyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
-        AscendC::Te::Copy(copyL0C2GM, gmC, tensorL0C, fixpParams);
+        AscendC::Te::Copy(copyL0C2GM.with(fixpParams), gmC, tensorL0C);
 
         if (enableL0cPingPong_) {
             AscendC::SetFlag<AscendC::HardEvent::FIX_M>(l0cPingPong_ & 0x1);

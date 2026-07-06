@@ -250,9 +250,7 @@ __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::ProcessTileL1(
         auto tensorScaleAL0 =
             AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, fp8_e8m0_t>(l0BufIdx_ * L0_BUF_OFFSET), layoutScaleAL0);
         auto CopyL12L0MxScaleA3510 = AscendC::Te::MakeCopy(Tile::CopyL12L0MxScaleA3510{});
-        AscendC::Te::Copy(
-            CopyL12L0MxScaleA3510, tensorScaleAL0, tensorScaleAL1_,
-            AscendC::Te::MakeCoord(0, ((l1KOffset + kbOffset) % MX_SCALE_K_L1_SIZE)));
+        CopyL12L0MxScaleA3510.Call(tensorScaleAL0, tensorScaleAL1_, AscendC::Te::MakeCoord(0, ((l1KOffset + kbOffset) % MX_SCALE_K_L1_SIZE)));
 
         auto CopyL12L0B = AscendC::Te::MakeCopy(AscendC::Te::CopyL12L0B{});
         auto layoutBL0 = MakeLayoutBL0{}(realL0k, param.nL1Size);
@@ -266,9 +264,7 @@ __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::ProcessTileL1(
         auto tensorScaleBL0 =
             AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, fp8_e8m0_t>(l0BufIdx_ * L0_BUF_OFFSET), layoutScaleBL0);
         auto CopyL12L0MxScaleB3510 = AscendC::Te::MakeCopy(Tile::CopyL12L0MxScaleB3510{});
-        AscendC::Te::Copy(
-            CopyL12L0MxScaleB3510, tensorScaleBL0, tensorScaleBL1_,
-            AscendC::Te::MakeCoord(((l1KOffset + kbOffset) % MX_SCALE_K_L1_SIZE), 0));
+        CopyL12L0MxScaleB3510.Call(tensorScaleBL0, tensorScaleBL1_, AscendC::Te::MakeCoord(((l1KOffset + kbOffset) % MX_SCALE_K_L1_SIZE), 0));
 
         SetFlag<HardEvent::MTE1_M>(eventIdMte1ToM_);
         WaitFlag<HardEvent::MTE1_M>(eventIdMte1ToM_);
@@ -364,7 +360,7 @@ __aicore__ inline void WQBMM_CUBE_COMPUTE_CLASS::CopyCL0c2Gm(const TensorC& tens
     auto layoutL0C = AscendC::Te::MakeFrameLayout<AscendC::Te::NZLayoutPtn, AscendC::Std::Int<L0C_C0>>(param.mL1Size, param.nL1Size);
     auto tensorL0C = AscendC::Te::MakeTensor(AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0C, float>(0), layoutL0C);
     auto CopyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
-    AscendC::Te::Copy(CopyL0C2GM, tensorC, tensorL0C, FP32_64_AS_UINT64, AscendC::Te::FixpipeParams{/*unitflag*/ 3});
+    AscendC::Te::Copy(CopyL0C2GM.with(AscendC::Te::FixpipeParams{/*unitflag*/ 3}), tensorC, tensorL0C, FP32_64_AS_UINT64);
 }
 
 WQBMM_CUBE_COMPUTE_TEMPLATE_PARAM

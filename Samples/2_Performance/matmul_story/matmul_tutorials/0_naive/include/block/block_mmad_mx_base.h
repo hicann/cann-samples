@@ -175,8 +175,7 @@ public:
                 auto tensorBlockScaleAL1 = tensorScaleAL1.Slice(AscendC::Te::MakeCoord(0, 0),
                     AscendC::Te::MakeShape(curM, CeilDiv(curKL1, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE));
                 auto copyL12L0MxScaleA = AscendC::Te::MakeCopy(::Tile::CopyL12L0MxScaleA3510{});
-                AscendC::Te::Copy(
-                    copyL12L0MxScaleA, tensorScaleAL0, tensorBlockScaleAL1, AscendC::Te::MakeCoord(0, kL0Offset));
+                copyL12L0MxScaleA.Call(tensorScaleAL0, tensorBlockScaleAL1, AscendC::Te::MakeCoord(0, kL0Offset));
 
                 auto layoutScaleBL0 = AscendC::Te::MakeFrameLayout<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<SCALE_C0>>(
                     CeilDiv(curKL0, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, curN);
@@ -185,8 +184,7 @@ public:
                 auto tensorBlockScaleBL1 = tensorScaleBL1.Slice(AscendC::Te::MakeCoord(0, 0),
                     AscendC::Te::MakeShape(CeilDiv(curKL1, MXFP_DIVISOR_SIZE) * MXFP_MULTI_BASE_SIZE, curN));
                 auto copyL12L0MxScaleB = AscendC::Te::MakeCopy(::Tile::CopyL12L0MxScaleB3510{});
-                AscendC::Te::Copy(
-                    copyL12L0MxScaleB, tensorScaleBL0, tensorBlockScaleBL1, AscendC::Te::MakeCoord(kL0Offset, 0));
+                copyL12L0MxScaleB.Call(tensorScaleBL0, tensorBlockScaleBL1, AscendC::Te::MakeCoord(kL0Offset, 0));
                 AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(0);
                 AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(0);
 

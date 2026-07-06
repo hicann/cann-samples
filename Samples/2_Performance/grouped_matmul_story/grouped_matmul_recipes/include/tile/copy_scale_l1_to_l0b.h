@@ -46,14 +46,3 @@ struct AscendC::Te::CopyTraits<::Tile::CopyL12L0MxScaleB3510>
         ::Tile::CopyL12L0MxScaleB3510, CopyL12L0BTraitDefault, ::Tile::CopyL12L0MxScaleB3510,
         CopyL12L0BTraitDefault> {};
 
-namespace AscendC::Te {
-
-constexpr LoadDataTrait LOAD_DATA_B_TRAIT{true};
-
-struct LoadData2BTrait {
-    using TraitType = LoadDataTrait;
-    static constexpr const TraitType value = LOAD_DATA_B_TRAIT;
-};
-
-} // namespace AscendC::Te
-

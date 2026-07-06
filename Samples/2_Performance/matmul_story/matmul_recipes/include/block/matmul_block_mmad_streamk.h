@@ -203,8 +203,9 @@ public:
                 AscendC::Te::MmadParams mmadParams(curML1, curNL1, curK0, unitFlag, cmatrixInitVal);
                 // Pass custom Trait type in mmad
                 AscendC::Te::Mmad(
-                    AscendC::Te::MmadAtom<AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, MmadMmTraitConfig>>{},
-                    tensorL0C, tensorAL0, tensorBL0, mmadParams);
+                    AscendC::Te::MmadAtom<AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, MmadMmTraitConfig>>{}
+                        .with(mmadParams),
+                    tensorL0C, tensorAL0, tensorBL0);
 
                 AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(l0PingPong_ & 0x1);
                 l0PingPong_++;
@@ -214,9 +215,9 @@ public:
                 // Depending on checkIsSkScene, decide to move out to GM or WorkSpace
                 if (checkIsSkScene) {
                     AscendC::Te::Copy(
-                        CopyL0C2GM, gmWorkSpace, tensorL0C, AscendC::Te::FixpipeParams(FINAL_ACCUMULATION));
+                        CopyL0C2GM.with(AscendC::Te::FixpipeParams(FINAL_ACCUMULATION)), gmWorkSpace, tensorL0C);
                 } else {
-                    AscendC::Te::Copy(CopyL0C2GM, gmC, tensorL0C, AscendC::Te::FixpipeParams(FINAL_ACCUMULATION));
+                    AscendC::Te::Copy(CopyL0C2GM.with(AscendC::Te::FixpipeParams(FINAL_ACCUMULATION)), gmC, tensorL0C);
                 }
             }
             AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(l1BufId);

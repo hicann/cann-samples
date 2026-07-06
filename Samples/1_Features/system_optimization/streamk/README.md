@@ -56,7 +56,7 @@ __global__ __aicore__ __mix__(1, 2) void MatmulKernel(
     // -------------------- AIV 逻辑（AI Vector Core） --------------------
     if ASCEND_IS_AIV {
         // 判断当前AIV核心是否已完成所有预期的循环轮次（lastLoopTotalCnt * 任务分配比）
-        if (curBlockIdx >= lastLoopTotalCnt * AscendC::GetTaskRation()) {
+        if (curBlockIdx >= lastLoopTotalCnt * AscendC::GetTaskRatio()) {
             AscendC::CrossCoreWaitFlag<tool::AIC_SYNC_AIV_MODE_4, PIPE_MTE3>(tool::AIC_SYNC_AIV_FLAG);
             AscendC::SyncAll();
             return;
@@ -244,12 +244,12 @@ __global__ __aicore__ __mix__(1, 2) void MatmulKernel(
         
         // newBlockIdx: 重新映射后的块索引（对应 M-N 平面上的块编号）
         // 计算方式：当前核心索引 curBlockIdx 除以 (任务分配比 × K轴分片数)
-        // AscendC::GetTaskRation() 获取任务分配比率（AIV 核心数 / AIC 核心数）
-        uint64_t newBlockIdx = curBlockIdx / (AscendC::GetTaskRation() * skKTileNum);
+        // AscendC::GetTaskRatio() 获取任务分配比率（AIV 核心数 / AIC 核心数）
+        uint64_t newBlockIdx = curBlockIdx / (AscendC::GetTaskRatio() * skKTileNum);
         
         // kTileIdx: 重新映射后的 K 维度分块索引
         // 通过对 (任务分配比 × K轴分片数) 取模得到
-        uint64_t kTileIdx = curBlockIdx % (AscendC::GetTaskRation() * skKTileNum);
+        uint64_t kTileIdx = curBlockIdx % (AscendC::GetTaskRatio() * skKTileNum);
         uint64_t cGmIndex = newBlockIdx + (mTileNum * nTileNum - (mTileNum * nTileNum) % blockNum);
         uint64_t mTileIdx = cGmIndex / nTileNum;
         uint64_t nTileIdx = cGmIndex % nTileNum;

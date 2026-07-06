@@ -325,8 +325,7 @@ public:
                 auto tensorScaleAL0 = AscendC::Te::MakeTensor(
                     AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, fp8_e8m0_t>(l0Offset), layoutScaleAL0);
                 auto CopyL12L0MxScaleA3510 = AscendC::Te::MakeCopy(::Tile::CopyL12L0MxScaleA3510{});
-                AscendC::Te::Copy(
-                    CopyL12L0MxScaleA3510, tensorScaleAL0, tensorBlockScaleAL1, AscendC::Te::MakeCoord(0, kL0Offset));
+                CopyL12L0MxScaleA3510.Call(tensorScaleAL0, tensorBlockScaleAL1, AscendC::Te::MakeCoord(0, kL0Offset));
 
                 auto layoutBL0 =
                     AscendC::Te::MakeFrameLayout<AscendC::Te::ZNLayoutPtn, AscendC::Std::Int<C0_SIZE>>(curKL0, curN);
@@ -342,8 +341,7 @@ public:
                 auto tensorScaleBL0 = AscendC::Te::MakeTensor(
                     AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, fp8_e8m0_t>(l0Offset), layoutScaleBL0);
                 auto CopyL12L0MxScaleB3510 = AscendC::Te::MakeCopy(::Tile::CopyL12L0MxScaleB3510{});
-                AscendC::Te::Copy(
-                    CopyL12L0MxScaleB3510, tensorScaleBL0, tensorBlockScaleBL1, AscendC::Te::MakeCoord(kL0Offset, 0));
+                CopyL12L0MxScaleB3510.Call(tensorScaleBL0, tensorBlockScaleBL1, AscendC::Te::MakeCoord(kL0Offset, 0));
 
                 AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(l0BufId);
                 AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(l0BufId);
@@ -380,7 +378,7 @@ public:
         auto CopyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
         // The whole block accumulates into one L0C tile, which is flushed once
         // after all K chunks have contributed.
-        AscendC::Te::Copy(CopyL0C2GM, gmC, tensorL0C, AscendC::Te::FixpipeParams{FINAL_ACCUMULATION});
+        AscendC::Te::Copy(CopyL0C2GM.with(AscendC::Te::FixpipeParams{FINAL_ACCUMULATION}), gmC, tensorL0C);
         if (enableL0cPingPong_) {
             l0cPingPong_++;
         }

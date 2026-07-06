@@ -43,5 +43,6 @@ add_dependencies(cann_samples_tensor_api cann_samples_tensor_api_dependencies)
 target_include_directories(cann_samples_tensor_api INTERFACE
     "${TENSOR_API_PATH}/include"
     "${TENSOR_API_PATH}/include/tensor_api"
+    "${TENSOR_API_PATH}/include/tensor_api/include"
     "${ASCEND_DIR}/asc"
 )

@@ -177,13 +177,9 @@ public:
 
         auto copyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
         if constexpr (isScalarScale) {
-            AscendC::Te::Copy(
-                copyL0C2GM, gmC, c1Local, scalarScale_,
-                AscendC::Te::FixpipeParams{GroupedMatmulRecipe::FINAL_ACCUMULATION});
+            AscendC::Te::Copy(copyL0C2GM.with(AscendC::Te::FixpipeParams{GroupedMatmulRecipe::FINAL_ACCUMULATION}), gmC, c1Local, scalarScale_);
         } else {
-            AscendC::Te::Copy(
-                copyL0C2GM, gmC, c1Local, tensorX2L1,
-                AscendC::Te::FixpipeParams{GroupedMatmulRecipe::FINAL_ACCUMULATION});
+            AscendC::Te::Copy(copyL0C2GM.with(AscendC::Te::FixpipeParams{GroupedMatmulRecipe::FINAL_ACCUMULATION}), gmC, c1Local, tensorX2L1);
         }
 
         if (enableL0cPingPong_) {
@@ -239,10 +235,8 @@ private:
             params.cmatrixInitVal =
                 (initMode == L0_INIT_MODE_ABL1) ? (initQ0 == 0 && iter1 == 0)
                                                 : (initQ0 == 0 && initQ1 == 0 && iter1 == 0);
-            AscendC::Te::Mmad(
-                AscendC::Te::MmadAtom<
-                    AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, AscendC::Te::MmadTraitDefault>>{},
-                c1Local, l0aLocal, l0bLocal, params);
+            AscendC::Te::Mmad(AscendC::Te::MmadAtom<
+                    AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, AscendC::Te::MmadTraitDefault>>{}.with(params), c1Local, l0aLocal, l0bLocal);
 
             AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(l0PingPong_ & 0x1);
             l0PingPong_++;

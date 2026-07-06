@@ -102,7 +102,7 @@ public:
         kCnt_ = AscendC::Te::Get<MNK_K>(coordInAiv);
         usedCoreNum_ = usedCoreNum;
         // Decrease tile size of per vector core to prevent data race of cube and vector
-        aivMte2Num_ = checkIsSkScene ? AscendC::GetTaskRation() : AscendC::BLOCK_CUBE;
+        aivMte2Num_ = checkIsSkScene ? AscendC::GetTaskRatio() : AscendC::BLOCK_CUBE;
         cGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ OutType*>(params.cGmAddr));
         workspaceGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ WorkspaceType*>(params.workspaceGmAddr));
         ICachePreLoad(NUM_TWO);
@@ -115,8 +115,8 @@ public:
 
     __aicore__ inline void UpdateAivBasicIndex()
     {
-        uint64_t newBlockIdx = AscendC::GetBlockIdx() / (AscendC::GetTaskRation() * kCnt_);
-        aivParams_.kCntIndex = AscendC::GetBlockIdx() % (AscendC::GetTaskRation() * kCnt_);
+        uint64_t newBlockIdx = AscendC::GetBlockIdx() / (AscendC::GetTaskRatio() * kCnt_);
+        aivParams_.kCntIndex = AscendC::GetBlockIdx() % (AscendC::GetTaskRatio() * kCnt_);
 
         aivParams_.indexParams = newBlockIdx;
         uint64_t cGmIndex = aivParams_.indexParams + (mCnt_ * nCnt_ - mCnt_ * nCnt_ % usedCoreNum_);
@@ -151,7 +151,7 @@ public:
     __aicore__ inline void UpdateAivParams(uint64_t index)
     {
         mBurstBase_ = CeilAlign(
-            CeilDiv(aivParams_.curML1InAiv, kCnt_ * AscendC::GetTaskRation()),
+            CeilDiv(aivParams_.curML1InAiv, kCnt_ * AscendC::GetTaskRatio()),
             CeilDiv(BLOCK_BYTE_SIZE, aivParams_.curAlignedNInAiv));
         uint64_t mBurstCnt = CeilDiv(aivParams_.curML1InAiv, mBurstBase_);
         uint64_t mBurstTail = aivParams_.curML1InAiv - (mBurstCnt - 1) * mBurstBase_;

@@ -333,7 +333,7 @@ private:
             AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ BType*>(params.mmad.bGmAddr)),
             LayoutB{}(static_cast<int64_t>(params.problemShape.k), static_cast<int64_t>(params.problemShape.n)));
         uint64_t tileNum = scheduler.GetTileNum();
-        uint64_t curBlockIdx = AscendC::GetBlockIdx() / AscendC::GetTaskRation();
+        uint64_t curBlockIdx = AscendC::GetBlockIdx() / AscendC::GetTaskRatio();
         typename BlockPrologue::Params prologueParams{
             params.mmad.bGmAddr, static_cast<uint64_t>(AscendC::Std::get<1>(params.mmad.l1TileShape)),
             static_cast<uint64_t>(AscendC::Std::get<2>(params.mmad.l1TileShape)), params.mmad.kBubSize,

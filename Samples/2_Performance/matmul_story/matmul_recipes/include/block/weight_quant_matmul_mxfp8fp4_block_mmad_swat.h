@@ -385,9 +385,7 @@ private:
         auto tensorScaleAL0 = AscendC::Te::MakeTensor(
             AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0A, ScaleAType>(l0Offset), layoutScaleAL0);
         auto copyScaleA = AscendC::Te::MakeCopy(::Tile::CopyL12L0MxScaleA3510{});
-        AscendC::Te::Copy(
-            copyScaleA, tensorScaleAL0, tensorScaleAL1,
-            AscendC::Te::MakeCoord(0, static_cast<int64_t>(kOffsetInScaleWindow)));
+        copyScaleA.Call(tensorScaleAL0, tensorScaleAL1, AscendC::Te::MakeCoord(0, static_cast<int64_t>(kOffsetInScaleWindow)));
 
         auto layoutScaleBL0 =
             AscendC::Te::MakeFrameLayout<AscendC::Te::NNLayoutPtn, AscendC::Std::Int<MXFP_MULTI_BASE_SIZE>>(
@@ -395,9 +393,7 @@ private:
         auto tensorScaleBL0 = AscendC::Te::MakeTensor(
             AscendC::Te::MakeMemPtr<AscendC::Te::Location::L0B, ScaleBType>(l0Offset), layoutScaleBL0);
         auto copyScaleB = AscendC::Te::MakeCopy(::Tile::CopyL12L0MxScaleB3510{});
-        AscendC::Te::Copy(
-            copyScaleB, tensorScaleBL0, tensorScaleBL1,
-            AscendC::Te::MakeCoord(static_cast<int64_t>(kOffsetInScaleWindow), 0));
+        copyScaleB.Call(tensorScaleBL0, tensorScaleBL1, AscendC::Te::MakeCoord(static_cast<int64_t>(kOffsetInScaleWindow), 0));
     }
 
     template <typename TensorC, typename TensorL0C>
@@ -406,7 +402,8 @@ private:
         constexpr uint64_t FP32_64_AS_UINT64 = 0x42800000;
         auto copyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
         AscendC::Te::Copy(
-            copyL0C2GM, tensorC, tensorL0C, FP32_64_AS_UINT64, AscendC::Te::FixpipeParams{FINAL_ACCUMULATION});
+            copyL0C2GM.with(AscendC::Te::FixpipeParams{FINAL_ACCUMULATION}), tensorC, tensorL0C,
+            FP32_64_AS_UINT64);
     }
 
     __aicore__ inline void PostProcess(

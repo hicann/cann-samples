@@ -40,7 +40,7 @@ template <class ProblemShape_, bool TransA_, bool TransB_>
      int64_t nBaseTailLast_{0};
      int64_t mCoreNum_{0};
      int64_t mTailCoreNum_{0};
-     int64_t blockIdx_{AscendC::GetBlockIdx() / AscendC::GetTaskRation()};
+     int64_t blockIdx_{AscendC::GetBlockIdx() / AscendC::GetTaskRatio()};
      int64_t blockNum_{AscendC::GetBlockNum()};
      int64_t startBlockIdx_{0};
      int64_t endBlockIdx_{0};

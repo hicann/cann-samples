@@ -202,11 +202,11 @@ public:
 
         auto copyL0C2GM = AscendC::Te::MakeCopy(AscendC::Te::CopyL0C2GM{});
         if constexpr (isScalarScale) {
-            AscendC::Te::Copy(copyL0C2GM, gmC, c1Local, scalarScale_,
-                AscendC::Te::FixpipeParams{FINAL_ACCUMULATION});
+            AscendC::Te::Copy(copyL0C2GM.with(AscendC::Te::FixpipeParams{FINAL_ACCUMULATION}), gmC, c1Local,
+                scalarScale_);
         } else {
-            AscendC::Te::Copy(copyL0C2GM, gmC, c1Local, tensorX2L1,
-                AscendC::Te::FixpipeParams{FINAL_ACCUMULATION});
+            AscendC::Te::Copy(copyL0C2GM.with(AscendC::Te::FixpipeParams{FINAL_ACCUMULATION}), gmC, c1Local,
+                tensorX2L1);
         }
 
         if (enableL0cPingPong_) {
@@ -270,8 +270,9 @@ private:
             }
             AscendC::Te::Mmad(
                 AscendC::Te::MmadAtom<
-                    AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, AscendC::Te::MmadTraitDefault>>{},
-                c1Local, l0aLocal, l0bLocal, mmadParams);
+                    AscendC::Te::MmadTraits<AscendC::Te::MmadOperation, AscendC::Te::MmadTraitDefault>>{}
+                    .with(mmadParams),
+                c1Local, l0aLocal, l0bLocal);
 
             AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(l0PingPong_ & 0x1);
             l0PingPong_++;
