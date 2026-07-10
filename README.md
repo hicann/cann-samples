@@ -57,7 +57,7 @@ toolkit 安装包文件名格式如下：
 3. **前置依赖**
 
    编译用到的依赖如下，请确保已安装并且满足版本要求：
-   
+
    - cmake >= 3.16.0
    - python >= 3.8.0
    - zip
@@ -137,12 +137,32 @@ toolkit 安装包文件名格式如下：
 
      完成第三步的安装后，所有编译生成文件都在`build_out`文件夹下，`matmul`用例的可运行文件在`./build_out/0_Introduction/matmul`目录下，执行如下命令运行：
      ```
-     ./build_out/0_Introduction/matmul/matmul 100 50 200
+     cd ./build_out/0_Introduction/matmul/
+     ./matmul 100 50 200
      ```
-     可以得到结果如下：
-     ```
-     matmul run successfully!
-     ```
+     运行成功后，终端将打印如下类似信息：
+     ```txt
+     Data generated successfully!
+
+     [verify] shape(100, 200), elements=20000 - summary (large matrix, full tensors omitted)
+     abs_err: max=0.000000e+00, mean=0.000000e-00, rmse=0.000000e+00
+     rel_err: max=0.000000e+00
+     count(|abs_err| > 0.001): 0 / 20000
+     cpu golden (top-left 4x4):
+     tensor([[1144., 1088., 1012., 1040.],
+           [1104., 1072., 1004., 972.],
+           [1056., 968., 888., 984.],
+           [1012., 932., 876., 912.]], dtype=torch.bfloat16)
+     npu out (top-left 4x4):
+     tensor([[1144., 1088., 1012., 1040.],
+           [1104., 1072., 1004., 972.],
+           [1056., 968., 888., 984.],
+           [1012., 932., 876., 912.]], dtype=torch.bfloat16)
+     max abs diff: 0.0
+     point error count(>0.1): 0/20000
+     ratio error count(>0.001): 0/20000, error ratio: 0.000000
+     [PASS] NPU results are consistent with CPU.
+   ```
      开发者可自行尝试运行`build_out`下的其它用例。
 
 ## 📂目录结构
