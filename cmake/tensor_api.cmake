@@ -46,3 +46,8 @@ target_include_directories(cann_samples_tensor_api INTERFACE
     "${TENSOR_API_PATH}/include/tensor_api/include"
     "${ASCEND_DIR}/asc"
 )
+
+target_compile_options(cann_samples_tensor_api INTERFACE
+    "-iquote${TENSOR_API_PATH}/include/tensor_api"
+    "-iquote${TENSOR_API_PATH}/include/tensor_api/include"
+)
