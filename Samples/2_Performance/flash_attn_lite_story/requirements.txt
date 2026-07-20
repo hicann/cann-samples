@@ -1,0 +1,5 @@
+numpy>=2.0,<3
+ml_dtypes>=0.4
+
+# 可选: 使用 CPU 版 torch 加速 Golden 计算.
+# torch>=2.0
