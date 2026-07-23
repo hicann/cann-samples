@@ -22,3 +22,7 @@
 
 ### [kv_rms_norm_rope_cache_story](./kv_rms_norm_rope_cache_story)
 围绕 Ascend 950 上的 KvRmsNormRopeCache full-load 路径给出 MemBase 与 RegBase 两个 BF16 直调样例，展示 RMSNorm、interleave RoPE 与 Norm cache 更新的融合实现，以及从 MemBase 到 RegBase 的寄存器化优化点。
+
+### [simt_scatter_story](./simt_scatter_story)
+以 Scatter 算子为例的 SIMT 递进教学样例（`dav-3510`）：演示 SIMT 直接访问 GM 完成不规则写，以及通过目标地址分组和单写者选择处理重复 index 带来的写冲突。
+
