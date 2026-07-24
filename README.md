@@ -1,4 +1,27 @@
-# cann-samples
+<h1 align="center">CANN-SAMPLES</h1>
+
+<p align="center">
+  昇腾 CANN 算子领域的实战样例仓库<br>
+  提供高性能实现示例与体系化调优知识库，从入门概念到极致性能，覆盖 MatMul、MoE、Attention 等核心算子的完整优化链路
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/Perf%20Stories-9-blueviolet.svg" alt="Perf Stories">
+  <img src="https://img.shields.io/badge/CANN-9.0%2B-green.svg" alt="CANN">
+  <a href="https://zread.ai/hicann/cann-samples"><img src="https://img.shields.io/badge/Zread-Ask_AI-_.svg?style=flat&color=0052D9&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff" alt="Zread"></a>
+</p>
+
+<p align="center">
+  <a href="#概述">📖 概述</a> ·
+  <a href="#最新动态">🔥 最新动态</a> ·
+  <a href="#环境部署">🛠️ 环境部署</a> ·
+  <a href="#快速入门">🚀 快速入门</a> ·
+  <a href="#样例列表">📦 样例列表</a> ·
+  <a href="https://gitcode.com/cann/cann-samples/issues">💬 社区讨论</a>
+</p>
+
+---
 
 ## 🚀概述
 
@@ -6,10 +29,33 @@
 
 本仓已集成代码仓库智能体，点击 [![Zread](https://img.shields.io/badge/Zread-Ask_AI-_.svg?style=flat&color=0052D9&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/hicann/cann-samples) 徽章，进入其专属页面，开启在线智能代码学习与知识问答体验！
 
-## 🔥Latest News
+### 🗺️ 用户导航
+
+| 你是... | 推荐入口 | 预计耗时 |
+|---------|---------|:-------:|
+| 👋 NPU 算子初学者 | [入门样例](Samples/0_Introduction/README.md) → `vector_add` / `matmul` 建立基本概念 | 30 min |
+| 🏗️ 自有环境部署 | [环境部署](#环境部署) → [快速入门](#快速入门) 编译运行第一个样例 | 20 min |
+| 🚀 追求极致性能 | [样例列表](#样例列表) → 按算子类型查找调优实践 | 按需 |
+| ✨ 贡献代码 | [所属 SIG](https://gitcode.com/cann/community/tree/master/CANN/sigs/ops-basic) | 15 min |
+
+### 为什么使用 cann-samples
+
+| 维度 | 说明 |
+|------|------|
+| ⚡ 体系化调优知识库 | 从入门概念到极致性能，覆盖 MatMul、MoE、Attention 等核心算子的完整优化链路 |
+| 🔬 端到端可复现 | 每个 story 提供 baseline→优化分步教程与可运行 recipe，配合 cannsim trace 量化性能差异 |
+| 🧠 硬件特性深挖 | 直击 ScalarBound、流水线排布、寄存器 Spill、SIMT / SIMD VF 编程等底层优化点 |
+| 🧩 多数据类型覆盖 | 支持 BF16 / FP16 / HiFloat8 / MXFP4 / MXFP8 等多种精度与量化方案 |
+| 🎯 多代际硬件适配 | 覆盖 Ascend 950（`dav-3510`）与 Ascend 910B/C（`dav-2201`）平台 |
+
+---
+
+## 🔥最新动态
 
 - [2026/05] cann-samples在matmul_story新增[matmul_a16w16](Samples/2_Performance/matmul_story/matmul_recipes/examples/matmul_a16w16/README.md) streamK等高性能example，并在既有quant_matmul_mxfp4、quant_matmul_mxfp8 MX量化矩阵乘中支持Weight NZ。
 - [2026/05] cann-samples在grouped_matmul_story新增[weight_quant_grouped_matmul_mxfp8fp4](Samples/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/weight_quant_grouped_matmul_mxfp8fp4/README.md) MXA8W4量化example，并在既有quant_grouped_matmul_mxfp4、quant_grouped_matmul_mxfp8分组矩阵乘中支持Weight NZ。
+
+---
 
 ## 📝环境部署
 
@@ -140,9 +186,9 @@ toolkit 安装包文件名格式如下：
      cd ./build_out/0_Introduction/matmul/
      ./matmul 100 50 200
      ```
-     运行成功后，终端将打印如下类似信息：
-     ```txt
-     Data generated successfully!
+      运行成功后，终端将打印如下类似信息：
+      ```txt
+      Data generated successfully!
 
      [verify] shape(100, 200), elements=20000 - summary (large matrix, full tensors omitted)
      abs_err: max=0.000000e+00, mean=0.000000e-00, rmse=0.000000e+00
@@ -161,12 +207,13 @@ toolkit 安装包文件名格式如下：
      max abs diff: 0.0
      point error count(>0.1): 0/20000
      ratio error count(>0.001): 0/20000, error ratio: 0.000000
-     [PASS] NPU results are consistent with CPU.
-   ```
-     开发者可自行尝试运行`build_out`下的其它用例。
+      [PASS] NPU results are consistent with CPU.
+      ```
+      开发者可自行尝试运行`build_out`下的其它用例。
+
+---
 
 ## 📂目录结构
-
 ```
 ├── Samples                                  # 样例目录
 │   ├── 0_Introduction                       # 入门样例
@@ -192,6 +239,8 @@ toolkit 安装包文件名格式如下：
 └── README.md                                # 项目说明文档
 ```
 
+
+
 ## 💬相关信息
 
 - [许可证](LICENSE)
@@ -203,3 +252,9 @@ toolkit 安装包文件名格式如下：
 
 - **问题反馈**：通过 GitCode [Issues](https://gitcode.com/cann/cann-samples/issues) 提交问题
 - **社区互动**：通过 GitCode [Discussions](https://gitcode.com/cann/cann-samples/discussions) 参与交流
+
+---
+
+<p align="center">
+  <sub>Made with ❤️ by the CANN Team · <a href="https://gitcode.com/cann">More CANN Projects</a></sub>
+</p>
