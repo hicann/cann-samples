@@ -9,12 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-set(SUPPORTED_NPU_ARCHS dav-3510)
-file(RELATIVE_PATH SAMPLE_PATH ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
-if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
-    message(STATUS "Skip sample ${SAMPLE_PATH}: NPU_ARCH=${NPU_ARCH} is not supported")
-    return()
-endif()
+cann_sample_check_arch(dav-3510)
 
 set(CPP_FILES
     membase/full_load.asc

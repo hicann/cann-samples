@@ -8,12 +8,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-set(SUPPORTED_NPU_ARCHS dav-3510)
-file(RELATIVE_PATH SAMPLE_PATH ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
-if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS)
-    message(STATUS "Skip sample ${SAMPLE_PATH}: NPU_ARCH=${NPU_ARCH} is not supported")
-    return()
-endif()
+cann_sample_check_arch(dav-3510)
 
 #! CANNsim 对 mode2 多代复用支持不完整. 仅仿真时解除下一行注释,
 #! 使全部 AIC/AIV CrossCore 同步切换为 mode4; 真机默认使用 mode2.
@@ -94,7 +89,7 @@ foreach(VERSION_DIR ${VERSION_DIRS})
 endforeach()
 
 if(NOT FALITE_VERSION_TARGETS)
-    message(FATAL_ERROR "${SAMPLE_PATH} 未发现 src/vN 版本目录")
+    message(FATAL_ERROR "${_cann_sample_path} 未发现 src/vN 版本目录")
 endif()
 
 add_custom_target(falite DEPENDS ${FALITE_VERSION_TARGETS})
