@@ -1,0 +1,59 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This file is a part of the CANN Open Software.
+# Licensed under CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+# BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+version: 1
+
+samples:
+  - id: vector_add
+    setup: []
+    steps:
+      - name: run_default
+        cwd: build_out/0_Introduction/vector_add
+        cmd: ["./vector_add"]
+    pass_criteria:
+      exit_code: 0
+      stdout_contains:
+        - "Vector add completed successfully!"
+      stdout_not_contains:
+        - "Vector add failed!"
+
+  - id: matmul_basic
+    setup: []
+    steps:
+      - name: run_case_128_256_512
+        cwd: build_out/0_Introduction/matmul
+        cmd: ["./matmul", "128", "256", "512"]
+    pass_criteria:
+      exit_code: 0
+      stdout_contains:
+        - "matmul run successfully!"
+      stdout_not_contains:
+        - "matmul run failed!"
+
+  - id: hif8_quantize
+    setup:
+      - name: gen_input
+        cwd: build_out/1_Features/hardware_features/hif8
+        cmd: ["python3", "scripts/gen_data.py"]
+    steps:
+      - name: run_demo
+        cwd: build_out/1_Features/hardware_features/hif8
+        cmd: ["./quantize_hif8_demo"]
+      - name: verify_output
+        cwd: build_out/1_Features/hardware_features/hif8
+        cmd:
+          - "python3"
+          - "scripts/verify_result.py"
+          - "output/output_y.bin"
+          - "output/golden_y.bin"
+    pass_criteria:
+      all_steps_exit_zero: true
+      final_stdout_contains:
+        - "test pass"
