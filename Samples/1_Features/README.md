@@ -22,3 +22,4 @@
 - [simt](./hardware_features/simt)：演示如何使用 SIMT（单指令多线程）编程模型在 NPU 上实现 Gather 算子。
 - [vector_function](./hardware_features/vector_function)：演示 Vector Function 编程概念，通过 GeLU 对比展示 VF 能力。
 - [hif8](./hardware_features/hif8)：演示 HiFloat8（HIF8）量化数据类型及相关样例实现。
+- [mem_bandwidth](./hardware_features/mem_bandwidth)：测量 NPU 访存带宽，覆盖纯读、读写拷贝、读+计算+写三种数据流，通过成对扫描 UB tile 大小与 buffer 数观察带宽随搬运粒度与缓冲深度的变化。
