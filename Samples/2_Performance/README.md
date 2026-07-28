@@ -26,3 +26,5 @@
 ### [simt_scatter_story](./simt_scatter_story)
 以 Scatter 算子为例的 SIMT 递进教学样例（`dav-3510`）：演示 SIMT 直接访问 GM 完成不规则写，以及通过目标地址分组和单写者选择处理重复 index 带来的写冲突。
 
+### [gelu_eltwise_regbase_story](./gelu_eltwise_regbase_story)
+用 GELU + Element-wise 融合算子演示 RegBase 的改写和优化（`dav-3510`）：Case 0 是 MemBase 基线，Case 1~4 依次做 VF 融合、循环拆分、循环展开、常量外提，共 5 个独立可执行 Case。
