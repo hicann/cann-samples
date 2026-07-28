@@ -14,15 +14,18 @@
 
 namespace FALite {
 
-enum class PLayoutMode : uint32_t {
+enum class PLayoutMode : uint32_t
+{
     UNSUPPORTED = 0,
     DN_TO_NZ = 1,
 };
 
-// 当前实现固定 D=128, Br/Bc 由 host tiling 赋值.
+// 当前固定 D=128; Br 和 Bc 由 host tiling 设置.
 constexpr uint32_t HEAD_DIM = 128;
+constexpr uint32_t PIPELINE_SLOT_NUM = 2;
+constexpr uint32_t IO_SLOT_NUM = 2;
 
-// Addr 以字节为单位, Elems 为 LocalTensor 的元素数.
+// Addr 的单位是字节; Elems 是包含全部 slot 的 LocalTensor 总元素数.
 struct SRAMLayoutAIC {
     uint32_t pL1Addr;
     uint32_t pL1Elems;
@@ -55,7 +58,7 @@ struct SRAMLayoutAIV {
     uint32_t rowStatsUBElems;
 };
 
-// 仅保留调度及 kernel 共用的字段, 局部尺寸在使用处计算.
+// TilingData 只保存 host 与 kernel 共用的数据; 局部尺寸在使用处计算.
 struct FlashAttnLiteTilingData {
     PLayoutMode pLayoutMode;
 
@@ -73,9 +76,7 @@ struct FlashAttnLiteTilingData {
     SRAMLayoutAIV layoutAIV;
 };
 
-void LaunchFlashAttnLiteKernel(uint8_t *dQ, uint8_t *dK, uint8_t *dV,
-                                  uint8_t *dOut,
-                                  const FlashAttnLiteTilingData &data,
-                                  void *stream);
+void LaunchFlashAttnLiteKernel(
+    uint8_t* dQ, uint8_t* dK, uint8_t* dV, uint8_t* dOut, const FlashAttnLiteTilingData& data, void* stream);
 
 } // namespace FALite

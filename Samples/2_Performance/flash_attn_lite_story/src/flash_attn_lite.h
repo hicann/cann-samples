@@ -8,9 +8,14 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include <kernel_operator.h>
+#pragma once
 
-__global__ __mix__(1, 2) void falite_v1_placeholder()
-{
-    // To be done.
-}
+#include <acl/acl.h>
+
+#include <cstdint>
+
+// 返回 true 表示参数校验通过, 且 kernel 已提交到 stream.
+// requestedAicCoreNum 为 0 时使用本卡全部 AIC 核.
+bool FlashAttnLiteNPU(
+    uint8_t* dQ, uint8_t* dK, uint8_t* dV, uint8_t* dOut, uint32_t batchSize, uint32_t seqLen, float softmaxScale,
+    uint32_t requestedAicCoreNum, aclrtStream stream);

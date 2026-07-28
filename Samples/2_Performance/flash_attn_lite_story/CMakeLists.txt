@@ -20,6 +20,10 @@ set(FALITE_SCRIPTS
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/thread_limit.py
 )
 
+set(FALITE_SHARED_DEMO
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/flash_attn_lite_demo.cpp
+)
+
 # 程序根据自身路径查找脚本, 因此脚本与所有版本的二进制放在同一目录.
 foreach(SCRIPT_FILE ${FALITE_SCRIPTS})
     get_filename_component(SCRIPT_NAME ${SCRIPT_FILE} NAME)
@@ -32,7 +36,7 @@ function(add_falite_version VERSION_NAME)
     set(VERSION_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/${VERSION_NAME})
     set(TARGET_NAME falite_${VERSION_NAME})
     set(VERSION_SOURCES
-        ${VERSION_DIR}/flash_attn_lite_demo.cpp
+        ${FALITE_SHARED_DEMO}
         ${VERSION_DIR}/host/flash_attn_lite_host.cpp
         ${VERSION_DIR}/kernel/flash_attn_lite_kernel.asc
     )
@@ -47,6 +51,7 @@ function(add_falite_version VERSION_NAME)
     target_include_directories(${TARGET_NAME} PRIVATE
         ${ASCEND_DIR}/${SYSTEM_PREFIX}/include
         ${ASCEND_DIR}/${SYSTEM_PREFIX}/asc/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     target_compile_options(${TARGET_NAME} PRIVATE
         "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
