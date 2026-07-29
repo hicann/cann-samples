@@ -46,3 +46,7 @@ Vector add completed successfully!
 ```shell
 Vector add failed!
 ```
+
+## References
+
+- [torch_library_report_tensor](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/01_utilities/04_profiling/torch_library_report_tensor/torch_library_report_tensor.asc): 性能分析元信息上报参考样例。

@@ -24,6 +24,7 @@ target_link_libraries(vector_add
     dl
     platform
     tiling_api
+    msprofiler
 )
 
 install(TARGETS vector_add
