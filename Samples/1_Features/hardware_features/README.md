@@ -14,5 +14,8 @@
 ### [hif8](./hif8)
 演示 HiFloat8（HIF8）量化数据类型的应用，展示 Quantize 算子的实现，支持 8 位浮点格式以优化存储和计算效率。
 
+### [cv_datapath](./cv_datapath)
+演示 Ascend 950 CV（Cube-Vector）数据通路特性：以 MatMul+ReLU 对比 Cube/Vector 分离、Mix Scenario1（L0C→GM→UB）与 Scenario2（L0C→UB Fixpipe 直通），帮助理解 AIC/AIV 协同与数据通路选型。
+
 ### [mem_bandwidth](./mem_bandwidth)
 测量 NPU 的访存带宽，覆盖纯读、读写拷贝、读+计算+写三种数据流，统一采用 `TPipe + TQue` 多 buffer 流水范式，通过成对扫描 UB tile 大小与 buffer 数，观察带宽随搬运粒度与缓冲深度的变化。带宽由 `msprof` 采集 `Task Duration` 换算。
