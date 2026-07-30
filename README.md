@@ -33,9 +33,10 @@
 
 | 你是... | 推荐入口 | 预计耗时 |
 |---------|---------|:-------:|
-| 👋 NPU 算子初学者 | [入门样例](Samples/0_Introduction/README.md) → `vector_add` / `matmul` 建立基本概念 | 30 min |
+| 👋 NPU 算子初学者 | [入门样例](Samples/0_Introduction/README.md) → `add` / `matmul` 建立基本概念 | 30 min |
 | 🏗️ 自有环境部署 | [环境部署](#环境部署) → [快速入门](#快速入门) 编译运行第一个样例 | 20 min |
-| 🚀 追求极致性能 | [样例列表](#样例列表) → 按算子类型查找调优实践 | 按需 |
+| 🧠 NPU 新特性掌握 | [特性列表](Samples/1_Features/README.md) → 探索芯片功能特性与优化方法 | 按需 |
+| 🚀 追求极致性能 | [样例列表](Samples/2_Performance/README.md) → 按算子类型查找调优实践 | 按需 |
 | ✨ 贡献代码 | [所属 SIG](https://gitcode.com/cann/community/tree/master/CANN/sigs/ops-basic) | 15 min |
 
 ### 为什么使用 cann-samples
