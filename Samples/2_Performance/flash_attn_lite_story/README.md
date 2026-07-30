@@ -4,7 +4,7 @@
 
 Flash Attention Lite（FALite）是面向 Ascend 950 的教学样例，以固定规格的 Flash Attention 前向计算说明 Cube 与 Vector 融合算子的实现和流水排布。代码从单槽串行基线开始，逐步加入 CV 核间双槽流水、AIC 核内双缓冲和 task 级 I/O 双缓冲。
 
-本文覆盖 v2～v5。各版本使用相同的算法、输入规格和精度判据，只调整片上缓冲、指令发射顺序和同步范围。
+本文覆盖 v0～v5。v0/v1 为 GM 通路基线（Cube/Vector 经 GM 交换数据），v2 起转为片内零拷贝通路。各版本使用相同的算法、输入规格和精度判据。
 
 ## 算子实现原理
 
@@ -121,6 +121,8 @@ cmake --build build --target falite
 cmake --build build --target flash_attn_lite_story
 
 # 只构建一个版本。
+cmake --build build --target falite_v0
+cmake --build build --target falite_v1
 cmake --build build --target falite_v2
 cmake --build build --target falite_v3
 cmake --build build --target falite_v4
@@ -144,6 +146,8 @@ cmake -S . -B build-sim \
 ### 运行与校验
 
 ```bash
+./build/Samples/2_Performance/flash_attn_lite_story/falite_v0 --size 1 32768
+./build/Samples/2_Performance/flash_attn_lite_story/falite_v1 --size 1 32768
 ./build/Samples/2_Performance/flash_attn_lite_story/falite_v2 --size 1 32768
 ./build/Samples/2_Performance/flash_attn_lite_story/falite_v3 --size 1 32768
 ./build/Samples/2_Performance/flash_attn_lite_story/falite_v4 --size 1 32768
@@ -167,6 +171,33 @@ abs(npu - golden) <= 2^-6 + 2^-6 * abs(golden)
 全部元素通过时程序返回 0。
 
 ## 分阶段优化
+
+### v0：分块 + online softmax / GM 块交换
+
+v0 实现分块 FA 的 j-loop CV 流水。Cube 与 Vector 通过 GM 交换中间矩阵 S/P/ΔO，每轮 j 迭代完成 C1→V1→C2→V2 四个阶段的 CrossCore 同步。
+
+```text
+j-loop: C1[j] --S_READY--> V1[j] --P_READY--> C2[j] --O_READY--> V2[j] --DONE--> C1[j+1]
+```
+
+C1/C2 使用完整单 Mmad(128,128,128) + Fixpipe L0C→GM 将 S/ΔO 落盘，Q 每 task 搬入一次、K/V 每轮搬入。C1/C2 结果直接写 GM。AIV 做 online softmax 后直写 BF16 O。v0 与 v1 的 C1/C2 结构完全一致，仅 S/ΔO 搬运路径不同（v0: L0C→GM→UB, v1: L0C→UB）。
+
+GM 中间 buffer 均 per-task 复用 (j 间由 CrossCore 保护)：S (Bc×Br FP32) + P (Bc×Br BF16) + ΔO (Br×D FP32)。
+
+### v1：L0C→UB 优化
+
+v1 在 v0 基础上将 C1 的 S 和 C2 的 ΔO 改为 Fixpipe L0C→UB，直接写入 AIV 的 UB。AIV 不再从 GM 搬运 S/ΔO，省去两路 GM 读写。P 仍通过 AIV→GM→AIC P L1 路径交换。
+
+```text
+C1: K×Q^T → S^T⸺FixpipeToVecUB→ AIV UB (dualDstCtl=2)
+V1: UB 读 S → online softmax → P → GM
+C2: GM 读 P × V → ΔO⸺FixpipeToVecUB→ AIV UB
+V2: UB 读 ΔO → O_acc 更新
+```
+
+C1 使用单 Mmad (K[128,128]×Q^T[128,128])，不再做 D 维拆分。L0B/L0C buffer 相应增大至 16384 elem。
+
+GM 中间 buffer：仅 P (BF16)，S/ΔO 走 UB。
 
 ### v2：单槽融合基线
 
@@ -258,9 +289,29 @@ task t+1:                 Q[io^1] -> C1/V1/C2/V2 -> ...
 
 参考性能：`46974.507812 us`，相较 v4 下降 `8.02%`，加速 `1.087x`。
 
+## 精度验证
+
+v0/v1 使用与 v2～v5 相同的 BF16 算法和精度判据。以下为 CANN 9.2.0 + dav-3510 + 28 AIC 条件下的 Golden 比对结果：
+
+| 版本 | S=128 | S=1024 | S=4096 | S=32768 | S=131072 |
+|------|-------|--------|--------|---------|----------|
+| v0 | 0 失败 | 0 失败 | 0 失败 | 0 失败 | dry-run 可运行 (未做 Golden 比对) |
+| v1 | 0 失败 | 0 失败 | 0 失败 | 0 失败 | dry-run 可运行 (未做 Golden 比对) |
+
+v0/v1 的 S/P/ΔO buffer 均 per-task 复用 (Bc×Br / Bc×Br / Br×D)，S=131072 时 v0 buffer 合计约 160 MiB，v1 仅需 P buffer 约 32 MiB。
+
 ## 性能参考
 
-本次只调整版本目录编号，四份实现源码未改。下表按当前编号列出同一次干净构建和同一套采集条件下的结果：
+v0/v1 性能数据（CANN 9.2.0, dav-3510, msopprof Task Duration）：
+
+| 版本 | S=32768 (28 AIC) | vs v0 | S=131072 (32 AIC) | vs v0 |
+|------|-----------------|-------|-------------------|-------|
+| v0 | 20,359 us | 1.00x | 269,403 us | 1.00x |
+| v1 | 10,409 us | **1.96x** | 139,645 us | **1.93x** |
+
+v1 通过 L0C→UB 省去 S/ΔO 两路 GM 读写，加速比稳定在约 2x。
+
+以下为 v2～v5 性能参考。本次只调整版本目录编号，四份实现源码未改。下表按当前编号列出同一次干净构建和同一套采集条件下的结果：
 
 - CANN 9.2.0
 - `dav-3510`，正式 mode2
