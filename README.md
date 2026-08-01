@@ -16,6 +16,7 @@
   <a href="#概述">📖 概述</a> ·
   <a href="#最新动态">🔥 最新动态</a> ·
   <a href="#环境部署">🛠️ 环境部署</a> ·
+  <a href="#环境自检">✅ 环境自检</a> ·
   <a href="#快速入门">🚀 快速入门</a> ·
   <a href="#样例列表">📦 样例列表</a> ·
   <a href="https://gitcode.com/cann/cann-samples/issues">💬 社区讨论</a>
@@ -34,7 +35,7 @@
 | 你是... | 推荐入口 | 预计耗时 |
 |---------|---------|:-------:|
 | 👋 NPU 算子初学者 | [入门样例](Samples/0_Introduction/README.md) → `add` / `matmul` 建立基本概念 | 30 min |
-| 🏗️ 自有环境部署 | [环境部署](#环境部署) → [快速入门](#快速入门) 编译运行第一个样例 | 20 min |
+| 🏗️ 自有环境部署 | [环境部署](#环境部署) → [环境自检](#环境自检) → [快速入门](#快速入门) 编译运行第一个样例 | 20 min |
 | 🧠 NPU 新特性掌握 | [特性列表](Samples/1_Features/README.md) → 探索芯片功能特性与优化方法 | 按需 |
 | 🚀 追求极致性能 | [样例列表](Samples/2_Performance/README.md) → 按算子类型查找调优实践 | 按需 |
 | ✨ 贡献代码 | [所属 SIG](https://gitcode.com/cann/community/tree/master/CANN/sigs/ops-basic) | 15 min |
@@ -121,6 +122,20 @@ toolkit 安装包文件名格式如下：
      若未提前初始化子模块，CMake在构建依赖`cann_samples::tensor_api`的目标时也会尝试执行上述子模块更新命令。
    - **Toolkit要求**：Tensor API相关样例会使用`third_party/ops-tensor/include/tensor_api`以及Toolkit中的Ascend C头文件，因此必须安装完整的CANN Toolkit并先执行`source ${install_path}/ascend-toolkit/set_env.sh`。当前请使用上表中已验证通过的版本构建；Toolkit版本过旧、仅安装Run包或环境变量未生效时，可能出现头文件缺失、符号未定义或编译选项报错。
    - **NPU架构**：`matmul_story`、`grouped_matmul_story`额外要求`NPU_ARCH=dav-3510`（Ascend 950）；使用`dav-2201`全量配置工程时，这两项样例会被跳过，属预期行为。
+
+---
+
+## ✅环境自检
+
+在实际编译或运行样例之前，建议先完成环境自检，确保开发环境已正确配置。在仓库根目录执行以下命令，脚本会自动逐项检查并给出提示：
+
+```bash
+python3 scripts/check_env.py
+```
+
+该脚本仅做检查和提示，不修改任何环境配置，也不会替代正式的构建流程。检查通过后再进入下一步的构建与运行。
+
+---
 
 ## ⚡️快速入门
 
@@ -233,6 +248,8 @@ toolkit 安装包文件名格式如下：
 │   ├── shmem                                # 共享内存相关组件
 │   └── ...                                  # 其它第三方依赖
 ├── cmake                                    # 工程编译配置
+├── scripts                                   # 环境检查等辅助脚本
+│   └── check_env.py                          # 构建前环境自检脚本
 ├── .clang-format                            # 代码格式配置
 ├── CMakeLists.txt                           # 根 CMake 配置
 ├── LICENSE                                  # 许可证
