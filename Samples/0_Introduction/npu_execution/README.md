@@ -792,7 +792,7 @@ L0算子的管理，由nnopbase框架完成，包括算子的注册、算子信�
 
 L0算子通常采用多Kernel实例化架构，针对不同的输入输出特征组合，编译生成独立的二进制目标文件（.o文件）。
 
-每个独立的二进制文件对应一组明确的输入输出参数v，核心特征维度包括：
+每个独立的二进制文件对应一组明确的输入输出参数，核心特征维度包括：
 
 - 数据类型（dtype）：如bfloat16、float32、int32等
 - 数据格式（format）：如ND（N-Dimensional）、NHWC、NCHW等
@@ -865,7 +865,7 @@ private:
 };
 
 class OpKernelBin {
-piblic:
+public:
     // kernel下发执行
     aclnnStatus Launch(stream, args);
     
@@ -899,7 +899,7 @@ SelectBin(inputs, outputs, attrs)
     │
     └── 2. 若静态二进制未找到，查找动态二进制
             ├── 根据算子入参inputs、outputs、attrs等参数，生成匹配key，计算hash值
-            └── 在动态二进制列表 bins_ 中查找匹配静态kernel
+            └── 在动态二进制列表 bins_ 中查找匹配动态kernel
 ```
 
 ## 6. INFER_SHAPE机制

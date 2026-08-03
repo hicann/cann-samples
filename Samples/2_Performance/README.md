@@ -31,3 +31,12 @@
 
 ### [gelu_eltwise_regbase_story](./gelu_eltwise_regbase_story)
 用 GELU + Element-wise 融合算子演示 RegBase 的改写和优化（`dav-3510`）：Case 0 是 MemBase 基线，Case 1~4 依次做 VF 融合、循环拆分、循环展开、常量外提，共 5 个独立可执行 Case。
+
+### [flash_attn_lite_story](./flash_attn_lite_story)
+Flash Attention Lite 教学样例（Ascend 950），以固定规格的 Flash Attention 前向计算说明 Cube 与 Vector 融合算子的实现和流水排布，从单槽串行基线逐步加入 CV 核间双槽流水、AIC 核内双缓冲和 task 级 I/O 双缓冲，覆盖 v0～v5 递进版本。
+
+### [scalar_story](./scalar_story)
+Scalar 单元性能优化专题，分析 Ascend 950 上 ScalarBound 问题的根因与诊断方法，涵盖 icache 预取、静态创建 LocalTensor、局部变量替代成员变量、消除多级指针解引用等优化手段，以 FusedInferAttentionScore 和 QuantBatchMatmul 为案例。
+
+### [simd_vf_story](./simd_vf_story)
+SIMD VF 编程范式实践，覆盖 Broadcast（尾轴/首轴/中间轴）、Elemwise 逐元素与 Reduce 归约算子的 SIMD VF 实现与优化分析，展示不同写法间的性能差异与优化原理。

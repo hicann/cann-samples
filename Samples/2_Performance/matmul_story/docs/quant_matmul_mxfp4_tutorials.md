@@ -156,7 +156,7 @@ Step 0 实现一个基础的mxfp4的matmul调用Demo，承担 **基准** 角色�
 
 ### 1.5 代码索引比对
 
-- **样例根目录**：[1_pingpong/](1_pingpong/)
+- **样例根目录**：[1_pingpong/](../matmul_tutorials/1_pingpong/)
 
 ---
 

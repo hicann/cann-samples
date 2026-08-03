@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/Perf%20Stories-9-blueviolet.svg" alt="Perf Stories">
+  <img src="https://img.shields.io/badge/Perf%20Stories-13-blueviolet.svg" alt="Perf Stories">
   <img src="https://img.shields.io/badge/CANN-9.0%2B-green.svg" alt="CANN">
   <a href="https://zread.ai/hicann/cann-samples"><img src="https://img.shields.io/badge/Zread-Ask_AI-_.svg?style=flat&color=0052D9&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff" alt="Zread"></a>
 </p>
@@ -38,6 +38,7 @@
 | 🏗️ 自有环境部署 | [环境部署](#环境部署) → [环境自检](#环境自检) → [快速入门](#快速入门) 编译运行第一个样例 | 20 min |
 | 🧠 NPU 新特性掌握 | [特性列表](Samples/1_Features/README.md) → 探索芯片功能特性与优化方法 | 按需 |
 | 🚀 追求极致性能 | [样例列表](Samples/2_Performance/README.md) → 按算子类型查找调优实践 | 按需 |
+| 🔧 调试与性能分析 | [工具集](Samples/3_Utilities/README.md) → 使用辅助工具分析算子性能瓶颈 | 按需 |
 | ✨ 贡献代码 | [所属 SIG](https://gitcode.com/cann/community/tree/master/CANN/sigs/ops-basic) | 15 min |
 
 ### 为什么使用 cann-samples
@@ -242,6 +243,8 @@ python3 scripts/check_env.py
 │   │   ├── matmul_story                     # 矩阵乘性能优化实践
 │   │   ├── grouped_matmul_story             # 分组矩阵乘性能优化实践
 │   │   └── ...                              # 其它性能调优样例
+│   ├── 3_Utilities                          # 开发工具集
+│   │   └── simulation-based-vf-profiling     # 基于 cannsim 的 VF 性能分析
 │   └── CMakeLists.txt
 ├── third_party                              # 外部依赖（Git 子模块）
 │   ├── ops-tensor                          # ops-tensor：Ascend C Tensor API 头文件
