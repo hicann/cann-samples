@@ -11,6 +11,7 @@
 import importlib
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,20 @@ def _try_find_command(name):
     return shutil.which(name)
 
 
+def _parse_version(text):
+    match = re.search(r"(\d+(?:\.\d+)+)", text or "")
+    if not match:
+        return None
+    return tuple(int(p) for p in match.group(1).split("."))
+
+
+def _older_than(version, min_version):
+    n = max(len(version), len(min_version))
+    version = version + (0,) * (n - len(version))
+    min_version = min_version + (0,) * (n - len(min_version))
+    return version < min_version
+
+
 def check_command(cmd_name, min_version=None, version_args=None):
     cmd_path = _try_find_command(cmd_name)
     if cmd_path is None:
@@ -54,11 +69,28 @@ def check_command(cmd_name, min_version=None, version_args=None):
     try:
         result = subprocess.run([cmd_path] + args, capture_output=True, text=True, timeout=5)
         version_text = result.stdout + result.stderr
-        _logger.info(f"  {PASS} `{cmd_name}` found at {cmd_path}  (version: {version_text.splitlines()[0].strip()})")
     except subprocess.TimeoutExpired:
         _logger.warning(f"  {WARN} `{cmd_name}` found at {cmd_path} but version query timed out")
+        return True
     except Exception:
         _logger.warning(f"  {WARN} `{cmd_name}` found at {cmd_path} but failed to query version")
+        return True
+    version = _parse_version(version_text)
+    min_ver = _parse_version(min_version)
+    if version is None:
+        _logger.warning(f"  {WARN} `{cmd_name}` version could not be parsed from: "
+                        f"{version_text.strip()!r}; skipping version comparison")
+        return True
+    if min_ver is None:
+        _logger.warning(f"  {WARN} `{cmd_name}` min_version {min_version!r} could not be parsed; "
+                        "skipping version comparison")
+        return True
+    version_str = ".".join(map(str, version))
+    if _older_than(version, min_ver):
+        _logger.info(f"  {FAIL} `{cmd_name}` found at {cmd_path}  "
+                     f"(version: {version_str}, required >= {min_version})")
+        return False
+    _logger.info(f"  {PASS} `{cmd_name}` found at {cmd_path}  (version: {version_str})")
     return True
 
 

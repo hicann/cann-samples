@@ -1,2 +1,4 @@
 en_dtypes==0.0.4
 ml_dtypes==0.5.4
+numpy>=2.0,<3
+torch>=2.0
