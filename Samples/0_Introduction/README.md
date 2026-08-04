@@ -11,6 +11,9 @@
 ### [vector_add](./vector_add)
 使用 Ascend C TQue / TPipe 实现向量逐元素加法，学习 Vector Core kernel 的基本编程模型与编译运行流程。
 
+### [vector_function_add](./vector_function_add)
+RegBase 编程模型的可运行入门样例。使用 Vector Function（VF）在寄存器上实现与 vector_add 相同的向量加法，学习 `__simd_vf__`、`AscendC::Reg::*`、Mask 尾块自适应与 `asc_vf_call` 调用方式。仅支持 Ascend 950（dav-3510）。
+
 ### [matmul](./matmul)
 使用 Ascend C Tensor API 实现矩阵乘法，学习 Cube Core kernel 的基本编程模型与性能 profiling 方法。
 

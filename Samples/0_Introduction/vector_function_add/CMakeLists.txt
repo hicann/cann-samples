@@ -9,7 +9,25 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(vector_add)
-add_subdirectory(vector_add_c_api)
-add_subdirectory(vector_function_add)
-add_subdirectory(matmul)
+# RegBase / Vector Function 是 Ascend 950 特性，仅在 dav-3510 下编译，dav-2201 配置会自动跳过本样例。
+cann_sample_check_arch(dav-3510)
+
+add_executable(vector_function_add main.asc)
+
+target_compile_options(vector_function_add PRIVATE
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
+    "$<$<COMPILE_LANGUAGE:ASC>:--cce-simd-vf-fusion=true>"
+)
+
+target_link_libraries(vector_function_add
+    PRIVATE
+    m
+    dl
+    platform
+    tiling_api
+)
+
+install(TARGETS vector_function_add
+    RUNTIME DESTINATION 0_Introduction/vector_function_add
+)
