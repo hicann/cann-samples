@@ -25,7 +25,7 @@ $$
 其中$(query * dequantScaleQuery)$和$(key * dequantScaleKey)^T$的乘积代表输入$x$的注意力，为避免该值变得过大，通常除以$d$的开根号进行缩放，并对每行进行softmax归一化，与$value * dequantScaleValue$相乘后得到一个$n*d$的矩阵。
 
 - **FIA per-block全量化介绍**  
-为了满足训练场景的低bit量化诉求，对标A3的FP8量化能力，设计了per-block全量化，兼顾精度与性能，实现业界通用量化形式对FP8/HIFP8的支持。
+为了满足训练场景的低bit量化诉求，参考业界主流的FP8量化能力，设计了per-block全量化，兼顾精度与性能，实现业界通用量化形式对FP8/HIFP8的支持。
 相比于per-tensor全量化，对于$query、key、value$矩阵采用同一个量化参数进行计算，per-block全量化要求根据block_size对输入分开进行量化，通常要求block_size的值，与算子tiling块一致。
 per-block全量化主要计算流程：
 
