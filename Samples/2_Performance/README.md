@@ -26,6 +26,9 @@
 ### [simt_scatter_story](./simt_scatter_story)
 以 Scatter 算子为例的 SIMT 递进教学样例（`dav-3510`）：演示 SIMT 直接访问 GM 完成不规则写，以及通过目标地址分组和单写者选择处理重复 index 带来的写冲突。
 
+### [softmax_regbase_story](./softmax_regbase_story)
+Softmax 算子的 RegBase 递进优化专题，演示 reduce + element-wise 混合算子从 MemBase 基线到 RegBase VF 融合、多行并行的优化实践。
+
 ### [simt_histogram_story](./simt_histogram_story)
 以 Histogram 算子为例的 SIMT 递进教学样例（`dav-3510`）：从 MTE+Vector 串行基线出发，逐步引入 SIMT 并行计数（grid-stride）、float4 向量化、launch_bounds 寄存器分析与 GridDim 扫描，展示 A5 纯 SIMT 编程模型下的性能优化路径。
 
