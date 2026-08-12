@@ -36,7 +36,10 @@ Softmax 算子的 RegBase 递进优化专题，演示 reduce + element-wise 混�
 用 GELU + Element-wise 融合算子演示 RegBase 的改写和优化（`dav-3510`）：Case 0 是 MemBase 基线，Case 1~4 依次做 VF 融合、循环拆分、循环展开、常量外提，共 5 个独立可执行 Case。
 
 ### [flash_attn_lite_story](./flash_attn_lite_story)
-Flash Attention Lite 教学样例（Ascend 950），以固定规格的 Flash Attention 前向计算说明 Cube 与 Vector 融合算子的实现和流水排布，从单槽串行基线逐步加入 CV 核间双槽流水、AIC 核内双缓冲和 task 级 I/O 双缓冲，覆盖 v0～v5 递进版本。
+【建设中】Flash Attention Lite 教学样例（Ascend 950），从 GM 中间结果交换逐步过渡到片内数据通路，并通过双缓冲、四代滚动调度和 Vector Function 融合优化 Cube/Vector 流水，当前提供 v0～v5 和 v8。
+
+### [kimi_delta_attn_lite_story](./kimi_delta_attn_lite_story)
+【建设中】Kimi Delta Attention Lite 教学样例（Ascend 950），以 Recurrent KDA 为正确性定义，在设备端实现 Chunk KDA，并通过 v0～v3 展示三 Kernel 基线、Kernel 融合、Cube 与 Vector 协作以及多状态链流水优化。
 
 ### [scalar_story](./scalar_story)
 Scalar 单元性能优化专题，分析 Ascend 950 上 ScalarBound 问题的根因与诊断方法，涵盖 icache 预取、静态创建 LocalTensor、局部变量替代成员变量、消除多级指针解引用等优化手段，以 FusedInferAttentionScore 和 QuantBatchMatmul 为案例。

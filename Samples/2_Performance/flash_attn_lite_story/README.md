@@ -4,7 +4,7 @@
 
 Flash Attention Lite（FALite）是面向 Ascend 950 的教学样例，以固定规格的 Flash Attention 前向计算说明 Cube 与 Vector 融合算子的实现和流水排布。代码从单槽串行基线开始，逐步加入 CV 核间双槽流水、AIC 核内双缓冲和 task 级 I/O 双缓冲。
 
-本文覆盖 v0～v5。v0/v1 为 GM 通路基线（Cube/Vector 经 GM 交换数据），v2 起转为片内零拷贝通路。各版本使用相同的算法、输入规格和精度判据。
+当前提供 v0～v5 和 v8。v0/v1 为 GM 通路基线（Cube/Vector 经 GM 交换数据），v2 起转为片内零拷贝通路，v8 进一步采用四代滚动调度并融合 Vector Function。各版本使用相同的算法、输入规格和精度判据。
 
 ## 算子实现原理
 
@@ -90,10 +90,13 @@ flash_attn_lite_story/
 └── src/
     ├── flash_attn_lite.h        # 各版本共用的 Host 接口
     ├── flash_attn_lite_demo.cpp # 各版本共用的 Demo
+    ├── v0/
+    ├── v1/
     ├── v2/
     ├── v3/
     ├── v4/
-    └── v5/
+    ├── v5/
+    └── v8/
 ```
 
 每个 `src/vN` 目录保留该版本独立的 TilingData、Host tiling、Kernel 入口和 AIC/AIV 实现。CMake 自动识别 `src/vN` 并生成 `falite_vN`。
@@ -127,6 +130,7 @@ cmake --build build --target falite_v2
 cmake --build build --target falite_v3
 cmake --build build --target falite_v4
 cmake --build build --target falite_v5
+cmake --build build --target falite_v8
 ```
 
 二进制和共用 Python 脚本位于：
@@ -152,9 +156,8 @@ cmake -S . -B build-sim \
 ./build/Samples/2_Performance/flash_attn_lite_story/falite_v3 --size 1 32768
 ./build/Samples/2_Performance/flash_attn_lite_story/falite_v4 --size 1 32768
 ./build/Samples/2_Performance/flash_attn_lite_story/falite_v5 --size 1 32768
+./build/Samples/2_Performance/flash_attn_lite_story/falite_v8 --size 1 32768
 ```
-
-本次迁移使用 CANN 9.0.0 Community、`dav-3510` 和全部 32 个 AIC 验证上述规格，v2～v5 的 Golden 比对均为 0 个失败元素。
 
 命令行参数：
 
@@ -289,6 +292,24 @@ task t+1:                 Q[io^1] -> C1/V1/C2/V2 -> ...
 
 参考性能：`46974.507812 us`，相较 v4 下降 `8.02%`，加速 `1.087x`。
 
+### v8：四代滚动与 Vector Function 融合
+
+v5 仍以两个 KV tile 为一组，组间需要等待固定阶段收口。v8 保留相同算法和 task 级 I/O 双缓冲，将阶段调度改为 `R=4` 的滚动流水，使四代 C1/V1 可以同时在途：
+
+```text
+epoch 0: AIC C1(0)
+epoch 1: AIC C1(1)       | AIV V1(0)
+epoch 2: AIC C1(2)       | AIV V1(1)
+epoch 3: AIC C1(3),C2(0) | AIV V1(2)
+epoch 4: AIC C1(4),C2(1) | AIV V1(3),V2(0)
+```
+
+稳态下，AIC 按 `C1(t) -> C2(t-3)` 发射，AIV 按 `V1(t-1) -> V2(t-4)` 发射。P、V 和 alpha 使用 4 槽保存跨阶段状态；K、S、PWork、DeltaO 和 L0A/L0B 使用双槽；L0C 使用 4 槽作为 Mmad 到 Fixpipe 的结果队列。核内物理槽由 Mutex 管理，S、P 和 DeltaO 的 AIC/AIV 交接仍使用 CrossCore flag。
+
+v8 同时收紧了 AIV 计算路径：online softmax 与 FP32 DN→BF16 NZ Cast/Pack 合并为一次 VF，exp 不再写回 FP32 UB 后重读；max、sum 和 OAcc 更新采用四条独立寄存器链；首个 V2 直接以 DeltaO 初始化 OAcc，后续更新使用 `MulDstAdd`。这些改动减少了 VF 启动、UB 访问和串行依赖。
+
+三类槽位参数相互独立：`CV_PIPELINE_SLOT_NUM=4` 表示跨 CV 阶段的在途深度，`DB_SLOT_NUM=2` 用于相邻异步组件的双缓冲，`L0C_QUEUE_DEPTH=4` 表示 Cube 到 Fixpipe 的结果队列深度。固定分块下，L1、单路 AIV UB 和 L0C 分别占用 384 KiB、225.75 KiB 和 256 KiB。
+
 ## 精度验证
 
 v0/v1 使用与 v2～v5 相同的 BF16 算法和精度判据。以下为 CANN 9.2.0 + dav-3510 + 28 AIC 条件下的 Golden 比对结果：
@@ -299,6 +320,8 @@ v0/v1 使用与 v2～v5 相同的 BF16 算法和精度判据。以下为 CANN 9.
 | v1 | 0 失败 | 0 失败 | 0 失败 | 0 失败 | dry-run 可运行 (未做 Golden 比对) |
 
 v0/v1 的 S/P/ΔO buffer 均 per-task 复用 (Bc×Br / Bc×Br / Br×D)，S=131072 时 v0 buffer 合计约 160 MiB，v1 仅需 P buffer 约 32 MiB。
+
+v8 使用 CANN 9.0.0 + `dav-3510` 验证了 `--core-num 1 --size 1 128` 和 `--core-num 1 --size 1 640`，两项 Golden 比对的失败元素均为 0；CANN 9.2.0 下的 `--core-num 1 --size 1 640` 同样通过。`S=640` 包含 5 个 KV tile，可覆盖 `R=4` 四槽的首次回卷复用。
 
 ## 性能参考
 
@@ -311,7 +334,7 @@ v0/v1 性能数据（CANN 9.2.0, dav-3510, msopprof Task Duration）：
 
 v1 通过 L0C→UB 省去 S/ΔO 两路 GM 读写，加速比稳定在约 2x。
 
-以下为 v2～v5 性能参考。本次只调整版本目录编号，四份实现源码未改。下表按当前编号列出同一次干净构建和同一套采集条件下的结果：
+以下为 v2～v5 性能参考。下表列出同一次干净构建和同一套采集条件下的结果：
 
 - CANN 9.2.0
 - `dav-3510`，正式 mode2
@@ -329,9 +352,16 @@ v1 通过 L0C→UB 省去 S/ΔO 两路 GM 读写，加速比稳定在约 2x。
 
 从 v2 到 v5，Task Duration 下降 `58.74%`，对应 `2.423x`。这些单次实板数据用于说明当前版本在同条件下的相对变化，不代表所有规格上的固定收益。
 
+v8 当前 Mutex 实现另行采集两次，Task Duration 分别为 `21259.328125 us` 和 `21268.353516 us`，均值为 `21263.840821 us`。采集条件为 CANN 9.2.0、`dav-3510`、32 个 AIC、1650 MHz、`--dry-run --size 1 131072`。这组数据与 v2～v5 的表格不是同批采集，因此不计算相邻版本加速比。
+
+该规格的两次 BF16 BMM 有效工作量为 8.796093 TFLOP。按 32 核 BF16 Cube 峰值 432 TFLOPS 计算，v8 的有效 Cube MFU 为 95.756%，理论下限为 `20361.326 us`。这里的 MFU 以整个 Kernel 的 Task Duration 为分母，不是 Cube Pipe 的局部利用率。
+
+在保持 `R=4` 调度不变、只调整 VF 的受控对照中，Task Duration 从 `29510.722657 us` 降至 `21126.238282 us`，下降 `28.41%`，对应 `1.397x`。该组数据用于隔离 VF 融合和寄存器依赖优化的效果，不与当前 Mutex 结果混算。
+
 ## 当前实现边界
 
 - 所有版本使用相同的 BF16 算法和固定分块，不支持本 README“支持规格”之外的输入。
 - v2 是单槽串行基线；v3～v5 均以两个 KV tile 为一组，尾组不足两个 tile 时只执行 slot 0。
 - v5 已加入 AIC 核内双缓冲、KV 预取和 task 级 I/O 双缓冲，但 group 边界仍会留下流水空洞。
+- v8 取消固定双 tile group，改用 `R=4` 滚动调度；L0C 已使用全部 256 KiB，继续加深本地结果队列需要先调整片上布局。
 - 性能表只比较本次同源报告中的 `Task Duration`。组件 active time 可以重叠，不能直接相加，也不能只凭某一项 active time 判定稳定的性能 bound。

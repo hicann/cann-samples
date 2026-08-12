@@ -80,7 +80,7 @@ function(add_falite_version VERSION_NAME)
     )
 endfunction()
 
-# 复制 src/v(n-1) 为 src/vn 后重新配置, 即可自动生成 falite_vn.
+# 新增 src/vN 目录并重新配置后, CMake 会自动生成 falite_vN.
 file(GLOB VERSION_DIRS CONFIGURE_DEPENDS LIST_DIRECTORIES true
     ${CMAKE_CURRENT_SOURCE_DIR}/src/v*
 )
