@@ -118,22 +118,23 @@ public:
 
     __aicore__ inline void InitAicSyncFlags()
     {
-        AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID0);
-        AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID1);
-        AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID2);
-        AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID3);
-        AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(EVENT_ID0);
-        AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(EVENT_ID1);
+        l1APingMutex = AscendC::AllocMutexID();
+        l1APongMutex = AscendC::AllocMutexID();
+        l1BPingMutex = AscendC::AllocMutexID();
+        l1BPongMutex = AscendC::AllocMutexID();
+        l0PingMutex = AscendC::AllocMutexID();
+        l0PongMutex = AscendC::AllocMutexID();
     }
 
     __aicore__ inline void WaitAicSyncFlags()
     {
-        AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(EVENT_ID0);
-        AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(EVENT_ID1);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID1);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID2);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID3);
+        AscendC::PipeBarrier<PIPE_ALL>();
+        AscendC::ReleaseMutexID(l1APingMutex);
+        AscendC::ReleaseMutexID(l1APongMutex);
+        AscendC::ReleaseMutexID(l1BPingMutex);
+        AscendC::ReleaseMutexID(l1BPongMutex);
+        AscendC::ReleaseMutexID(l0PingMutex);
+        AscendC::ReleaseMutexID(l0PongMutex);
     }
 
     __aicore__ inline void RunMatmul(
@@ -219,15 +220,15 @@ private:
         CubeL1L0Buf& buf, uint32_t mTileIdx, uint32_t nTileIdx,
         uint32_t& a1NextKChunkIdx, uint32_t& b1NextKChunkIdx, uint8_t& a1CopyInIdx, uint8_t& b1CopyInIdx)
     {
-        AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID0);
+        AscendC::Mutex::Lock<PIPE_MTE2>(l1APingMutex);
         DataCopyInA(buf.a1Ping, a1NextKChunkIdx, mTileIdx);
-        AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>(EVENT_ID0);
+        AscendC::Mutex::Unlock<PIPE_MTE2>(l1APingMutex);
         a1NextKChunkIdx += stepKa;
         a1CopyInIdx ^= 1;
 
-        AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>(EVENT_ID2);
+        AscendC::Mutex::Lock<PIPE_MTE2>(l1BPingMutex);
         DataCopyInB(buf.b1Ping, b1NextKChunkIdx, nTileIdx);
-        AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>(EVENT_ID2);
+        AscendC::Mutex::Unlock<PIPE_MTE2>(l1BPingMutex);
         b1NextKChunkIdx += stepKb;
         b1CopyInIdx ^= 1;
     }
@@ -236,10 +237,10 @@ private:
         uint32_t a1ReadIdx, uint32_t b1ReadIdx)
     {
         if (kOffsetInChunkA == 0) {
-            AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE1>((a1ReadIdx == 0) ? EVENT_ID0 : EVENT_ID1);
+            AscendC::Mutex::Lock<PIPE_MTE1>((a1ReadIdx == 0) ? l1APingMutex : l1APongMutex);
         }
         if (kOffsetInChunkB == 0) {
-            AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE1>((b1ReadIdx == 0) ? EVENT_ID2 : EVENT_ID3);
+            AscendC::Mutex::Lock<PIPE_MTE1>((b1ReadIdx == 0) ? l1BPingMutex : l1BPongMutex);
         }
     }
 
@@ -247,10 +248,10 @@ private:
         uint32_t a1ReadIdx, uint32_t b1ReadIdx)
     {
         if ((kOffsetInChunkA + 1) == stepKa) {
-            AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>((a1ReadIdx == 0) ? EVENT_ID0 : EVENT_ID1);
+            AscendC::Mutex::Unlock<PIPE_MTE1>((a1ReadIdx == 0) ? l1APingMutex : l1APongMutex);
         }
         if ((kOffsetInChunkB + 1) == stepKb) {
-            AscendC::SetFlag<AscendC::HardEvent::MTE1_MTE2>((b1ReadIdx == 0) ? EVENT_ID2 : EVENT_ID3);
+            AscendC::Mutex::Unlock<PIPE_MTE1>((b1ReadIdx == 0) ? l1BPingMutex : l1BPongMutex);
         }
     }
 
@@ -261,17 +262,17 @@ private:
     {
         if (((kBlockIdx == 0) || ((kOffsetInChunkB + 1) == stepKb)) && b1NextKChunkIdx < kLoopCount) {
             AscendC::LocalTensor<half> b1WriteBuf = (b1CopyInIdx == 0) ? buf.b1Ping : buf.b1Pong;
-            AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>((b1CopyInIdx == 0) ? EVENT_ID2 : EVENT_ID3);
+            AscendC::Mutex::Lock<PIPE_MTE2>((b1CopyInIdx == 0) ? l1BPingMutex : l1BPongMutex);
             DataCopyInB(b1WriteBuf, b1NextKChunkIdx, nTileIdx);
-            AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>((b1CopyInIdx == 0) ? EVENT_ID2 : EVENT_ID3);
+            AscendC::Mutex::Unlock<PIPE_MTE2>((b1CopyInIdx == 0) ? l1BPingMutex : l1BPongMutex);
             b1NextKChunkIdx += stepKb;
             b1CopyInIdx ^= 1;
         }
         if (((kBlockIdx == 0) || ((kOffsetInChunkA + 1) == stepKa)) && a1NextKChunkIdx < kLoopCount) {
             AscendC::LocalTensor<half> a1WriteBuf = (a1CopyInIdx == 0) ? buf.a1Ping : buf.a1Pong;
-            AscendC::WaitFlag<AscendC::HardEvent::MTE1_MTE2>((a1CopyInIdx == 0) ? EVENT_ID0 : EVENT_ID1);
+            AscendC::Mutex::Lock<PIPE_MTE2>((a1CopyInIdx == 0) ? l1APingMutex : l1APongMutex);
             DataCopyInA(a1WriteBuf, a1NextKChunkIdx, mTileIdx);
-            AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>((a1CopyInIdx == 0) ? EVENT_ID0 : EVENT_ID1);
+            AscendC::Mutex::Unlock<PIPE_MTE2>((a1CopyInIdx == 0) ? l1APingMutex : l1APongMutex);
             a1NextKChunkIdx += stepKa;
             a1CopyInIdx ^= 1;
         }
@@ -293,7 +294,7 @@ private:
         AscendC::LocalTensor<half> a2Local = (mte1DBFlag == 0) ? buf.a2Ping : buf.a2Pong;
         AscendC::LocalTensor<half> b2Local = (mte1DBFlag == 0) ? buf.b2Ping : buf.b2Pong;
 
-        AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(mte1DBFlag);
+        AscendC::Mutex::Lock<PIPE_MTE1>((mte1DBFlag == 0) ? l0PingMutex : l0PongMutex);
         WaitL1Ready(kOffsetInChunkA, kOffsetInChunkB, a1ReadIdx, b1ReadIdx);
         DataLoadA(a1ReadBuf, a2Local, kOffsetInChunkA);
         DataLoadB(b1ReadBuf, b2Local, kOffsetInChunkB);
@@ -373,8 +374,9 @@ private:
         AscendC::LocalTensor<float> cLocal, AscendC::LocalTensor<half> a2Local,
         AscendC::LocalTensor<half> b2Local, uint32_t kBlockIdx, uint32_t kLoopCount)
     {
-        AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(mte1DBFlag);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(mte1DBFlag);
+        uint8_t curL0Mutex = (mte1DBFlag == 0) ? l0PingMutex : l0PongMutex;
+        AscendC::Mutex::Unlock<PIPE_MTE1>(curL0Mutex);
+        AscendC::Mutex::Lock<PIPE_M>(curL0Mutex);
         AscendC::MmadParams mmadParams;
         mmadParams.m = baseM;
         mmadParams.n = baseN;
@@ -382,13 +384,19 @@ private:
         mmadParams.cmatrixInitVal = (kBlockIdx == 0);
         mmadParams.unitFlag = (kBlockIdx != kLoopCount - 1) ? 2 : 3;
         AscendC::Mmad(cLocal, a2Local, b2Local, mmadParams);
-        AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(mte1DBFlag);
+        AscendC::Mutex::Unlock<PIPE_M>(curL0Mutex);
         mte1DBFlag ^= 1;
     }
 
     AscendC::GlobalTensor<half> aGM;
     AscendC::GlobalTensor<half> bGM;
     uint8_t mte1DBFlag = 0;
+    uint8_t l1APingMutex = 0;
+    uint8_t l1APongMutex = 0;
+    uint8_t l1BPingMutex = 0;
+    uint8_t l1BPongMutex = 0;
+    uint8_t l0PingMutex = 0;
+    uint8_t l0PongMutex = 0;
 };
 
 using CubePipe = MatmulCubePipeline<
