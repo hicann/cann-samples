@@ -36,44 +36,44 @@ Q/K 已完成 L2Norm，Q 已乘 `1/sqrt(Dk)`。`log_decay` 是门控后的逐 to
 
 除非特别说明，本文中的向量均为行向量。先省略 Batch 轴和固定为 1 的 Head 轴，讨论一条序列。KDA core 接收
 
-\[
+$$
 \mathbf Q,\mathbf K,\mathbf g\in\mathbb R^{S\times D_k},\qquad
 \mathbf V\in\mathbb R^{S\times D_v},\qquad
 \boldsymbol\beta\in\mathbb R^{1\times S},
-\]
+$$
 
 输出
 
-\[
+$$
 \mathbf O\in\mathbb R^{S\times D_v},\qquad
 \mathbf H_{\mathrm{final}}\in\mathbb R^{D_k\times D_v}.
-\]
+$$
 
-其中，\(\mathbf g\) 对应输入 `log_decay`，指数运算按元素进行。第 \(i\) 个 token 的变量和状态形状为
+其中，$\mathbf g$ 对应输入 `log_decay`，指数运算按元素进行。第 $i$ 个 token 的变量和状态形状为
 
-\[
+$$
 \mathbf q_i,\mathbf k_i,\mathbf g_i\in\mathbb R^{1\times D_k},\qquad
 \mathbf v_i,\mathbf o_i,\mathbf p_i,\mathbf r_i\in\mathbb R^{1\times D_v},\qquad
 \mathbf H_i\in\mathbb R^{D_k\times D_v},\qquad
 \beta_i\in\mathbb R.
-\]
+$$
 
 | 记号 | 含义 |
 | --- | --- |
-| \(\mathbf x\mathbf Y\) | 矩阵乘；行向量读取状态时结果仍为行向量 |
-| \(\mathbf x^\top\mathbf y\) | 列向量与行向量的外积 |
-| \(\odot\) | 逐元素乘 |
-| \(\operatorname{Diag}(\mathbf x)\) | 以向量 \(\mathbf x\) 为对角线构造方阵 |
-| \(\operatorname{StrictLower}(\mathbf X)\) | 只保留严格下三角元素 |
-| \(\operatorname{Lower}(\mathbf X)\) | 保留下三角和对角线 |
+| $\mathbf x\mathbf Y$ | 矩阵乘；行向量读取状态时结果仍为行向量 |
+| $\mathbf x^\top\mathbf y$ | 列向量与行向量的外积 |
+| $\odot$ | 逐元素乘 |
+| $\operatorname{Diag}(\mathbf x)$ | 以向量 $\mathbf x$ 为对角线构造方阵 |
+| $\operatorname{StrictLower}(\mathbf X)$ | 只保留严格下三角元素 |
+| $\operatorname{Lower}(\mathbf X)$ | 保留下三角和对角线 |
 
-本文使用 \(B\) 表示 Batch size，\(N\) 表示 Head 数，\(S\) 表示序列长度，\(C\) 表示 ChunkSize，\(T_c=\lceil S/C\rceil\) 表示 Chunk 数。本样例固定 \(N=1\) 和 \(D_k=D_v=128\)，但下面的数学公式允许 \(D_k\ne D_v\)。
+本文使用 $B$ 表示 Batch size，$N$ 表示 Head 数，$S$ 表示序列长度，$C$ 表示 ChunkSize，$T_c=\lceil S/C\rceil$ 表示 Chunk 数。本样例固定 $N=1$ 和 $D_k=D_v=128$，但下面的数学公式允许 $D_k\ne D_v$。
 
 #### Recurrent KDA
 
-Recurrent KDA 是本样例的正确性定义。令 \(\mathbf H_{i-1}\in\mathbb R^{D_k\times D_v}\) 为处理第 \(i\) 个 token 前的状态，初始状态为 \(\mathbf H_{-1}=\mathbf 0\)。一次递推依次执行
+Recurrent KDA 是本样例的正确性定义。令 $\mathbf H_{i-1}\in\mathbb R^{D_k\times D_v}$ 为处理第 $i$ 个 token 前的状态，初始状态为 $\mathbf H_{-1}=\mathbf 0$。一次递推依次执行
 
-\[
+$$
 \begin{aligned}
 \boldsymbol\lambda_i &= \exp(\mathbf g_i) &&\in\mathbb R^{1\times D_k},\\
 \overline{\mathbf H}_i &= \operatorname{Diag}(\boldsymbol\lambda_i)\mathbf H_{i-1} &&\in\mathbb R^{D_k\times D_v},\\
@@ -82,53 +82,53 @@ Recurrent KDA 是本样例的正确性定义。令 \(\mathbf H_{i-1}\in\mathbb R
 \mathbf H_i &= \overline{\mathbf H}_i+\mathbf k_i^\top\mathbf r_i &&\in\mathbb R^{D_k\times D_v},\\
 \mathbf o_i &= \mathbf q_i\mathbf H_i &&\in\mathbb R^{1\times D_v}.
 \end{aligned}
-\]
+$$
 
-这里先按 Key 通道衰减旧状态，再用 \(\mathbf k_i\) 读取预测值。残差 \(\mathbf r_i\) 经 \(\beta_i\) 缩放后，以外积 \(\mathbf k_i^\top\mathbf r_i\) 写回状态。输出读取的是已经包含当前 token 更新的 \(\mathbf H_i\)，而不是 \(\mathbf H_{i-1}\)。Golden 在 FP32 中直接执行这组逐 token 递推，不复用设备端的 Chunk 变换。
+这里先按 Key 通道衰减旧状态，再用 $\mathbf k_i$ 读取预测值。残差 $\mathbf r_i$ 经 $\beta_i$ 缩放后，以外积 $\mathbf k_i^\top\mathbf r_i$ 写回状态。输出读取的是已经包含当前 token 更新的 $\mathbf H_i$，而不是 $\mathbf H_{i-1}$。Golden 在 FP32 中直接执行这组逐 token 递推，不复用设备端的 Chunk 变换。
 
 #### 从 Recurrent 形式推到 Chunk 形式
 
-考虑一个有效长度为 \(L\le C\) 的 Chunk，并用局部下标 \(i=0,\ldots,L-1\)。补齐后的 Chunk 张量为
+考虑一个有效长度为 $L\le C$ 的 Chunk，并用局部下标 $i=0,\ldots,L-1$。补齐后的 Chunk 张量为
 
-\[
+$$
 \mathbf Q,\mathbf K,\mathbf g\in\mathbb R^{C\times D_k},\qquad
 \mathbf V\in\mathbb R^{C\times D_v},\qquad
 \boldsymbol\beta\in\mathbb R^{1\times C},\qquad
 \mathbf H_{\mathrm{in}}\in\mathbb R^{D_k\times D_v}.
-\]
+$$
 
 先定义累计 log-decay
 
-\[
+$$
 \mathbf G_i=\sum_{t=0}^{i}\mathbf g_t\in\mathbb R^{1\times D_k},\qquad
 \mathbf E_i=\operatorname{Diag}\!\left(\exp(\mathbf G_i)\right)\in\mathbb R^{D_k\times D_k},
-\]
+$$
 
-并约定 \(\mathbf G_{-1}=\mathbf 0\)、\(\mathbf E_{-1}=\mathbf I_{D_k}\)，因此 \(\widetilde{\mathbf H}_{-1}=\mathbf H_{\mathrm{in}}\)。由于相邻 token 的衰减满足 \(\operatorname{Diag}(\exp(\mathbf g_i))=\mathbf E_i\mathbf E_{i-1}^{-1}\)，可把状态归一化为
+并约定 $\mathbf G_{-1}=\mathbf 0$、$\mathbf E_{-1}=\mathbf I_{D_k}$，因此 $\widetilde{\mathbf H}_{-1}=\mathbf H_{\mathrm{in}}$。由于相邻 token 的衰减满足 $\operatorname{Diag}(\exp(\mathbf g_i))=\mathbf E_i\mathbf E_{i-1}^{-1}$，可把状态归一化为
 
-\[
+$$
 \widetilde{\mathbf H}_i=\mathbf E_i^{-1}\mathbf H_i.
-\]
+$$
 
 代入 Recurrent 状态更新后，连续的衰减项被消去：
 
-\[
+$$
 \widetilde{\mathbf H}_i
 =\widetilde{\mathbf H}_{i-1}
 +\left(\mathbf k_i\odot\exp(-\mathbf G_i)\right)^\top\mathbf r_i.
-\]
+$$
 
 因此
 
-\[
+$$
 \widetilde{\mathbf H}_i
 =\mathbf H_{\mathrm{in}}
 +\sum_{j=0}^{i}\left(\mathbf k_j\odot\exp(-\mathbf G_j)\right)^\top\mathbf r_j.
-\]
+$$
 
 定义按行堆叠的变换矩阵
 
-\[
+$$
 \begin{aligned}
 \mathbf Q^+_i &= \mathbf q_i\odot\exp(\mathbf G_i),\\
 \mathbf K^+_i &= \mathbf k_i\odot\exp(\mathbf G_i),\\
@@ -136,110 +136,110 @@ Recurrent KDA 是本样例的正确性定义。令 \(\mathbf H_{i-1}\in\mathbb R
 \end{aligned}
 \qquad
 \mathbf Q^+,\mathbf K^+,\mathbf K^-\in\mathbb R^{C\times D_k}.
-\]
+$$
 
-第 \(i\) 个 token 的预测值便可写成
+第 $i$ 个 token 的预测值便可写成
 
-\[
+$$
 \mathbf p_i
 =\mathbf K^+_i\mathbf H_{\mathrm{in}}
 +\sum_{j=0}^{i-1}(\mathbf P_{\mathrm{raw}})_{ij}\mathbf r_j,
 \qquad
 \mathbf P_{\mathrm{raw}}=\mathbf K^+(\mathbf K^-)^\top\in\mathbb R^{C\times C}.
-\]
+$$
 
 其中
 
-\[
+$$
 (\mathbf P_{\mathrm{raw}})_{ij}
 =\left\langle\mathbf k_i\odot\exp(\mathbf G_i),\;\mathbf k_j\odot\exp(-\mathbf G_j)\right\rangle
 \in\mathbb R
-\]
+$$
 
-描述第 \(j\) 个残差对第 \(i\) 个预测的影响。因果关系只使用 \(j<i\) 的严格下三角元素。
+描述第 $j$ 个残差对第 $i$ 个预测的影响。因果关系只使用 $j<i$ 的严格下三角元素。
 
-将所有残差按行堆叠成 \(\mathbf R\in\mathbb R^{C\times D_v}\)，令 \(\mathbf B_\beta=\operatorname{Diag}(\boldsymbol\beta)\in\mathbb R^{C\times C}\)，即可得到单位下三角方程
+将所有残差按行堆叠成 $\mathbf R\in\mathbb R^{C\times D_v}$，令 $\mathbf B_\beta=\operatorname{Diag}(\boldsymbol\beta)\in\mathbb R^{C\times C}$，即可得到单位下三角方程
 
-\[
+$$
 \underbrace{\left[\mathbf I_C+\operatorname{StrictLower}(\mathbf B_\beta\mathbf P_{\mathrm{raw}})\right]}_{\mathbf T\in\mathbb R^{C\times C}}
 \mathbf R
 =\mathbf B_\beta\left(\mathbf V-\mathbf K^+\mathbf H_{\mathrm{in}}\right).
-\]
+$$
 
-这一步把 Chunk 内按 token 串行的残差依赖集中到了一个下三角系统中。\(\mathbf T\) 的对角线恒为 1，因此可以按行前向代入，不需要计算通用矩阵逆。
+这一步把 Chunk 内按 token 串行的残差依赖集中到了一个下三角系统中。$\mathbf T$ 的对角线恒为 1，因此可以按行前向代入，不需要计算通用矩阵逆。
 
 #### Chunk KDA
 
 定义
 
-\[
+$$
 \mathbf M=\mathbf T^{-1}\mathbf B_\beta\in\mathbb R^{C\times C}.
-\]
+$$
 
-实现通过方程 \(\mathbf T\mathbf M=\mathbf B_\beta\) 求 \(\mathbf M\)。若 \(\mathbf e_i\in\mathbb R^{1\times C}\) 是第 \(i\) 个标准基行向量，则前向代入为
+实现通过方程 $\mathbf T\mathbf M=\mathbf B_\beta$ 求 $\mathbf M$。若 $\mathbf e_i\in\mathbb R^{1\times C}$ 是第 $i$ 个标准基行向量，则前向代入为
 
-\[
+$$
 \mathbf M_{i,:}
 =\beta_i\mathbf e_i
 -\beta_i\sum_{j=0}^{i-1}(\mathbf P_{\mathrm{raw}})_{ij}\mathbf M_{j,:}.
-\]
+$$
 
 于是残差矩阵可改写为
 
-\[
+$$
 \begin{aligned}
 \mathbf W &= \mathbf M\mathbf K^+ &&\in\mathbb R^{C\times D_k},\\
 \mathbf U &= \mathbf M\mathbf V &&\in\mathbb R^{C\times D_v},\\
 \mathbf R &= \mathbf U-\mathbf W\mathbf H_{\mathrm{in}} &&\in\mathbb R^{C\times D_v}.
 \end{aligned}
-\]
+$$
 
 输出端定义
 
-\[
+$$
 \mathbf A_{\mathrm{raw}}=\mathbf Q^+(\mathbf K^-)^\top\in\mathbb R^{C\times C},\qquad
 \mathbf A=\operatorname{Lower}(\mathbf A_{\mathrm{raw}})\in\mathbb R^{C\times C}.
-\]
+$$
 
-其中 \(\mathbf A\) 保留对角线，因为 \(\mathbf o_i\) 读取的是更新后的 \(\mathbf H_i\)。整个 Chunk 的输出为
+其中 $\mathbf A$ 保留对角线，因为 $\mathbf o_i$ 读取的是更新后的 $\mathbf H_i$。整个 Chunk 的输出为
 
-\[
+$$
 \mathbf O
 =\underbrace{\mathbf Q^+\mathbf H_{\mathrm{in}}}_{\text{history}\in\mathbb R^{C\times D_v}}
 +\underbrace{\mathbf A\mathbf R}_{\text{local}\in\mathbb R^{C\times D_v}}
 \in\mathbb R^{C\times D_v}.
-\]
+$$
 
-令 \(\mathbf G_{\mathrm{tail}}=\mathbf G_{L-1}\)，并定义
+令 $\mathbf G_{\mathrm{tail}}=\mathbf G_{L-1}$，并定义
 
-\[
+$$
 \mathbf d=\exp(\mathbf G_{\mathrm{tail}})\in\mathbb R^{1\times D_k},\qquad
 \mathbf K^{\mathrm{tail}}_i=\mathbf k_i\odot\exp(\mathbf G_{\mathrm{tail}}-\mathbf G_i),\qquad
 \mathbf K^{\mathrm{tail}}\in\mathbb R^{C\times D_k}.
-\]
+$$
 
 Chunk 末状态为
 
-\[
+$$
 \mathbf H_{\mathrm{out}}\in\mathbb R^{D_k\times D_v},\qquad
 \mathbf H_{\mathrm{out}}
 =\operatorname{Diag}(\mathbf d)\mathbf H_{\mathrm{in}}
 +(\mathbf K^{\mathrm{tail}})^\top\mathbf R.
-\]
+$$
 
 以上公式与 Recurrent KDA 在实数精确算术下等价。实现按下面三类工作组织：
 
 | 阶段 | 主要计算 | 依赖关系 |
 | --- | --- | --- |
-| Chunk 准备 | 生成 \(\mathbf M,\mathbf A,\mathbf Q^+,\mathbf K^+,\mathbf K^{\mathrm{tail}},\mathbf d\)，以及版本需要的 \(\mathbf W/\mathbf U\) | 每个 Chunk 独立 |
-| 状态推进 | 根据 \(\mathbf H_{\mathrm{in}}\) 计算 \(\mathbf R\) 和 \(\mathbf H_{\mathrm{out}}\) | 同一 Batch 的 Chunk 必须按序 |
-| 输出计算 | 计算 history、local 和 \(\mathbf O\) | 各 Chunk 的 \(D_v\) 列块可并行 |
+| Chunk 准备 | 生成 $\mathbf M,\mathbf A,\mathbf Q^+,\mathbf K^+,\mathbf K^{\mathrm{tail}},\mathbf d$，以及版本需要的 $\mathbf W/\mathbf U$ | 每个 Chunk 独立 |
+| 状态推进 | 根据 $\mathbf H_{\mathrm{in}}$ 计算 $\mathbf R$ 和 $\mathbf H_{\mathrm{out}}$ | 同一 Batch 的 Chunk 必须按序 |
+| 输出计算 | 计算 history、local 和 $\mathbf O$ | 各 Chunk 的 $D_v$ 列块可并行 |
 
-v1/v2 不保存 \(\mathbf W\)，而按结合律计算 \(\mathbf M(\mathbf K^+\mathbf H_{\mathrm{in}})\)；v0/v3 使用 \((\mathbf M\mathbf K^+)\mathbf H_{\mathrm{in}}\)。两条路径在实数精确算术中相同，但 BF16 中间量的舍入位置不同，因此每个版本都单独对 Recurrent Golden 做精度校验。
+v1/v2 不保存 $\mathbf W$，而按结合律计算 $\mathbf M(\mathbf K^+\mathbf H_{\mathrm{in}})$；v0/v3 使用 $(\mathbf M\mathbf K^+)\mathbf H_{\mathrm{in}}$。两条路径在实数精确算术中相同，但 BF16 中间量的舍入位置不同，因此每个版本都单独对 Recurrent Golden 做精度校验。
 
-\(\mathbf K^-\) 只用于数学推导。v2/v3 为 Cube 构造带 anchor 的 BF16 因子，避免直接生成 \(\exp(-\mathbf G_i)\) 带来的过大动态范围；anchor 在矩阵乘中相互抵消，不改变上述实数公式。
+$\mathbf K^-$ 只用于数学推导。v2/v3 为 Cube 构造带 anchor 的 BF16 因子，避免直接生成 $\exp(-\mathbf G_i)$ 带来的过大动态范围；anchor 在矩阵乘中相互抵消，不改变上述实数公式。
 
-尾块将无效行补为 \(\mathbf Q=\mathbf K=\mathbf V=\mathbf 0\)、\(\beta=0\)、\(\mathbf g=\mathbf 0\)。这些行不衰减状态，也不写入新的状态增量。Kernel 仍按完整 \(C\) 行计算，最终只回写有效的 \(L\) 行输出。
+尾块将无效行补为 $\mathbf Q=\mathbf K=\mathbf V=\mathbf 0$、$\beta=0$、$\mathbf g=\mathbf 0$。这些行不衰减状态，也不写入新的状态增量。Kernel 仍按完整 $C$ 行计算，最终只回写有效的 $L$ 行输出。
 
 ## 公共接口与执行模型
 
