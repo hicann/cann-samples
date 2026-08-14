@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file quant_matmul_tiling_data.h
+ * \file quant_matmul_mx_tiling_data.h
  * \brief Serialized tiling data passed from the host launcher to the kernel.
  */
 
@@ -24,7 +24,7 @@
 // The field order is part of the host-device contract, so layout stability is
 // more important here than convenience of reordering members.
 #pragma pack(push, 8)
-struct alignas(8) QuantMatmulTilingData {
+struct alignas(8) QuantMatmulMxTilingData {
     // Original problem shape.
     uint32_t m{0};
     uint32_t n{0};

@@ -37,7 +37,7 @@ protected:
         return "swat";
     }
 
-    void DoOpTiling(QuantMatmulTilingData& tilingData) override
+    void DoOpTiling(QuantMatmulMxTilingData& tilingData) override
     {
         // The streaming path can reuse the common base block search directly,
         // then specializes only the tail split and L1-depth decisions.
@@ -60,7 +60,7 @@ private:
             runInfo_.scaleFactorB * runInfo_.stepKb * runInfo_.baseK));
     }
 
-    void BuildTilingData(QuantMatmulTilingData& tilingData, uint32_t scaleKL1, uint8_t nBufferNum) const
+    void BuildTilingData(QuantMatmulMxTilingData& tilingData, uint32_t scaleKL1, uint8_t nBufferNum) const
     {
         // Flatten the host-side search result into the POD payload consumed by
         // the launcher and device kernel.

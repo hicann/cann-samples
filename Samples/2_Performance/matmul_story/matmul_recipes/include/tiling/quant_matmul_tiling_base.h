@@ -20,7 +20,7 @@
 
 #include "host_utils/common_utils.h"
 #include "quant_matmul_tiling_common.h"
-#include "quant_matmul_tiling_data.h"
+#include "quant_matmul_mx_tiling_data.h"
 #include "utils/constant.h"
 
 template <mm::DataType aDataType, mm::DataType bDataType>
@@ -29,7 +29,7 @@ public:
     QuantMatmulTilingBase() = default;
     virtual ~QuantMatmulTilingBase() = default;
 
-    void GetTilingData(uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, QuantMatmulTilingData& tilingData)
+    void GetTilingData(uint64_t m, uint64_t n, uint64_t k, bool transA, bool transB, QuantMatmulMxTilingData& tilingData)
     {
         // Clear the cached state so one tiling object can safely be reused for
         // multiple shapes without leaking the previous decision.
@@ -46,7 +46,7 @@ public:
         PrintTilingData(tilingData);
     }
 
-    void GetTilingData(uint64_t m, uint64_t n, uint64_t k, QuantMatmulTilingData& tilingData)
+    void GetTilingData(uint64_t m, uint64_t n, uint64_t k, QuantMatmulMxTilingData& tilingData)
     {
         // Keep compatibility with the common sample default:
         // A is not transposed and B is transposed.
@@ -60,10 +60,10 @@ protected:
 
     virtual const char* TilingName() const = 0;
 
-    virtual void DoOpTiling(QuantMatmulTilingData& tilingData) = 0;
+    virtual void DoOpTiling(QuantMatmulMxTilingData& tilingData) = 0;
 
 private:
-    void PrintTilingData(const QuantMatmulTilingData& tilingData) const
+    void PrintTilingData(const QuantMatmulMxTilingData& tilingData) const
     {
         printf("[QuantMatmul Strategy]\n");
         printf("  strategy           : %s\n", TilingName());

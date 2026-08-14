@@ -37,7 +37,7 @@ protected:
         return "a_full_load";
     }
 
-    void DoOpTiling(QuantMatmulTilingData& tilingData) override
+    void DoOpTiling(QuantMatmulMxTilingData& tilingData) override
     {
         // The A-full-load path validates eligibility before computing its
         // L1 layout because later calculations assume A stays resident in L1.
@@ -61,7 +61,7 @@ private:
             runInfo_.scaleFactorB * runInfo_.stepKb * runInfo_.baseK));
     }
 
-    void BuildTilingData(QuantMatmulTilingData& tilingData, uint32_t scaleKL1, uint8_t nBufferNum) const
+    void BuildTilingData(QuantMatmulMxTilingData& tilingData, uint32_t scaleKL1, uint8_t nBufferNum) const
     {
         // Flatten the host-side search result into the POD payload consumed by
         // the launcher and device kernel.

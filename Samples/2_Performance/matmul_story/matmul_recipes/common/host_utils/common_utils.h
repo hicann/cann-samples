@@ -85,7 +85,7 @@ inline uint64_t ParsePositiveUint64(const char* arg, const char* name)
 
 inline void CheckUint32Shape(uint64_t value, const char* name)
 {
-    // QuantMatmulTilingData serializes public shape fields as uint32_t.
+    // QuantMatmulMxTilingData serializes public shape fields as uint32_t.
     constexpr uint64_t uint32Max = static_cast<uint64_t>(std::numeric_limits<uint32_t>::max());
     if (value > uint32Max) {
         throw std::invalid_argument(std::string("ERROR: ") + name + " must not exceed UINT32_MAX");
