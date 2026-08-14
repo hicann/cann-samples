@@ -48,6 +48,8 @@ add_matmul_recipe(matmul_a32w32_streamk
 
 add_matmul_recipe(quant_matmul_mxfp8_swat
     quant_matmul_mxfp8/quant_matmul_mxfp8_swat.asc quant_matmul_mxfp8)
+add_matmul_recipe(quant_matmul_mxfp8_k_tail_stepwise_copyout
+    quant_matmul_mxfp8/quant_matmul_mxfp8_k_tail_stepwise_copyout.asc quant_matmul_mxfp8)
 add_matmul_recipe(quant_matmul_mxfp8_swat_4_buffer
     quant_matmul_mxfp8/quant_matmul_mxfp8_swat_4_buffer.asc quant_matmul_mxfp8)
 add_matmul_recipe(quant_matmul_mxfp8_swat_weight_nz

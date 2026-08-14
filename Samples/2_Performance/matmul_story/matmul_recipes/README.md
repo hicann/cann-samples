@@ -47,7 +47,7 @@ matmul_recipes/
 |------|----------|------|
 | [matmul_a16w16](examples/matmul_a16w16/README.md) | Float16 | A16W16 非量化矩阵乘 |
 | [quant_matmul_mxfp4](examples/quant_matmul_mxfp4/README.md) | MXFP4 | 4 位浮点量化矩阵乘，包含 SWAT 与 A 全载两种实现 |
-| [quant_matmul_mxfp8](examples/quant_matmul_mxfp8/README.md) | MXFP8 | 8 位浮点量化矩阵乘，包含 SWAT 与 A 全载两种实现 |
+| [quant_matmul_mxfp8](examples/quant_matmul_mxfp8/README.md) | MXFP8 | 8 位浮点量化矩阵乘，包含 SWAT、K-Tail Stepwise Copyout 与 A 全载实现 |
 | [quant_matmul_hifp8](examples/quant_matmul_hifp8/README.md) | HiFloat8（hifp8） | HiFloat8 输入、BF16 输出；DOUBLE_SCALE（`quant_matmul_hifp8_tt`）与 PER_CHANNEL（`quant_matmul_hifp8_tc`），见目录内 README |
 | [weight_quant_matmul_mxfp8fp4](examples/weight_quant_matmul_mxfp8fp4/README.md) | MXFP8 + MXFP4 | MXFP8FP4 量化矩阵乘 |
 

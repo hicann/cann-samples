@@ -331,6 +331,36 @@ $$
   - MMAD和FIXPIPE流水部分或全部串行执行的场景
   - 需要提高计算与搬出并行度的场景
 
+#### K-Tail Stepwise Copyout（K尾轮分步搬出）
+
+- **原理介绍**
+
+  UnitFlag可以让FIXPIPE在当前Tile最终累加期间提前搬出已完成的部分结果，但当FIXPIPE的搬出尾部延续到下一Tile时，下一Tile立即复用相同L0C地址仍可能产生读写冲突，造成MMAD流水空洞。
+
+  <div align="center">
+    <img src="images/qbmmv3-mx-mad-conflict.png" width="1500" alt="K尾轮MMAD与FIXPIPE搬出之间的L0C读写冲突" />
+  </div>
+
+  K-Tail Stepwise Copyout在完整输出基本块无法放入半个L0C时保持M不变，并沿N方向将MMAD近似对半拆成两个子块。首个KL1轮次采用相同的N切分，分别初始化两个子块对应的累加区域；中间KL1轮次按完整N累加；最后一个KL1轮次再次按N切分，形成K尾轮的分步搬出。
+
+  K尾轮采用`KL1 -> N Split -> KL0`循环顺序。每个N子块先连续完成全部KL0累加，在最终累加完成后立即通过FIXPIPE搬出到GM，再切换到下一个N子块。无需拆分的输出Tile仍按完整N执行。
+- **效果对比**
+
+  <div align="center">
+    <img src="images/qbmmv3-mx-iter-diff.png" width="1500" />
+  </div>
+
+  原`KL1 -> KL0 -> N Split`顺序会在每个KL0轮次中切换N子块。第一个N子块触发FIXPIPE后，只间隔第二个N子块的一轮MMAD就可能进入下一Tile，较短的间隔无法稳定覆盖搬出尾部。
+
+  K-Tail Stepwise Copyout采用`KL1 -> N Split -> KL0`顺序，使第一个N子块完成全部K尾轮计算并触发搬出后，再执行第二个N子块的整段KL0计算。同一L0C子区域被下一Tile复用前获得更长的计算间隔，从而减少FIXPIPE读取与MMAD写入冲突，并提高K尾轮计算与结果搬出的并行度。
+- **适用场景**
+
+  - Cube-bound，且MMAD连续性对Kernel总耗时有明显影响的场景
+  - 完整输出基本块无法放入半个L0C，需要在K尾轮沿N方向分步搬出的场景
+  - K较大或单核计算轮数较多，FIXPIPE引入的流水空洞会在连续Tile之间累积的场景
+  - A/B为MXFP4，或二者均为支持的MXFP8类型，Scale为FP8 E8M0，输出为FP16/BF16的场景
+  - 输入内轴满足硬件对齐要求的场景，其中MXFP4对齐256 B，MXFP8对齐128 B
+
 
 ### 搬运效率优化
 

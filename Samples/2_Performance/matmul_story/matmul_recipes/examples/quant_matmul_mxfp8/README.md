@@ -2,7 +2,7 @@
 
 ## 概述
 
-本示例展示了MXFP8量化矩阵乘算子在昇腾AI处理器上的完整实现，包含基于SWAT模板的高性能优化方案。MXFP8是一种8位浮点数量化格式，可在保持较好精度的前提下显著降低带宽开销与访存压力，适用于大语言模型推理等场景。
+本示例展示了MXFP8量化矩阵乘算子在昇腾AI处理器上的完整实现，包含基于SWAT模板的高性能优化方案，以及面向K尾轮计算与搬出并行的K-Tail Stepwise Copyout实现。MXFP8是一种8位浮点数量化格式，可在保持较好精度的前提下显著降低带宽开销与访存压力，适用于大语言模型推理等场景。
 
 当前目录提供以下能力：
 
@@ -11,6 +11,7 @@
 权重`ND`排布（包括`NDExtLayout`/`DNExtLayout`）
 
 - `quant_matmul_mxfp8_swat`：基于SWAT模板、双L1缓冲（2-buffer）的实现。
+- `quant_matmul_mxfp8_k_tail_stepwise_copyout`：基于SWAT non-full-load路径的K-Tail Stepwise Copyout实现。当完整输出基本块大于半个L0C时，保持M方向不变，仅在首个和最后一个KL1轮次沿N方向切分；K尾轮中每个N子块完成全部KL0累加后立即搬出，以减少FIXPIPE读取与下一Tile MMAD写入之间的冲突。
 - `quant_matmul_mxfp8_swat_4_buffer`：基于SWAT模板、四L1缓冲（4-buffer）的实现。
 - `quant_matmul_mxfp8_a_full_load`：A矩阵full load方案的实现。
 
@@ -89,9 +90,9 @@ cd Samples/2_Performance/matmul_story/matmul_recipes/examples/quant_matmul_mxfp8
 # 自动构建 + 自动推荐最优算法 + 运行
 bash scripts/run.sh 16 128 16384 0 1
 
-# 指定目标可执行文件，跳过重新构建
+# 指定K-Tail Stepwise Copyout目标，跳过重新构建
 bash scripts/run.sh \
-  --target quant_matmul_mxfp8_a_full_load --skip-build 16 128 16384 0 1
+  --target quant_matmul_mxfp8_k_tail_stepwise_copyout --skip-build 4096 1024 32768 0 1
 
 # 查看完整帮助
 bash scripts/run.sh --help
@@ -144,6 +145,10 @@ python3 gen_data_weight_nz.py 16 128 16384 0 1
 ./quant_matmul_mxfp8_swat_4_buffer 16 128 16384 0 1
 # 或：A full load
 ./quant_matmul_mxfp8_a_full_load 16 128 16384 0 1
+
+# K-Tail Stepwise Copyout：重新生成匹配该Shape的输入数据
+python3 gen_data.py 4096 1024 32768 0 1
+./quant_matmul_mxfp8_k_tail_stepwise_copyout 4096 1024 32768 0 1
 ```
 
 `NZ`权重：
@@ -163,12 +168,13 @@ python3 quant_matmul_mxfp8_algorithm_recommend.py 16 128 16384 0 1
 
 ```text
 [Profile Breakdown]
-+------------------------------------+----------+---------+----------+---------+---------+------------+--------------+
-| candidate                          |kernel(us)| mac(us) |scalar(us)| mte1(us)| mte2(us)|fixpipe(us) |icache_miss(%)|
-+====================================+==========+=========+==========+=========+=========+============+==============+
-| quant_matmul_mxfp8_swat_weight_nz  |    10.100|   1.150 |     0.520|   0.100 |   0.280 |     0.720 |        0.082  |
-| quant_matmul_mxfp8_swat_4_buffer   |    11.900|   1.200 |     0.550|   0.110 |   0.440 |     0.770 |        0.095  |
-| quant_matmul_mxfp8_swat            |    12.345|   1.234 |     0.567|   0.123 |   0.456 |     0.789 |        0.100  |
-| quant_matmul_mxfp8_a_full_load     |    15.678|   2.100 |     0.800|   0.200 |   0.300 |     0.500 |        0.250  |
-+------------------------------------+----------+---------+----------+---------+---------+------------+--------------+
++------------------------------------------------+----------+---------+----------+---------+---------+------------+--------------+
+| candidate                                      |kernel(us)| mac(us) |scalar(us)| mte1(us)| mte2(us)|fixpipe(us) |icache_miss(%)|
++================================================+==========+=========+==========+=========+=========+============+==============+
+| quant_matmul_mxfp8_swat_weight_nz              |    10.100|   1.150 |     0.520|   0.100 |   0.280 |     0.720 |        0.082  |
+| quant_matmul_mxfp8_k_tail_stepwise_copyout     |    10.500|   1.170 |     0.530|   0.105 |   0.320 |     0.730 |        0.086  |
+| quant_matmul_mxfp8_swat_4_buffer               |    11.900|   1.200 |     0.550|   0.110 |   0.440 |     0.770 |        0.095  |
+| quant_matmul_mxfp8_swat                        |    12.345|   1.234 |     0.567|   0.123 |   0.456 |     0.789 |        0.100  |
+| quant_matmul_mxfp8_a_full_load                 |    15.678|   2.100 |     0.800|   0.200 |   0.300 |     0.500 |        0.250  |
++------------------------------------------------+----------+---------+----------+---------+---------+------------+--------------+
 ```
