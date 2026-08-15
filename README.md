@@ -55,8 +55,10 @@
 
 ## 🔥最新动态
 
-- [2026/05] cann-samples在matmul_story新增[matmul_a16w16](Samples/2_Performance/matmul_story/matmul_recipes/examples/matmul_a16w16/README.md) streamK等高性能example，并在既有quant_matmul_mxfp4、quant_matmul_mxfp8 MX量化矩阵乘中支持Weight NZ。
-- [2026/05] cann-samples在grouped_matmul_story新增[weight_quant_grouped_matmul_mxfp8fp4](Samples/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/weight_quant_grouped_matmul_mxfp8fp4/README.md) MXA8W4量化example，并在既有quant_grouped_matmul_mxfp4、quant_grouped_matmul_mxfp8分组矩阵乘中支持Weight NZ。
+- [2026/08] 新增 [Kimi Delta Attention Lite](Samples/2_Performance/kimi_delta_attn_lite_story/README.md)、[Softmax RegBase 递进优化](Samples/2_Performance/softmax_regbase_story/README.md)和 [Vector Function Add](Samples/0_Introduction/vector_function_add/README.md) 样例，并上线环境自检脚本，进一步完善入门与性能调优体验。
+- [2026/07] 新增 [Flash Attention Lite](Samples/2_Performance/flash_attn_lite_story/README.md)、[GELU + Element-wise RegBase](Samples/2_Performance/gelu_eltwise_regbase_story/README.md)、[SIMT Histogram](Samples/2_Performance/simt_histogram_story/README.md)和 [SIMT Scatter](Samples/2_Performance/simt_scatter_story/README.md) 调优实践，同时补充 [NPU 访存带宽测试](Samples/1_Features/hardware_features/mem_bandwidth/README.md)与 [CV 数据通路优化](Samples/1_Features/hardware_features/cv_datapath/README.md)样例。
+- [2026/06] 建设 [SIMD VF 常见范式](Samples/2_Performance/simd_vf_story/README.md)，覆盖 Broadcast、Elementwise 与 Reduce；新增 [Reg 数据搬运场景选型指南](Samples/1_Features/memory_optimization/reg_data_movement/Reg数据搬运场景选型指南.md)及 10 个可运行示例，并补充 [KvRmsNormRopeCache RegBase](Samples/2_Performance/kv_rms_norm_rope_cache_story/README.md)优化实践。
+- [2026/05] 矩阵乘与分组矩阵乘样例持续增强：新增 [matmul_a16w16](Samples/2_Performance/matmul_story/matmul_recipes/examples/matmul_a16w16/README.md) StreamK、[weight_quant_grouped_matmul_mxfp8fp4](Samples/2_Performance/grouped_matmul_story/grouped_matmul_recipes/examples/weight_quant_grouped_matmul_mxfp8fp4/README.md) MXA8W4 量化等高性能样例，并为 MXFP4/MXFP8 量化场景补充 Weight NZ 支持。
 
 ---
 
