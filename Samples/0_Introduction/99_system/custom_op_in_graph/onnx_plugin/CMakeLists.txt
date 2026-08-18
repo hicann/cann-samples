@@ -10,14 +10,12 @@
 # ----------------------------------------------------------------------------
 
 aux_source_directory(. SRCS)
-message(STATUS "onnx_plugin SRCS = ${SRCS}")
 
 if("x${SRCS}" STREQUAL "x")
     message(WARNING "onnx_plugin: no source files found, skip")
     return()
 endif()
 
-# ---- 编译为共享库 ----
 set(TARGET_NAME ${ONNX_PLUGIN_TARGET})
 set(LIBRARY_OUTPUT_PATH ${ONNX_PLUGIN_TARGET_OUT_DIR})
 
@@ -25,9 +23,9 @@ add_library(${TARGET_NAME} SHARED ${SRCS})
 
 target_compile_definitions(${TARGET_NAME} PRIVATE
     google=ascend_private
+    _GLIBCXX_USE_CXX11_ABI=0
 )
 
-# ---- nlohmann/json：优先使用 CANN 自带的，没有则自动下载 ----
 set(NLOHMANN_JSON_DIR "${CMAKE_CURRENT_BINARY_DIR}/third_party/json")
 set(NLOHMANN_JSON_HEADER "${NLOHMANN_JSON_DIR}/include/nlohmann/json.hpp")
 if(NOT EXISTS "${NLOHMANN_JSON_HEADER}")
@@ -48,13 +46,14 @@ if(NOT EXISTS "${NLOHMANN_JSON_HEADER}")
     endif()
 endif()
 
-# ---- include 路径 ----
 target_include_directories(${TARGET_NAME} PRIVATE
-    ${ASCEND_INC}/../../opp/built-in/op_graph/inc/
+    ${ASCEND_INC}
+    ${ASCEND_DIR}/opp/built-in/op_graph/inc/
     "${NLOHMANN_JSON_DIR}/include"
 )
 
-# ---- 链接 CANN 框架库 ----
-target_link_libraries(${TARGET_NAME}
-    ${ASCEND_INC}/../lib64/libgraph.so
+target_link_libraries(${TARGET_NAME} PRIVATE
+    ${ASCEND_DIR}/lib64/libgraph.so
+    ${ASCEND_DIR}/lib64/libregister.so
+    stdc++
 )
