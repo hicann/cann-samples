@@ -160,7 +160,7 @@ bool KimiDeltaAttnLiteNPU(
     }
 
     std::printf(
-        "kdalite: 请求启动 kernel，ChunkPrepare=%u AIV，FusedRecurrentOutput=%u Mix，"
+        "kdalite: 请求启动 kernel，Prepare=%u AIV，StateOutput=%u Mix，"
         "workspace=%llu bytes\n",
         data.prepareUseAivNum, data.stateUseAicNum, static_cast<unsigned long long>(data.workspaceBytes));
     KDALite::LaunchKimiDeltaAttnLiteKernels(

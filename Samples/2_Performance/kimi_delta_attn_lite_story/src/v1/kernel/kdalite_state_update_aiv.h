@@ -108,13 +108,13 @@ __aicore__ inline void PublishState(
 }
 
 __aicore__ inline void KernelProcessStateUpdateForAIV(
-    __gm__ bfloat16_t* outputGMAddr, __gm__ float* finalStateGMAddr, __gm__ uint8_t* workspaceGMAddr,
+    __gm__ bfloat16_t* outputGMAddr, __gm__ bfloat16_t* finalStateGMAddr, __gm__ uint8_t* workspaceGMAddr,
     const KimiDeltaAttnLiteTilingData& data)
 {
     using namespace AscendC;
     if ASCEND_IS_AIV {
-        GlobalTensor<bfloat16_t> outputGlobal;
-        GlobalTensor<float> finalStateGlobal, stateDecayGlobal;
+        GlobalTensor<bfloat16_t> outputGlobal, finalStateGlobal;
+        GlobalTensor<float> stateDecayGlobal;
         outputGlobal.SetGlobalBuffer(outputGMAddr);
         finalStateGlobal.SetGlobalBuffer(finalStateGMAddr);
         stateDecayGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float*>(workspaceGMAddr + data.stateDecayOffset));
@@ -229,11 +229,11 @@ __aicore__ inline void KernelProcessStateUpdateForAIV(
             }
 
             Mutex::Unlock<PIPE_V>(MUTEX_STATE_VALUE_UB);
-            Mutex::Lock<PIPE_MTE3>(MUTEX_STATE_VALUE_UB);
+            Mutex::Lock<PIPE_MTE3>(MUTEX_STATE_SHADOW_UB);
             const uint64_t finalStateOffset = static_cast<uint64_t>(batchId) * HEAD_DIM * VALUE_DIM + valueColumn;
             CopyUbToGmRows(
-                finalStateGlobal[finalStateOffset], stateUBLocal, HEAD_DIM, AIV_DV_TILE, AIV_DV_TILE, VALUE_DIM);
-            Mutex::Unlock<PIPE_MTE3>(MUTEX_STATE_VALUE_UB);
+                finalStateGlobal[finalStateOffset], stateShadowUBLocal, HEAD_DIM, AIV_DV_TILE, AIV_DV_TILE, VALUE_DIM);
+            Mutex::Unlock<PIPE_MTE3>(MUTEX_STATE_SHADOW_UB);
 
             // 消费 AIC 归还的 state/R 空槽信号, 使本 task 的 CrossCore Set/Wait 成对.
             for (uint32_t slot = 0; slot < DB_SLOT_NUM; ++slot) {

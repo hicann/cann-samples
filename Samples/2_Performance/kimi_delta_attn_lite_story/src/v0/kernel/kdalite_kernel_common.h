@@ -32,7 +32,7 @@ constexpr uint16_t FLAG_PREP_INPUT_READY = 0;
 // M/K_plus 写入共享 L1 后由 AIV 置位; AIC 完成两次 MTE1 读取后释放 L1.
 constexpr uint16_t FLAG_PREP_L1_FREE = 1;
 
-// prediction 和 state delta 复用 AIV 的 resultUB. MM7 Fix 覆写 resultUB 前,
+// prediction 和 state delta 依次复用同一个 predDeltaUB. MM7 Fix 覆写该槽前,
 // PRED_CONSUMED 必须确认 prediction 已读完.
 constexpr uint16_t FLAG_STATE_INPUT_READY = 0;
 constexpr uint16_t FLAG_STATE_PRED_READY = 1;
@@ -40,7 +40,7 @@ constexpr uint16_t FLAG_STATE_PRED_CONSUMED = 2;
 constexpr uint16_t FLAG_STATE_R_READY = 3;
 constexpr uint16_t FLAG_STATE_DELTA_READY = 4;
 
-// LocalOutput 的 resultUB 为单槽. OUTPUT_DONE 防止下一个 task 的 Fix 提前覆写.
+// LocalOutput 的 localUB 只保存 local=A@R. OUTPUT_DONE 防止下一个 task 的 Fix 提前覆写.
 constexpr uint16_t FLAG_OUTPUT_LOCAL_READY = 0;
 constexpr uint16_t FLAG_OUTPUT_DONE = 1;
 
@@ -80,14 +80,16 @@ constexpr uint32_t PREP_L0C_ELEMS = CHUNK_D_ELEMS;
 constexpr uint32_t STATE_L0A_ELEMS = CHUNK_D_ELEMS;
 constexpr uint32_t STATE_L0B_ELEMS = STATE_TILE_ELEMS;
 constexpr uint32_t STATE_L0C_ELEMS = STATE_TILE_ELEMS;
-constexpr uint32_t STATE_RESULT_UB_ADDR = 0;
-constexpr uint32_t STATE_RESULT_UB_ELEMS = HEAD_DIM * AIV_DV_TILE;
+// 两路 AIV 的同址 UB 各保存 16 列: 先写 prediction[C,16], 消费后再覆写为 state delta[128,16].
+constexpr uint32_t STATE_PRED_DELTA_UB_ADDR = 0;
+constexpr uint32_t STATE_PRED_DELTA_UB_ELEMS = HEAD_DIM * AIV_DV_TILE;
 
 constexpr uint32_t OUTPUT_L0A_ELEMS = CHUNK_C_ELEMS;
 constexpr uint32_t OUTPUT_L0B_ELEMS = CHUNK_DV_TILE_ELEMS;
 constexpr uint32_t OUTPUT_L0C_ELEMS = CHUNK_DV_TILE_ELEMS;
-constexpr uint32_t OUTPUT_RESULT_UB_ADDR = 0;
-constexpr uint32_t OUTPUT_RESULT_UB_ELEMS = CHUNK_SIZE * AIV_DV_TILE;
+// LocalOutput 的 AIC/AIV 交接槽, 每路 AIV 只保存 local=A@R 的 16 列.
+constexpr uint32_t OUTPUT_LOCAL_UB_ADDR = 0;
+constexpr uint32_t OUTPUT_LOCAL_UB_ELEMS = CHUNK_SIZE * AIV_DV_TILE;
 
 constexpr AscendC::FixpipeConfig KDA_FIXPIPE_CFG_UB = {AscendC::CO2Layout::ROW_MAJOR, true};
 constexpr AscendC::FixpipeConfig KDA_FIXPIPE_CFG_GM = {AscendC::CO2Layout::ROW_MAJOR, false};

@@ -74,9 +74,11 @@ constexpr uint32_t PREP_L1_CV_SLOT_BYTES = PREP_L1_SLOT_BYTES * PREP_SUB_AIV_NUM
 // Cpair 取走 factor 后, 同一片 L1 分时保存 Cw 的 M 和 KPlus 输入.
 constexpr uint32_t PREP_W_M_L1_ADDR = PREP_K_FACTOR_L1_ADDR;
 constexpr uint32_t PREP_W_K_PLUS_L1_ADDR = PREP_Q_FACTOR_L1_ADDR;
-constexpr uint16_t FLAG_PREP_INPUT_HANDOFF_BASE = 0;
-constexpr uint16_t FLAG_PREP_RESULT_HANDOFF_BASE = FLAG_PREP_INPUT_HANDOFF_BASE + PREP_CV_SLOT_NUM;
-constexpr uint16_t FLAG_PREP_W_HANDOFF_BASE = FLAG_PREP_RESULT_HANDOFF_BASE + PREP_CV_SLOT_NUM;
+// 同一 L1 时间槽先传 factor, 再传 M/KPlus; Cw 的 MTE1 读完后才归还下一代 VP.
+constexpr uint16_t FLAG_PREP_L1_HANDOFF_BASE = 0;
+// AIC 通过 Fixpipe 写出 Pair/Araw, AIV 消费后归还对应的结果槽.
+constexpr uint16_t FLAG_PREP_PAIR_ARAW_HANDOFF_BASE = FLAG_PREP_L1_HANDOFF_BASE + PREP_CV_SLOT_NUM;
+constexpr uint16_t FLAG_PREP_W_HANDOFF_BASE = FLAG_PREP_PAIR_ARAW_HANDOFF_BASE + PREP_CV_SLOT_NUM;
 static_assert(PREP_L1_CV_SLOT_BYTES * PREP_CV_SLOT_NUM <= 512 * 1024, "ChunkPrepare L1 allocation exceeds 512 KiB");
 static_assert(FLAG_PREP_W_HANDOFF_BASE + PREP_CV_SLOT_NUM - 1 <= 10, "Prepare CrossCore FlagID exceeds 10");
 

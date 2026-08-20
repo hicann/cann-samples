@@ -73,10 +73,12 @@ constexpr uint32_t PREP_Q_FACTOR_L1_ADDR = PREP_K_FACTOR_L1_ADDR + CHUNK_D_ELEMS
 constexpr uint32_t PREP_K_INV_FACTOR_L1_ADDR = PREP_Q_FACTOR_L1_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);
 constexpr uint32_t PREP_L1_SLOT_BYTES = PREP_K_INV_FACTOR_L1_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);
 constexpr uint32_t PREP_L1_CV_SLOT_BYTES = PREP_L1_SLOT_BYTES * PREP_SUB_AIV_NUM;
-constexpr uint16_t FLAG_PREP_INPUT_HANDOFF_BASE = 0;
-constexpr uint16_t FLAG_PREP_RESULT_HANDOFF_BASE = FLAG_PREP_INPUT_HANDOFF_BASE + PREP_CV_SLOT_NUM;
+// AIV 写入三组 factor 后交给 AIC; AIC 的 MTE1 读完后归还该 L1 时间槽.
+constexpr uint16_t FLAG_PREP_L1_HANDOFF_BASE = 0;
+// AIC 通过 Fixpipe 写出 Pair/Araw, AIV 消费后归还对应的结果槽.
+constexpr uint16_t FLAG_PREP_PAIR_ARAW_HANDOFF_BASE = FLAG_PREP_L1_HANDOFF_BASE + PREP_CV_SLOT_NUM;
 static_assert(PREP_L1_CV_SLOT_BYTES * PREP_CV_SLOT_NUM <= 512 * 1024, "ChunkPrepare L1 allocation exceeds 512 KiB");
-static_assert(FLAG_PREP_RESULT_HANDOFF_BASE + PREP_CV_SLOT_NUM - 1 <= 10, "Prepare CrossCore FlagID exceeds 10");
+static_assert(FLAG_PREP_PAIR_ARAW_HANDOFF_BASE + PREP_CV_SLOT_NUM - 1 <= 10, "Prepare CrossCore FlagID exceeds 10");
 
 constexpr uint32_t PREP_Q_BF16_SLOT_ADDR = 0;
 constexpr uint32_t PREP_K_BF16_SLOT_ADDR = PREP_Q_BF16_SLOT_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);

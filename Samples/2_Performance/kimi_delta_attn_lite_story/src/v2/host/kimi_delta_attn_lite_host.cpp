@@ -158,7 +158,7 @@ bool KimiDeltaAttnLiteNPU(
     }
 
     std::printf(
-        "kdalite: 请求启动 kernel，ChunkPrepare=%u Mix（%u chunk），FusedRecurrentOutput=%u Mix，"
+        "kdalite: 请求启动 kernel，Prepare=%u Mix（%u chunk），StateOutput=%u Mix，"
         "workspace=%llu bytes\n",
         data.prepareUseAicNum, data.prepareNumTasks, data.stateUseAicNum,
         static_cast<unsigned long long>(data.workspaceBytes));

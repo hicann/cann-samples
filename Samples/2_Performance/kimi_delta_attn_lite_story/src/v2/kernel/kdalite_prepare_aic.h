@@ -18,7 +18,7 @@ namespace KDALite {
 constexpr MutexId MUTEX_PREP_L0AB = 0;
 constexpr MutexId MUTEX_PREP_L0C = 1;
 
-__aicore__ inline void FixPrepareResultToAiv(
+__aicore__ inline void FixPreparePairArawToAiv(
     const AscendC::LocalTensor<float>& dstUBLocal, const AscendC::LocalTensor<float>& srcL0CLocal, uint32_t subBlockIdx)
 {
     using namespace AscendC;
@@ -40,7 +40,7 @@ __aicore__ inline void FixPrepareResultToAiv(
 __aicore__ inline void PreparePairAndArawForSlot(
     const AscendC::LocalTensor<bfloat16_t>& kFactorL1Local, const AscendC::LocalTensor<bfloat16_t>& qFactorL1Local,
     const AscendC::LocalTensor<bfloat16_t>& kInvFactorL1Local, const AscendC::LocalTensor<bfloat16_t>& aL0ALocal,
-    const AscendC::LocalTensor<bfloat16_t>& bL0BLocal, const AscendC::LocalTensor<float>& resultL0CLocal,
+    const AscendC::LocalTensor<bfloat16_t>& bL0BLocal, const AscendC::LocalTensor<float>& mmadL0CLocal,
     const AscendC::LocalTensor<float>& pairUBLocal, const AscendC::LocalTensor<float>& aRawUBLocal,
     uint32_t subBlockIdx)
 {
@@ -54,12 +54,12 @@ __aicore__ inline void PreparePairAndArawForSlot(
 
     Mutex::Lock<PIPE_M>(MUTEX_PREP_L0AB);
     Mutex::Lock<PIPE_M>(MUTEX_PREP_L0C);
-    CubeMmad<float, bfloat16_t, bfloat16_t>(resultL0CLocal, aL0ALocal, bL0BLocal, CHUNK_SIZE, CHUNK_SIZE, HEAD_DIM);
+    CubeMmad<float, bfloat16_t, bfloat16_t>(mmadL0CLocal, aL0ALocal, bL0BLocal, CHUNK_SIZE, CHUNK_SIZE, HEAD_DIM);
     Mutex::Unlock<PIPE_M>(MUTEX_PREP_L0AB);
     Mutex::Unlock<PIPE_M>(MUTEX_PREP_L0C);
 
     Mutex::Lock<PIPE_FIX>(MUTEX_PREP_L0C);
-    FixPrepareResultToAiv(pairUBLocal, resultL0CLocal, subBlockIdx);
+    FixPreparePairArawToAiv(pairUBLocal, mmadL0CLocal, subBlockIdx);
     Mutex::Unlock<PIPE_FIX>(MUTEX_PREP_L0C);
 
     // 第一次 Mmad 读完 L0A/L0B 后, 只需用 QFactor 覆写 L0A; KInvFactor 可继续留在 L0B.
@@ -69,12 +69,12 @@ __aicore__ inline void PreparePairAndArawForSlot(
 
     Mutex::Lock<PIPE_M>(MUTEX_PREP_L0AB);
     Mutex::Lock<PIPE_M>(MUTEX_PREP_L0C);
-    CubeMmad<float, bfloat16_t, bfloat16_t>(resultL0CLocal, aL0ALocal, bL0BLocal, CHUNK_SIZE, CHUNK_SIZE, HEAD_DIM);
+    CubeMmad<float, bfloat16_t, bfloat16_t>(mmadL0CLocal, aL0ALocal, bL0BLocal, CHUNK_SIZE, CHUNK_SIZE, HEAD_DIM);
     Mutex::Unlock<PIPE_M>(MUTEX_PREP_L0AB);
     Mutex::Unlock<PIPE_M>(MUTEX_PREP_L0C);
 
     Mutex::Lock<PIPE_FIX>(MUTEX_PREP_L0C);
-    FixPrepareResultToAiv(aRawUBLocal, resultL0CLocal, subBlockIdx);
+    FixPreparePairArawToAiv(aRawUBLocal, mmadL0CLocal, subBlockIdx);
     Mutex::Unlock<PIPE_FIX>(MUTEX_PREP_L0C);
 }
 
@@ -85,7 +85,8 @@ __aicore__ inline void KernelProcessPrepareForAIC(const KimiDeltaAttnLiteTilingD
     if ASCEND_IS_AIC {
         LocalTensor<bfloat16_t> aL0ALocal(TPosition::A2, 0, CHUNK_D_ELEMS);
         LocalTensor<bfloat16_t> bL0BLocal(TPosition::B2, 0, CHUNK_D_ELEMS);
-        LocalTensor<float> resultL0CLocal(TPosition::CO1, 0, CHUNK_C_ELEMS);
+        // 单个 L0C 槽按顺序承载 Pair 和 Araw.
+        LocalTensor<float> mmadL0CLocal(TPosition::CO1, 0, CHUNK_C_ELEMS);
 
         const uint32_t aicIdx = GetBlockIdx();
         if (aicIdx >= data.preparePairNumTasks) {
@@ -95,22 +96,24 @@ __aicore__ inline void KernelProcessPrepareForAIC(const KimiDeltaAttnLiteTilingD
 
         // 初始时两个 L1 槽均归两路 AIV 写入.
         for (uint32_t cvSlot = 0; cvSlot < PREP_CV_SLOT_NUM; ++cvSlot) {
-            SetAicToAiv<PIPE_MTE1>(SlotFlagId(FLAG_PREP_INPUT_HANDOFF_BASE, cvSlot));
+            SetAicToAiv<PIPE_MTE1>(SlotFlagId(FLAG_PREP_L1_HANDOFF_BASE, cvSlot));
         }
 
         for (uint32_t ordinal = 0; ordinal < pairTaskCount; ++ordinal) {
             const uint32_t cvSlot = ordinal % PREP_CV_SLOT_NUM;
             const uint32_t pairTaskId = aicIdx + ordinal * data.prepareUseAicNum;
-            const uint16_t inputFlagId = SlotFlagId(FLAG_PREP_INPUT_HANDOFF_BASE, cvSlot);
-            const uint16_t resultFlagId = SlotFlagId(FLAG_PREP_RESULT_HANDOFF_BASE, cvSlot);
+            const uint16_t l1HandoffFlagId = SlotFlagId(FLAG_PREP_L1_HANDOFF_BASE, cvSlot);
+            const uint16_t pairArawFlagId = SlotFlagId(FLAG_PREP_PAIR_ARAW_HANDOFF_BASE, cvSlot);
             // 一次 mode2 Wait 等待两路 AIV 的 Set.
-            WaitAivToAic<PIPE_MTE1>(inputFlagId);
-            WaitAivToAic<PIPE_FIX>(resultFlagId);
+            WaitAivToAic<PIPE_MTE1>(l1HandoffFlagId);
+            WaitAivToAic<PIPE_FIX>(pairArawFlagId);
 
             // subBlockId 决定 Fixpipe 的目的 AIV; 两路 AIV 使用相同的本地 UB 地址.
-            const uint32_t resultSlotAddr = cvSlot * PREP_SLOT_BYTES;
-            LocalTensor<float> pairUBLocal(TPosition::VECCALC, resultSlotAddr + PREP_PAIR_FP32_UB_ADDR, CHUNK_C_ELEMS);
-            LocalTensor<float> aRawUBLocal(TPosition::VECCALC, resultSlotAddr + PREP_A_RAW_FP32_UB_ADDR, CHUNK_C_ELEMS);
+            const uint32_t pairArawSlotAddr = cvSlot * PREP_SLOT_BYTES;
+            LocalTensor<float> pairUBLocal(
+                TPosition::VECCALC, pairArawSlotAddr + PREP_PAIR_FP32_UB_ADDR, CHUNK_C_ELEMS);
+            LocalTensor<float> aRawUBLocal(
+                TPosition::VECCALC, pairArawSlotAddr + PREP_A_RAW_FP32_UB_ADDR, CHUNK_C_ELEMS);
             for (uint32_t subBlockIdx = 0; subBlockIdx < PREP_SUB_AIV_NUM; ++subBlockIdx) {
                 const uint32_t taskId = pairTaskId * PREP_SUB_AIV_NUM + subBlockIdx;
                 if (taskId >= data.prepareNumTasks) {
@@ -126,18 +129,18 @@ __aicore__ inline void KernelProcessPrepareForAIC(const KimiDeltaAttnLiteTilingD
                 LocalTensor<bfloat16_t> kInvFactorL1Local(
                     TPosition::A1, l1SlotAddr + PREP_K_INV_FACTOR_L1_ADDR, CHUNK_D_ELEMS);
                 PreparePairAndArawForSlot(
-                    kFactorL1Local, qFactorL1Local, kInvFactorL1Local, aL0ALocal, bL0BLocal, resultL0CLocal,
-                    pairUBLocal, aRawUBLocal, subBlockIdx);
+                    kFactorL1Local, qFactorL1Local, kInvFactorL1Local, aL0ALocal, bL0BLocal, mmadL0CLocal, pairUBLocal,
+                    aRawUBLocal, subBlockIdx);
             }
 
             // MTE1 读完所有有效 factor 后归还 L1 槽; 全部 Fix 完成后发布 Pair/Araw ready.
-            SetAicToAiv<PIPE_MTE1>(inputFlagId);
-            SetAicToAiv<PIPE_FIX>(resultFlagId);
+            SetAicToAiv<PIPE_MTE1>(l1HandoffFlagId);
+            SetAicToAiv<PIPE_FIX>(pairArawFlagId);
         }
 
         // 循环前为每个槽发布空闲信号; 此处统一消费各槽最终归还的信号.
         for (uint32_t cvSlot = 0; cvSlot < PREP_CV_SLOT_NUM; ++cvSlot) {
-            WaitAivToAic<PIPE_FIX>(SlotFlagId(FLAG_PREP_RESULT_HANDOFF_BASE, cvSlot));
+            WaitAivToAic<PIPE_FIX>(SlotFlagId(FLAG_PREP_PAIR_ARAW_HANDOFF_BASE, cvSlot));
         }
     }
 }

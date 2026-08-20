@@ -1,19 +1,21 @@
-# KDALite v2：Cube Prepare 与多 lane StateOutput
+# KDALite v2：Cube Prepare 与多状态链 StateOutput
 
 ## 版本概览
 
-v2 保留 v1 的双 Kernel 划分和 Chunk KDA 公式，将 Prepare 中的 Pair/Araw 点积移到 Cube，并为 Prepare 和 StateOutput 增加跨核滚动流水。当前实现支持可变 `B/S`，固定 `N=1`、`Dk=Dv=128`，初始 state 为零。当前源码的接口、任务切分和片上布局要求 `Dk==Dv`；这是样例支持边界，不是 KDA 数学公式的限制。
+v2 保留 v1 的双 Kernel 划分和 Chunk KDA 公式，将 Prepare 中的 Pair/Araw 点积迁移到 Cube，并为 Prepare 和 StateOutput 增加跨核滚动流水。本版支持可变 `B/S`，固定 `N=1`、`Dk=Dv=128`，初始 state 为零。本样例的接口、任务切分和片上布局要求 `Dk==Dv`；这是样例支持边界，不是 KDA 数学公式的限制。
 
 ```text
-Kernel 1, Prepare:     VP(AIV) -> C(AIC) -> VS(AIV)
+Kernel 1, Prepare:     VP(AIV) -> Cpair(AIC) -> VS(AIV)
 Kernel 2, StateOutput: C1(AIC) -> V1(AIV) -> C2(AIC) -> V2(AIV)
 ```
+
+VP 表示两路 AIV 准备变换数据，Cpair 表示 AIC 计算 Pair/Araw，VS 表示 AIV 前向代入求 M/A。StateOutput 中，C1/V1 生成残差 R，C2/V2 再完成输出和状态更新。
 
 `CHUNK_SIZE` 默认为 32，也可在编译时通过 `-DKDALITE_V2_CHUNK_SIZE=16` 选择 C16。v2 不开放 C64。
 
 ## 数学差异与约定
 
-完整的 Recurrent KDA 和 Chunk KDA 推导见 [总 README](../../README.md#数学定义)。本节保留读取 v2 源码必需的公式，以及本版为 Cube 计算引入的缩放输入（factor）。
+完整的 Recurrent KDA 和 Chunk KDA 推导见 [总 README 的 Chunk 公式](../../README.md#chunk-公式)；可直接用于实现的公式见 [NPU Kernel 公式速查](../../README.md#npu-kernel-公式速查)。本节只保留读取 v2 源码必需的公式，以及本版为 Cube 计算引入的缩放输入（factor）。
 
 本文默认 token 向量为行向量。`@` 表示矩阵乘，`*` 表示逐元素乘，`.T` 表示转置。对一个有效长度为 `L` 的 Chunk，主要变量如下。
 
@@ -70,7 +72,9 @@ local       = A @ R                                     [C,32]
 O           = history + local                           [C,32]
 ```
 
-以上公式描述数学语义。实现中，AIV 以 FP32 保存 state 本体，再将 BF16 状态副本交给 AIC；R 在 AIV 中以 FP32 相减后转为 BF16；Cube 输入为 BF16，L0C 累加、state 更新和 `state_decay` 为 FP32。O 为 BF16，`final_state` 为 FP32。
+以上公式描述数学语义。实现中，AIV 以 FP32 保存 state 本体，再将 BF16 shadow 交给 AIC；R 在 AIV 中以 FP32 相减后转为 BF16；Cube 输入为 BF16，L0C 累加、state 更新和 `state_decay` 为 FP32。O 与对外的 `final_state` 均为 BF16。最后一次 `UpdateStateAndShadowVF` 在更新 FP32 state 的同时生成 BF16 shadow，AIV 直接把该 shadow 写入 `final_state` GM。
+
+固定为 1 的 Head 轴不写入数据文件。O 的物理布局为 `[B,S,128]`，占 `256*B*S` 字节；`final_state` 的物理布局为 `[B,128,128]`，占 `32768*B` 字节。O 和 `final_state` 均为 BF16，workspace 的分段和大小见下文。
 
 ## Kernel 总览
 
@@ -92,7 +96,7 @@ kimi_delta_attn_lite_prepare_k<<<data.prepareUseAicNum, 0, stream>>>(...);
 kimi_delta_attn_lite_state_update_k<<<data.stateUseAicNum, 0, stream>>>(...);
 ```
 
-Prepare 完成后，StateOutput 才读取 workspace。每个 Prepare 任务处理两个完整 Chunk；每个 StateOutput 任务处理一个 Batch 的 32 个 Value 列。
+Prepare 完成后，StateOutput 才读取 workspace。每个 Prepare 成对任务最多处理两个完整 Chunk；Chunk 总数为奇数时只处理一个，另一 AIV 仅完成同步。每个 StateOutput 任务处理一个 Batch 的 32 个 Value 列。
 
 `--core-num` 按 Mix 组上限解释。两个 Kernel 均最多使用该数量的 Mix 组；如果对应阶段的任务更少，则按实际任务数缩减 launch。
 
@@ -157,9 +161,9 @@ flowchart TB
 
 | 阶段 | 核心 | 计算与搬运 |
 | --- | --- | --- |
-| AIV0-VP | AIV0 | 搬入 `taskId=2p` 的 Q/K/log_decay/beta；VF 计算累计 G、标准变换结果和三个 factor；MTE3 将 factor 写入当前 CV slot 的 AIV0 子槽，并将标准变换结果写入 Chunk `2p` 的 workspace。 |
-| AIV1-VP | AIV1 | 搬入 `taskId=2p+1` 的完整输入并执行同样的 VF；factor 写入当前 CV slot 的 AIV1 子槽，标准变换结果写入 Chunk `2p+1` 的 workspace。若该尾任务无效，只执行对称同步。 |
-| C | AIC | MTE1 读取 factor；两次 BF16×BF16→FP32 Mmad 得到 Pair/Araw；Fixpipe 将完整 `[C,C]` 结果定向写入对应 AIV 的 UB。 |
+| AIV0-VP | AIV0 | 搬入 `taskId=2p` 的 Q/K/log_decay/beta；VF 计算累计 G、Q_plus、K_plus、K_tail、state_decay 和三个 factor；MTE3 将 factor 写入当前共享时间槽的 AIV0 子槽，并将 Q_plus/K_plus/K_tail/state_decay 写入 Chunk `2p` 的 workspace。 |
+| AIV1-VP | AIV1 | 搬入 `taskId=2p+1` 的完整输入并执行同样的 VF；factor 写入当前共享时间槽的 AIV1 子槽，Q_plus/K_plus/K_tail/state_decay 写入 Chunk `2p+1` 的 workspace。若该尾任务无效，只执行对称同步。 |
+| Cpair | AIC | MTE1 读取 factor；两次 BF16×BF16→FP32 Mmad 得到 Pair/Araw；Fixpipe 将完整 `[C,C]` 结果定向写入对应 AIV 的 UB。 |
 | AIV0-VS | AIV0 | 等待定向到 AIV0 的完整 Pair/Araw；执行 FP32 前代求 M，屏蔽 Araw 上三角得到 A；转 BF16 后写入 Chunk `2p` 的 workspace。 |
 | AIV1-VS | AIV1 | 等待定向到 AIV1 的完整 Pair/Araw，对 Chunk `2p+1` 执行同样的前代与写回；无效尾任务不访问数值数据。 |
 
@@ -167,11 +171,11 @@ Prepare 中两路 AIV 对应两个不同 chunk，因此 AIC 通过 `subBlockId` 
 
 ### 双槽调度
 
-Prepare 使用两个 CV 槽，槽号为 `ordinal%2`。AIV 先预发两代 VP，使下一代 Transform 不被当前 VS 的结果等待挡住。
+Prepare 使用两个 AIC/AIV 共享时间槽，槽号为 `ordinal%2`。AIV 先预发两代 VP，使下一代变换不被当前 VS 的结果等待挡住。
 
 ```text
-AIV: VP(0) -> VP(1) -> VS(0) -> VP(2) -> VS(1) -> VP(3) -> ... -> VS(last)
-AIC: C(0)  -> C(1)  -> C(2)  -> C(3)  -> ...
+AIV: VP(0)    -> VP(1)    -> VS(0) -> VP(2)    -> VS(1) -> VP(3)    -> ... -> VS(last)
+AIC: Cpair(0) -> Cpair(1) -> Cpair(2) -> Cpair(3) -> ...
 ```
 
 必要调度骨架如下：
@@ -225,7 +229,7 @@ CrossCore 只管理 AIC/AIV 共享资源的所有权。核内 Mutex 分别约束
 
 ### 输入、输出与计算
 
-StateOutput 读取 Prepare workspace 和 V，在 Chunk 之间递推 state，最终写出 O 和 `final_state`。U、prediction、R、delta、history 和 local 均只在片上存活。
+StateOutput 读取 Prepare workspace 和 V，在 Chunk 之间递推 FP32 state，最终写出 BF16 O 和 BF16 `final_state`。U、prediction、R、delta、history 和 local 均只在片上存活；`final_state` 复用最后一次状态更新已经生成的 BF16 shadow。
 
 ### 任务映射与 AIV0/AIV1 分工
 
@@ -237,11 +241,11 @@ stateUseAicNum = min(stateNumTasks, availableMixCoreNum)
 
 文档中的 AIC 侧 DvTile 对应源码常量 `DV_TILE=32`，因此 `DV_TILE_COUNT=VALUE_DIM/DV_TILE=128/32=4`。同组两路 AIV 均分这 32 列，所以 AIV 侧 DvTile 为 `AIV_DV_TILE=DV_TILE/2=16`。一个 task 处理一个 `[128,DV_TILE]` state 列切片；令 `base=dvTileId*DV_TILE`，AIV0 负责前半列，AIV1 负责后半列。
 
-| 核心 | Value/O 的列范围 | 本地 state | 本地计算与写回 |
+| 核心 | Value/O/final_state 的列范围 | 本地 state | 本地计算与写回 |
 | --- | --- | --- | --- |
-| AIV0 | `[base,base+AIV_DV_TILE)` | `state[:,0:AIV_DV_TILE]`，Shape 为 `[128,AIV_DV_TILE]`，FP32。 | 计算前半列的 R、state 和 O，并写回 O 和 `final_state` 的前半区。 |
-| AIV1 | `[base+AIV_DV_TILE,base+DV_TILE)` | `state[:,AIV_DV_TILE:DV_TILE]`，Shape 为 `[128,AIV_DV_TILE]`，FP32。 | 对后半列执行相同流程，并写回后半区。 |
-| AIC | 完整 `[base,base+DV_TILE)` | 从共享 L1 的两个相邻半区读取完整 `[128,DV_TILE]` BF16 状态副本。 | 搬入完整 `[C,DV_TILE]` Value tile，完成六次 Mmad，并通过 Fixpipe 按列分发结果。 |
+| AIV0 | `[base,base+AIV_DV_TILE)` | `state[:,0:AIV_DV_TILE]`，Shape 为 `[128,AIV_DV_TILE]`，FP32；另有同 shape 的 BF16 shadow。 | 计算前半列的 R、state 和 O，写回 O，并在末 Chunk 后把 shadow 写入 `final_state` 前半区。 |
+| AIV1 | `[base+AIV_DV_TILE,base+DV_TILE)` | `state[:,AIV_DV_TILE:DV_TILE]`，Shape 为 `[128,AIV_DV_TILE]`，FP32；另有同 shape 的 BF16 shadow。 | 对后半列执行相同流程，并写入对应的 O 与 `final_state` 后半区。 |
+| AIC | 完整 `[base,base+DV_TILE)` | 从共享 L1 的两个相邻半区读取完整 `[128,DV_TILE]` BF16 状态副本。 | 搬入完整 `[C,DV_TILE]` Value tile，每个 Chunk 完成六次 Mmad，并通过 Fixpipe 按列分发结果。 |
 
 AIC 的 `FixpipeToVecUB` 设置 `dualDstCtl=0b10` 和 `dstStride=AIV_DV_TILE`。U、prediction、history、delta 和 local 的前半列写入 AIV0，后半列写入 AIV1；两路本地 UB 中的 shape 都是 `[rows,AIV_DV_TILE]`。
 
@@ -256,34 +260,34 @@ flowchart TB
     L1 --> A["AIC 读取完整矩阵"]
 ```
 
-Host 按每个已用 AIC 至少分到的 task 数选择递推 lane 数：
+Host 按每个已用 AIC 至少分到的任务数选择同时维护的状态链数：
 
 ```text
-tasksPerAic >= 4 -> R=4
-tasksPerAic >= 2 -> R=2
-otherwise        -> R=1
+tasksPerAic >= 4 -> laneCount=4
+tasksPerAic >= 2 -> laneCount=2
+otherwise        -> laneCount=1
 ```
 
 后文调度术语统一如下：
 
 | 术语 | 含义 |
 | --- | --- |
-| lane（状态链） | 一个独立的 `(batch,dvTile)` 任务，不是 C1/V1/C2/V2 的阶段编号。 |
-| wave（任务组） | 同一 Mix 组同时滚动的 R 条状态链。 |
-| item（Chunk 项） | 某条状态链上的一个 Chunk。 |
-| epoch（调度轮次） | 一次发射新 C1 并尝试推进旧 C2 的轮次。 |
-| static（Chunk 只读矩阵） | `K_plus/Q_plus/M/K_tail/A`，同一 Chunk 的不同 DvTile 可共用。 |
-| handoff（结果交接） | AIC 与 AIV 通过共享 L1 或结果 UB 传递数据。 |
-| backpressure（缓冲区等待） | 下一次发射因物理槽尚未归还而等待。 |
+| 状态链（源码中的 `lane`） | 一个独立的 `(batch,dvTile)` 任务，不是 C1/V1/C2/V2 的阶段编号。 |
+| 任务组（源码中的 `wave`） | 同一 Mix 组同时滚动的 `laneCount` 条状态链。 |
+| 工作项（源码中的 `item`） | 某条状态链上的一个 Chunk。 |
+| 调度轮次（源码中的 `epoch`） | 一次发射新 C1 并尝试推进旧 C2 的轮次。 |
+| Chunk 只读矩阵 | `K_plus/Q_plus/M/K_tail/A`，同一 Chunk 的不同 DvTile 可共用。 |
+| 结果交接 | AIC 与 AIV 通过共享 L1 或结果 UB 传递数据。 |
+| 缓冲区等待 | 下一次发射因物理槽尚未归还而等待。 |
 
-R1 和 R2/R4 只改变 task/lane 的发射方式，不改变上述 AIV0/AIV1 列切分。每个 lane 都由同一组的两路 AIV 合作维护一个 `DV_TILE` 列 state tile。
+`laneCount=1/2/4` 只改变任务和状态链的发射方式，不改变上述 AIV0/AIV1 列切分。每条状态链都由同一组的两路 AIV 合作维护一个 `DV_TILE` 列 state tile。
 
-### R=1 专用流程
+### 单状态链专用流程
 
-R=1 使用独立源码路径和同步协议，不是通用多 lane 状态机的退化分支。每个 AIC 串行处理分配到的 task；static、Value、state L1 发布槽和 state_decay 按 chunk 奇偶使用双槽，AIV 的 FP32 state 本体为单槽，R 只使用一个 L1 槽。
+`laneCount=1` 使用独立源码路径和同步协议，不是通用多状态链流程的退化分支。每个 AIC 串行处理分配到的任务；Chunk 只读矩阵、Value、state L1 发布槽和 state_decay 按 Chunk 奇偶使用双槽，AIV 的 FP32 state 本体为单槽，残差 R 只使用一个 L1 槽。
 
 ```text
-prologue: preload static(0), Value(0), state_decay(0), U(0)
+prologue: preload Chunk 只读矩阵(0), Value(0), state_decay(0), U(0)
 
 chunk i:
   AIC: preload inputs(i+1)
@@ -295,64 +299,64 @@ chunk i:
        K_tail.T@R -> delta
        A@R -> local
   AIV: U-prediction -> R -> L1
-       state_decay*state+delta -> state/BF16 state copy
+       state_decay*state+delta -> FP32 state/BF16 shadow
        publish state(i+1)
        history+local -> BF16 O -> GM
 ```
 
-R=1 的专用 CrossCore 协议如下。
+单状态链的专用跨核同步协议如下。
 
 | FlagID | 初始化与交接 | task 末尾 |
 | ---: | --- | --- |
 | 0/1，state 奇偶槽 | AIC `Set<PIPE_MTE1>` free；AIV `Wait/Set<PIPE_MTE3>` 写 state ready；AIC `Wait/Set<PIPE_MTE1>` 读 state 并归还。 | AIV `Wait<PIPE_MTE3>` drain 两槽。 |
 | 2，R 单槽 | AIC `Set<PIPE_MTE1>` free；AIV `Wait/Set<PIPE_MTE3>` 写 R ready；AIC `Wait/Set<PIPE_MTE1>` 读 R 并归还。 | AIV `Wait<PIPE_MTE3>` drain。 |
-| 4/5，U/prediction DB | AIV `Set<PIPE_V>` free；AIC 在 U Fix 前 `Wait<PIPE_FIX>`，prediction Fix 后 `Set<PIPE_FIX>` ready；AIV `Wait/Set<PIPE_V>` 计算 R 并归还。 | AIC `Wait<PIPE_FIX>` drain 两槽。 |
-| 6/7，delta DB | AIV `Set<PIPE_V>` free；AIC `Wait/Set<PIPE_FIX>` 写 delta；AIV `Wait/Set<PIPE_V>` 更新 state。 | AIC `Wait<PIPE_FIX>` drain 两槽。 |
-| 8/9，history/local DB | AIV `Set<PIPE_V>` free；AIC history Fix 时 `Wait<PIPE_FIX>`，local Fix 后 `Set<PIPE_FIX>` ready；AIV `Wait/Set<PIPE_V>` 完成相加和 Cast。 | AIC `Wait<PIPE_FIX>` drain 两槽。 |
+| 4/5，U/prediction 双槽 | AIV `Set<PIPE_V>` free；AIC 在 U Fix 前 `Wait<PIPE_FIX>`，prediction Fix 后 `Set<PIPE_FIX>` ready；AIV `Wait/Set<PIPE_V>` 计算 R 并归还。 | AIC `Wait<PIPE_FIX>` drain 两槽。 |
+| 6/7，delta 双槽 | AIV `Set<PIPE_V>` free；AIC `Wait/Set<PIPE_FIX>` 写 delta；AIV `Wait/Set<PIPE_V>` 更新 state。 | AIC `Wait<PIPE_FIX>` drain 两槽。 |
+| 8/9，history/local 双槽 | AIV `Set<PIPE_V>` free；AIC history Fix 时 `Wait<PIPE_FIX>`，local Fix 后 `Set<PIPE_FIX>` ready；AIV `Wait/Set<PIPE_V>` 完成相加和 Cast。 | AIC `Wait<PIPE_FIX>` drain 两槽。 |
 
-所有 token 已在 task 内闭环，因此 R1 不使用 wave-done。
+所有 token 已在任务内闭环，因此单状态链流程不使用任务组完成通知（源码中的 `wave-done`）。
 
-### R=2/R=4 多 lane 流水
+### 两条或四条状态链的滚动流水
 
 一个 wave 的映射为：
 
 ```text
-waveTaskBase = aicIdx*R + wave*stateUseAicNum*R
+waveTaskBase = aicIdx*laneCount + wave*stateUseAicNum*laneCount
 task(lane)   = waveTaskBase + lane
-itemId       = chunkId*R + lane
+itemId       = chunkId*laneCount + lane
 ```
 
-当前 `stateNumTasks=B*4`，R 只取 2 或 4，因此 R2 wave 恒有 2 条 lane，R4 wave 恒有 4 条 lane，不存在少于配置 R 的部分尾波。源码中的动态 `laneCount` 仅作防御性处理。
+`stateNumTasks=B*4`，多状态链流程的 `laneCount` 只取 2 或 4，因此每个任务组分别固定包含 2 条或 4 条状态链，不存在不足 `laneCount` 的部分尾组。源码中的动态 `laneCount` 仅作防御性处理。
 
 v2 在同一个 epoch 中先发完整的新 C1，再发旧 C2；AIV 先发 V1，再发 V2。
 
 ```text
-AIC: C1(e) -> C2(e-R+1), e>=R-1 时存在 C2
-AIV: V1(e-1) -> V2(e-R)
+AIC: C1(e) -> C2(e-laneCount+1), e>=laneCount-1 时存在 C2
+AIV: V1(e-1) -> V2(e-laneCount)
 ```
 
 ```python
 for wave in multi_lane_waves:
     initialize_all_physical_state_and_r_flags()
-    for epoch in range(chunk_count * R + R):
+    for epoch in range(chunk_count * laneCount + laneCount):
         if has_new(epoch):
             issue_input_preload_u_and_c1(epoch)
         if has_old(epoch):
-            issue_history_delta_and_local(epoch - R + 1)
+            issue_history_delta_and_local(epoch - laneCount + 1)
     drain_u_pred_and_v2_phase_flags()
     wait_wave_done_on_reused_state0()
 ```
 
-K_plus/Q_plus/M/K_tail/A 与 Dv tile 无关，同一 wave 只由 lane0 搬入一次，所有 lane 共用 `staticSlot=chunkId%2`。最后一条 lane 在 C2 读完 A 后归还 static 槽。Value 仍按 item 双槽搬入。V1 到 C2 之间最多有 `R-1` 个 R 同时在途，因此 R L1 队列深度为 R2 的 1 或 R4 的 3。
+K_plus/Q_plus/M/K_tail/A 与 Dv tile 无关，同一任务组只由第一条状态链搬入一次，所有状态链共用 `chunkMatrixSlot=chunkId%2`。最后一条状态链在 C2 读完 A 后归还 Chunk 矩阵槽。Value 仍按工作项双槽搬入。V1 到 C2 之间最多有 `laneCount-1` 个残差 R 同时在途，因此 R 的 L1 队列深度在两条状态链时为 1，在四条状态链时为 3。
 
-### 多 lane CrossCore 同步
+### 多状态链的跨核同步
 
 | FlagID | 初始化 | ready/free 交接 | wave 末尾 |
 | ---: | --- | --- | --- |
 | 0..3，state lane | AIC `Set<PIPE_MTE1>` 发布全部四个物理槽 free；AIV 将全零 BF16 状态副本发布为首个 ready。 | AIV `Wait/Set<PIPE_MTE3>` 写 state；AIC `Wait/Set<PIPE_MTE1>` 读 state。V2 更新后，AIV 为下一 chunk 再次发布。 | AIV `Wait<PIPE_MTE3>` 排空四个物理槽；随后复用已排空的 ID0 `Set<PIPE_MTE3>` 发送 wave-done，AIC 以额外一次 `Wait<PIPE_MTE1>` 接收。 |
-| 4/5，U/prediction DB | AIV `Set<PIPE_V>` free。 | AIC 在 U Fix 前 `Wait<PIPE_FIX>`，prediction Fix 后 `Set<PIPE_FIX>` ready；AIV V1 `Wait<PIPE_V>` 读两者并 `Set<PIPE_V>` free。 | AIC `Wait<PIPE_FIX>` drain。 |
+| 4/5，U/prediction 双槽 | AIV `Set<PIPE_V>` free。 | AIC 在 U Fix 前 `Wait<PIPE_FIX>`，prediction Fix 后 `Set<PIPE_FIX>` ready；AIV V1 `Wait<PIPE_V>` 读两者并 `Set<PIPE_V>` free。 | AIC `Wait<PIPE_FIX>` drain。 |
 | 6..8，R 队列 | AIC `Set<PIPE_MTE1>` 发布三个物理槽 free。 | AIV V1 `Wait/Set<PIPE_MTE3>` 写 R；AIC C2 `Wait/Set<PIPE_MTE1>` 读 R。 | AIV `Wait<PIPE_MTE3>` drain 三个物理槽。 |
-| 9/10，V2 phase DB | AIV `Set<PIPE_V>` free。 | AIC 以一次 `Wait<PIPE_FIX>` 开始 history，delta Fix 后 `Set<PIPE_FIX>`；AIV 第一次 `Wait/Set<PIPE_V>` 更新 state；AIC 再次 `Wait/Set<PIPE_FIX>` 写 local；AIV 第二次 `Wait/Set<PIPE_V>` 计算并写 O。 | AIC `Wait<PIPE_FIX>` drain。 |
+| 9/10，V2 阶段双槽 | AIV `Set<PIPE_V>` free。 | AIC 以一次 `Wait<PIPE_FIX>` 开始 history，delta Fix 后 `Set<PIPE_FIX>`；AIV 第一次 `Wait/Set<PIPE_V>` 更新 state；AIC 再次 `Wait/Set<PIPE_FIX>` 写 local；AIV 第二次 `Wait/Set<PIPE_V>` 计算并写 O。 | AIC `Wait<PIPE_FIX>` drain。 |
 
 ID9/10 在一次 item 中顺序承载两次握手：第一轮交接 history/delta 和 state ack，第二轮交接 local 和 O free。它不是一个泛化的“V2完成”标记。
 
@@ -360,21 +364,21 @@ ID9/10 在一次 item 中顺序承载两次握手：第一轮交接 history/delt
 
 核内 Mutex 保护 L1、L0A、L0B、L0C 和 UB 的生产消费顺序。state L0B 从 `K_plus@state` 一直保留到 history 读取完成；R L0B 从 delta 一直保留到 local 读取完成，不能在第一次 Mmad 后提前释放。
 
-| 位置 | 多 lane 物理槽数 | 用途 |
+| 位置 | 多状态链物理槽数 | 用途 |
 | --- | ---: | --- |
-| L1 static | 4，逻辑使用 2 | 地址按最大 R 预留，实际按 chunk 奇偶复用。 |
-| L1 state/Value/KPlusState/R | 4/2/2/3 | state 按 lane；Value、KPlusState 双槽；R 为最大 `R-1` 队列。 |
+| L1 Chunk 只读矩阵 | 4，逻辑使用 2 | 地址按四条状态链预留，实际按 Chunk 奇偶复用。 |
+| L1 state/Value/KPlusState/R | 4/2/2/3 | state 按状态链；Value、KPlusState 双槽；R 队列最多为 `laneCount-1` 个槽。 |
 | L0A/L0B/L0C | 2/7/4 | L0B 为 state 4 槽，加 Value、R、KPlusState 各 1 槽。 |
 | 每路 AIV UB | FP32 state/BF16 状态副本/state_decay 各 4 | 每 lane 一份递推状态与衰减。 |
-| 每路 AIV handoff UB | U、prediction、history、delta、local、R stage、output 各 2 | 相邻 item 双槽交接。 |
+| 每路 AIV 结果交接 UB | U、prediction、history、delta、local、R stage、output 各 2 | 相邻工作项双槽交接。 |
 
-默认 C32 下，多 lane AIC 使用 L1/L0A/L0B/L0C 158/16/38/64KiB，每路 AIV 使用 86KiB UB。R=1 的 AIC L1 为 82KiB，每路 AIV UB 为 49KiB。
+默认 C32 下，多状态链 AIC 使用 L1/L0A/L0B/L0C 158/16/38/64KiB，每路 AIV 使用 86KiB UB。单状态链流程的 AIC L1 为 82KiB，每路 AIV UB 为 49KiB。
 
 ## 从 v1 到 v2
 
-- Prepare 从纯 AIV 改为 `__mix(1,2)`，Pair/Araw 的 128 维点积改由 Cube 计算，M 的 FP32 前代仍留在 AIV。
-- Prepare 增加 midpoint anchor，并用 VP/C/VS 双槽滚动隐藏跨核等待。
-- StateOutput 增加 R2/R4 多 lane 流水、R 队列和同 Batch 的 Chunk 只读矩阵共享；R1 保留独立流程。
+- Prepare 从纯 AIV 改为 `__mix(1,2)`，Pair/Araw 的 128 维点积迁到 Cube，M 的 FP32 前代仍留在 AIV。
+- Prepare 增加 midpoint anchor，并用 VP/Cpair/VS 双槽滚动隐藏跨核等待。
+- StateOutput 增加两条或四条状态链的滚动流水、残差 R 队列和同 Batch 的 Chunk 只读矩阵共享；单状态链保留独立流程。
 - workspace 语义不变，StateOutput 的六次 Mmad 不变；C32 保留强衰减门禁，C64 不开放。
 
 ## 运行、精度与限制
@@ -391,29 +395,41 @@ ID9/10 在一次 item 中顺序承载两次握手：第一轮交接 history/delt
 ./build/Samples/2_Performance/kimi_delta_attn_lite_story/kdalite_v2 --size 2 65
 ```
 
-尾块将无效行按 `Q/K/V=0`、`beta=0`、`log_decay=0` 补齐。Kernel 片上仍按完整 C 行计算，最终只回写 `validLen` 行 O；`state_decay` 取最后一个有效 token 的累计值。O 按 BF16、`final_state` 按 FP32 比较，判据为 `abs(npu-golden) <= 2^-6 + 2^-6*abs(golden)`，NaN 或 Inf 直接判失败。
+尾块将无效行按 `Q/K/V=0`、`beta=0`、`log_decay=0` 补齐。Kernel 片上仍按完整 C 行计算，最终只回写 `validLen` 行 O；`state_decay` 取最后一个有效 token 的累计值。
 
-当前输入边界按 post-gate `log_decay in [-5,0]` 验证。C64 强衰减未通过，不能通过放开 `static_assert` 启用。
+默认精度标准对齐 FlashKDA/FLA：将 NPU 的 BF16 O 和 `final_state` 转为 FP32，分别与未量化的 FP32 Recurrent Golden 计算 NRMSE，并要求 `NRMSE < 0.006`；NaN 或 Inf 直接失败。CANN 9.2、C32、`B=1,S=33,core-num=1` 的六类输入全部通过，其中 O 和 `final_state` 最大 NRMSE 分别为 0.003676 和 0.003120。统一大规格 random 输入 `B=32,S=4096` 也通过，两项 NRMSE 分别为 0.003830 和 0.002995。指标来源和完整测试矩阵见 [总 README：复现方法](../../README.md#复现方法)。
+
+本版还覆盖 post-gate `log_decay in [-5,0]`、普通输入、尾块、1/2/4 条状态链、多任务组、强衰减和混合衰减。v2 仅支持 C16/C32，不支持 C64，不能通过放开 `static_assert` 启用。
 
 ## 性能参考
 
-主性能数据使用 CANN 9.2、`dav-3510`、C32、32 AIC/64 AIV 和 1650MHz，运行参数为 `--dry-run --size 32 65536`，不传 `--core-num`。msopprof 不指定 `--kernel-name`；重复三次后，分别取两个 Kernel 的 `Task Duration` 中位数再求和。
+主性能环境为 CANN 9.2、`dav-3510`、C32、32 AIC/64 AIV 和 1650MHz，运行参数为 `--dry-run --size 32 65536`，不传 `--core-num`。msopprof 不指定 `--kernel-name`；重复三次后，分别取两个 Kernel 的 `Task Duration` 中位数再求和。
 
 | 版本 | Prepare 中位数 (us) | StateOutput 中位数 (us) | Kernel Task Duration 合计 (us) |
 | --- | ---: | ---: | ---: |
-| v1 | 8816.471680 | 13393.181641 | 22209.653321 |
-| v2 | 4767.770996 | 9553.227539 | 14320.998535 |
+| v1 | 8797.722656 | 13432.345703 | 22230.068359 |
+| v2 | 4766.383301 | 9558.908203 | 14325.291504 |
 
-v2 相对 v1 的 Prepare 下降 45.922006%，StateOutput 下降 28.670963%，合计下降 35.519036%，加速 1.550845x。合计不是 Host 端到端耗时，也不包含数据生成、H2D/D2H、Kernel launch、Golden 和比对。
+v2 相对 v1 的 Prepare 下降 45.822533%，StateOutput 下降 28.836642%，合计下降 35.558941%，加速 1.551806x。合计不是 Host 端到端耗时，也不包含数据生成、H2D/D2H、Kernel launch、Golden 和比对。
 
 ### 流水证据，不参与统一性能比较
 
-以下 `B=32,S=4096,C=32` PipeTimeline 用于解释多 lane 和 static 共享的局部作用，不与上表混算。
+采集环境为 CANN 9.2、`dav-3510`、C32、32 Mix 组和 1650MHz，运行 `--dry-run --size 32 4096`。该规格下每个 Mix 组分到 4 条状态链。Task Duration 来自 `OpBasicInfo.csv`，Pipe 数据只统计 PipeTimeline 采样到的 core0。
 
-| StateOutput 阶段 | Task Duration (us) | AIC MTE2 active (us) |
-| --- | ---: | ---: |
-| R2 | 634.073975 | 399.128484 |
-| R4 | 620.057983 | 326.518786 |
-| R4 + static 共享 | 601.582947 | 242.932726 |
+| Kernel | Task Duration (us) |
+| --- | ---: |
+| Prepare | 295.488983 |
+| StateOutput | 602.562012 |
 
-CANN 9.2 的仿真兼容构建使用 `--dry-run --core-num 1 --size 1 512`，Prepare/StateOutput 分别为 40311/55091 cycles，MMAD 数为 32/384。该结果只用于核对发射顺序、同步和组件重叠，性能结论以上表真机数据为准。
+| StateOutput core0 指标 | AIC | AIV0 | AIV1 |
+| --- | ---: | ---: | ---: |
+| MTE2 active (us) | 243.704242 | - | - |
+| MTE1 active (us) | 95.493333 | - | - |
+| CUBE active (us) | 200.960609 | - | - |
+| FIXP active (us) | 181.364845 | - | - |
+| VECTOR active (us) | - | 197.388480 | 197.724843 |
+| MTE3 active (us) | - | 207.981819 | 217.375756 |
+| 任一 AIC 关注 Pipe active/span | 71.84% | - | - |
+| CUBE 与 VECTOR overlap | - | 22.49% | 23.80% |
+
+两路 AIV 的 VECTOR active 接近，符合沿 Dv 列对称切分的设计。AIC 与 AIV 仍存在较多可见空档，CUBE 与两路 VECTOR 的重叠率约为 22%～24%。不同 Pipe 可以并行，表中的 active 不能相加解释 Task Duration；PipeTimeline 的 busy 段也不等于指令数。core0 结果用于观察局部排布，不外推为全部 32 个 Mix 组。

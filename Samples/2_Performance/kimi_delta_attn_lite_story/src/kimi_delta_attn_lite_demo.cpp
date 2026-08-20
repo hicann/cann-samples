@@ -248,7 +248,7 @@ int main(int argc, char** argv)
         !CheckedMul(qkvElements, sizeof(float), logDecayBytes64) ||
         !CheckedMul(tokenCount, sizeof(uint16_t), betaBytes64) ||
         !CheckedMul(batchSize, static_cast<uint64_t>(HEAD_DIM) * HEAD_DIM, stateElements) ||
-        !CheckedMul(stateElements, sizeof(float), stateBytes64)) {
+        !CheckedMul(stateElements, sizeof(uint16_t), stateBytes64)) {
         std::fprintf(stderr, "输入或输出字节数超出 uint64_t 表示范围\n");
         return 1;
     }

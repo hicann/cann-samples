@@ -24,7 +24,7 @@ template <bool RELEASE_SHARED_L1, bool PROTECT_V_L1, typename DstT>
 __aicore__ inline void PrepareMmad(
     AscendC::LocalTensor<bfloat16_t>& lhsL1Local, AscendC::LocalTensor<bfloat16_t>& rhsL1Local,
     AscendC::LocalTensor<bfloat16_t>& aL0ALocal, AscendC::LocalTensor<bfloat16_t>& bL0BLocal,
-    AscendC::LocalTensor<float>& resultL0CLocal, const AscendC::GlobalTensor<DstT>& outputGlobal)
+    AscendC::LocalTensor<float>& mmadL0CLocal, const AscendC::GlobalTensor<DstT>& outputGlobal)
 {
     using namespace AscendC;
 
@@ -45,12 +45,12 @@ __aicore__ inline void PrepareMmad(
 
     Mutex::Lock<PIPE_M>(MUTEX_PREP_L0AB);
     Mutex::Lock<PIPE_M>(MUTEX_PREP_L0C);
-    CubeMmad<float, bfloat16_t, bfloat16_t>(resultL0CLocal, aL0ALocal, bL0BLocal, CHUNK_SIZE, HEAD_DIM, CHUNK_SIZE);
+    CubeMmad<float, bfloat16_t, bfloat16_t>(mmadL0CLocal, aL0ALocal, bL0BLocal, CHUNK_SIZE, HEAD_DIM, CHUNK_SIZE);
     Mutex::Unlock<PIPE_M>(MUTEX_PREP_L0AB);
     Mutex::Unlock<PIPE_M>(MUTEX_PREP_L0C);
 
     Mutex::Lock<PIPE_FIX>(MUTEX_PREP_L0C);
-    FixpipeToGm<DstT, float>(outputGlobal, resultL0CLocal, CHUNK_SIZE, HEAD_DIM);
+    FixpipeToGm<DstT, float>(outputGlobal, mmadL0CLocal, CHUNK_SIZE, HEAD_DIM);
     Mutex::Unlock<PIPE_FIX>(MUTEX_PREP_L0C);
 }
 
@@ -71,7 +71,8 @@ __aicore__ inline void KernelProcessPrepareForAIC(
         LocalTensor<bfloat16_t> vL1Local(TPosition::A1, PREP_V_L1_ADDR, PREP_V_L1_ELEMS);
         LocalTensor<bfloat16_t> aL0ALocal(TPosition::A2, 0, PREP_L0A_ELEMS);
         LocalTensor<bfloat16_t> bL0BLocal(TPosition::B2, 0, PREP_L0B_ELEMS);
-        LocalTensor<float> resultL0CLocal(TPosition::CO1, 0, PREP_L0C_ELEMS);
+        // 单个 L0C 槽按顺序承载 W=M@KPlus 和 U=M@V.
+        LocalTensor<float> mmadL0CLocal(TPosition::CO1, 0, PREP_L0C_ELEMS);
 
         for (uint32_t taskId = GetBlockIdx(); taskId < data.prepareNumTasks; taskId += data.prepareUseAicNum) {
             const uint32_t batchId = taskId / data.chunkCount;
@@ -91,9 +92,8 @@ __aicore__ inline void KernelProcessPrepareForAIC(
             WaitAivToAic<PIPE_MTE1>(FLAG_PREP_INPUT_READY);
 
             const uint64_t chunkOffset = static_cast<uint64_t>(taskId) * CHUNK_D_ELEMS;
-            PrepareMmad<false, false>(
-                mL1Local, kPlusL1Local, aL0ALocal, bL0BLocal, resultL0CLocal, wGlobal[chunkOffset]);
-            PrepareMmad<true, true>(mL1Local, vL1Local, aL0ALocal, bL0BLocal, resultL0CLocal, uGlobal[chunkOffset]);
+            PrepareMmad<false, false>(mL1Local, kPlusL1Local, aL0ALocal, bL0BLocal, mmadL0CLocal, wGlobal[chunkOffset]);
+            PrepareMmad<true, true>(mL1Local, vL1Local, aL0ALocal, bL0BLocal, mmadL0CLocal, uGlobal[chunkOffset]);
         }
     }
 }

@@ -253,20 +253,25 @@ __aicore__ inline void KernelProcessPrepareForAIV(
     stateDecayGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float*>(workspaceGMAddr + data.stateDecayOffset));
 
     for (uint32_t taskId = GetBlockIdx(); taskId < data.prepareNumTasks; taskId += data.prepareUseAivNum) {
-        constexpr uint32_t slotAddr = 0;
-        constexpr MutexId slotMutexId = MUTEX_PREP_SLOT_BASE;
-        LocalTensor<bfloat16_t> qUBLocal(TPosition::VECCALC, slotAddr + PREP_Q_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-        LocalTensor<bfloat16_t> kUBLocal(TPosition::VECCALC, slotAddr + PREP_K_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-        LocalTensor<float> gUBLocal(TPosition::VECCALC, slotAddr + PREP_G_FP32_SLOT_ADDR, CHUNK_D_ELEMS);
-        LocalTensor<bfloat16_t> betaUBLocal(TPosition::VECCALC, slotAddr + PREP_BETA_BF16_SLOT_ADDR, CHUNK_SIZE);
-        LocalTensor<float> cumulativeGUBLocal(TPosition::VECCALC, slotAddr + PREP_CUM_G_FP32_SLOT_ADDR, CHUNK_D_ELEMS);
-        LocalTensor<bfloat16_t> qPlusUBLocal(TPosition::VECCALC, slotAddr + PREP_Q_PLUS_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-        LocalTensor<bfloat16_t> kPlusUBLocal(TPosition::VECCALC, slotAddr + PREP_K_PLUS_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-        LocalTensor<bfloat16_t> kTailUBLocal(TPosition::VECCALC, slotAddr + PREP_K_TAIL_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-        LocalTensor<float> stateDecayUBLocal(TPosition::VECCALC, slotAddr + PREP_STATE_DECAY_FP32_SLOT_ADDR, HEAD_DIM);
-        LocalTensor<float> mFp32UBLocal(TPosition::VECCALC, slotAddr + PREP_M_FP32_SLOT_ADDR, CHUNK_C_ELEMS);
-        LocalTensor<bfloat16_t> mUBLocal(TPosition::VECCALC, slotAddr + PREP_M_BF16_SLOT_ADDR, CHUNK_C_ELEMS);
-        LocalTensor<bfloat16_t> aUBLocal(TPosition::VECCALC, slotAddr + PREP_A_BF16_SLOT_ADDR, CHUNK_C_ELEMS);
+        constexpr uint32_t prepUbSlotAddr = 0;
+        constexpr MutexId prepUbSlotMutexId = MUTEX_PREP_SLOT_BASE;
+        LocalTensor<bfloat16_t> qUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_Q_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+        LocalTensor<bfloat16_t> kUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_K_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+        LocalTensor<float> gUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_G_FP32_SLOT_ADDR, CHUNK_D_ELEMS);
+        LocalTensor<bfloat16_t> betaUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_BETA_BF16_SLOT_ADDR, CHUNK_SIZE);
+        LocalTensor<float> cumulativeGUBLocal(
+            TPosition::VECCALC, prepUbSlotAddr + PREP_CUM_G_FP32_SLOT_ADDR, CHUNK_D_ELEMS);
+        LocalTensor<bfloat16_t> qPlusUBLocal(
+            TPosition::VECCALC, prepUbSlotAddr + PREP_Q_PLUS_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+        LocalTensor<bfloat16_t> kPlusUBLocal(
+            TPosition::VECCALC, prepUbSlotAddr + PREP_K_PLUS_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+        LocalTensor<bfloat16_t> kTailUBLocal(
+            TPosition::VECCALC, prepUbSlotAddr + PREP_K_TAIL_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+        LocalTensor<float> stateDecayUBLocal(
+            TPosition::VECCALC, prepUbSlotAddr + PREP_STATE_DECAY_FP32_SLOT_ADDR, HEAD_DIM);
+        LocalTensor<float> mFp32UBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_M_FP32_SLOT_ADDR, CHUNK_C_ELEMS);
+        LocalTensor<bfloat16_t> mUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_M_BF16_SLOT_ADDR, CHUNK_C_ELEMS);
+        LocalTensor<bfloat16_t> aUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_A_BF16_SLOT_ADDR, CHUNK_C_ELEMS);
 
         const uint32_t batchId = taskId / data.chunkCount;
         const uint32_t chunkId = taskId % data.chunkCount;
@@ -280,17 +285,17 @@ __aicore__ inline void KernelProcessPrepareForAIV(
         if constexpr (CHUNK_SIZE > CUBE_BLOCK) {
             // DataCopyPad 只补齐当前 DataBlock. C>16 时先清零整个 beta 槽,
             // 防止尾 chunk 中未被 MTE2 覆盖的元素沿用上一个 task 的数据.
-            Mutex::Lock<PIPE_V>(slotMutexId);
+            Mutex::Lock<PIPE_V>(prepUbSlotMutexId);
             Duplicate<uint16_t>(betaUBLocal.ReinterpretCast<uint16_t>(), 0, CHUNK_SIZE);
-            Mutex::Unlock<PIPE_V>(slotMutexId);
+            Mutex::Unlock<PIPE_V>(prepUbSlotMutexId);
         }
-        Mutex::Lock<PIPE_MTE2>(slotMutexId);
+        Mutex::Lock<PIPE_MTE2>(prepUbSlotMutexId);
         CopyPrepareInputs(
             qUBLocal, kUBLocal, gUBLocal, betaUBLocal, qGlobal, kGlobal, gGlobal, betaGlobal, tokenOffset, betaOffset,
             validLen);
-        Mutex::Unlock<PIPE_MTE2>(slotMutexId);
+        Mutex::Unlock<PIPE_MTE2>(prepUbSlotMutexId);
 
-        Mutex::Lock<PIPE_V>(slotMutexId);
+        Mutex::Lock<PIPE_V>(prepUbSlotMutexId);
         asc_vf_call<PrepareTransformsVF>(
             reinterpret_cast<__ubuf__ bfloat16_t*>(qUBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ bfloat16_t*>(kUBLocal.GetPhyAddr()),
@@ -308,16 +313,16 @@ __aicore__ inline void KernelProcessPrepareForAIV(
             reinterpret_cast<__ubuf__ float*>(mFp32UBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ bfloat16_t*>(mUBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ bfloat16_t*>(aUBLocal.GetPhyAddr()));
-        Mutex::Unlock<PIPE_V>(slotMutexId);
+        Mutex::Unlock<PIPE_V>(prepUbSlotMutexId);
 
-        Mutex::Lock<PIPE_MTE3>(slotMutexId);
+        Mutex::Lock<PIPE_MTE3>(prepUbSlotMutexId);
         DataCopy(kPlusGlobal[chunkDOffset], kPlusUBLocal, CHUNK_D_ELEMS);
         DataCopy(qPlusGlobal[chunkDOffset], qPlusUBLocal, CHUNK_D_ELEMS);
         DataCopy(kTailGlobal[chunkDOffset], kTailUBLocal, CHUNK_D_ELEMS);
         DataCopy(mGlobal[chunkCOffset], mUBLocal, CHUNK_C_ELEMS);
         DataCopy(aGlobal[chunkCOffset], aUBLocal, CHUNK_C_ELEMS);
         DataCopy(stateDecayGlobal[static_cast<uint64_t>(taskId) * HEAD_DIM], stateDecayUBLocal, HEAD_DIM);
-        Mutex::Unlock<PIPE_MTE3>(slotMutexId);
+        Mutex::Unlock<PIPE_MTE3>(prepUbSlotMutexId);
     }
 }
 

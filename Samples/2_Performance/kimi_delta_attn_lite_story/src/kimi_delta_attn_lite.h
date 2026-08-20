@@ -15,7 +15,7 @@
 #include <cstdint>
 
 // 物理布局: Q/K/V/O 为 BF16 [B,S,128], log_decay 为 FP32 [B,S,128],
-// beta 为 BF16 [B,S], final_state 为 FP32 [B,128,128]. 当前固定 N=1、Dk=Dv=128,
+// beta 为 BF16 [B,S], final_state 为 BF16 [B,128,128]. 当前固定 N=1、Dk=Dv=128,
 // Head 轴不落盘.
 // 查询当前版本所需的设备 workspace 字节数.
 bool GetKimiDeltaAttnLiteWorkspaceSize(uint32_t batchSize, uint32_t seqLen, uint64_t& workspaceBytes);

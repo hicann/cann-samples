@@ -14,16 +14,17 @@
 
 namespace KDALite {
 
-// staticL1Local 中的只读矩阵按 chunkId%2 使用双槽. 同一 chunk 的 lane 0 取得槽所有权,
+// chunkMatrixL1Local 将 KPlus/QPlus/M/KTail/A 打包到同一槽, 并按 chunkId%2 使用双槽.
+// 同一 chunk 的 lane 0 取得槽所有权,
 // 最后一条 lane 在 C2 读完 A 后归还. 地址规划保留 4 个物理槽, 仅使用前 2 个.
 // Value 和 KPlusState 只跨一个局部阶段, 使用双槽.
-constexpr uint32_t STATIC_K_PLUS_SLOT_ADDR = 0;
-constexpr uint32_t STATIC_Q_PLUS_SLOT_ADDR = STATIC_K_PLUS_SLOT_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);
-constexpr uint32_t STATIC_M_SLOT_ADDR = STATIC_Q_PLUS_SLOT_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);
-constexpr uint32_t STATIC_K_TAIL_SLOT_ADDR = STATIC_M_SLOT_ADDR + CHUNK_C_ELEMS * sizeof(bfloat16_t);
-constexpr uint32_t STATIC_A_SLOT_ADDR = STATIC_K_TAIL_SLOT_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);
-constexpr uint32_t STATIC_SLOT_BYTES = STATIC_A_SLOT_ADDR + CHUNK_C_ELEMS * sizeof(bfloat16_t);
-constexpr uint32_t STATE_L1_ADDR = STATIC_SLOT_BYTES * STATE_PIPELINE_MAX_LANE_NUM;
+constexpr uint32_t CHUNK_MATRIX_K_PLUS_SLOT_ADDR = 0;
+constexpr uint32_t CHUNK_MATRIX_Q_PLUS_SLOT_ADDR = CHUNK_MATRIX_K_PLUS_SLOT_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);
+constexpr uint32_t CHUNK_MATRIX_M_SLOT_ADDR = CHUNK_MATRIX_Q_PLUS_SLOT_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);
+constexpr uint32_t CHUNK_MATRIX_K_TAIL_SLOT_ADDR = CHUNK_MATRIX_M_SLOT_ADDR + CHUNK_C_ELEMS * sizeof(bfloat16_t);
+constexpr uint32_t CHUNK_MATRIX_A_SLOT_ADDR = CHUNK_MATRIX_K_TAIL_SLOT_ADDR + CHUNK_D_ELEMS * sizeof(bfloat16_t);
+constexpr uint32_t CHUNK_MATRIX_SLOT_BYTES = CHUNK_MATRIX_A_SLOT_ADDR + CHUNK_C_ELEMS * sizeof(bfloat16_t);
+constexpr uint32_t STATE_L1_ADDR = CHUNK_MATRIX_SLOT_BYTES * STATE_PIPELINE_MAX_LANE_NUM;
 constexpr uint32_t VALUE_L1_ADDR = STATE_L1_ADDR + STATE_TILE_ELEMS * sizeof(bfloat16_t) * STATE_PIPELINE_MAX_LANE_NUM;
 constexpr uint32_t R_L1_ADDR = VALUE_L1_ADDR + CHUNK_DV_TILE_ELEMS * sizeof(bfloat16_t) * DB_SLOT_NUM;
 constexpr uint32_t K_PLUS_STATE_L1_ADDR =
@@ -44,8 +45,8 @@ static_assert(
     K_PLUS_STATE_L0B_ADDR + CHUNK_DV_TILE_ELEMS * sizeof(bfloat16_t) <= 64 * 1024, "L0B allocation exceeds 64 KiB");
 static_assert(L0C_SLOT_ELEMS * sizeof(float) * L0C_QUEUE_DEPTH <= 256 * 1024, "L0C allocation exceeds 256 KiB");
 
-constexpr MutexId MUTEX_STATIC_L1_BASE = 0;
-constexpr MutexId MUTEX_VALUE_L1_BASE = MUTEX_STATIC_L1_BASE + STATE_PIPELINE_MAX_LANE_NUM;
+constexpr MutexId MUTEX_CHUNK_MATRIX_L1_BASE = 0;
+constexpr MutexId MUTEX_VALUE_L1_BASE = MUTEX_CHUNK_MATRIX_L1_BASE + STATE_PIPELINE_MAX_LANE_NUM;
 constexpr MutexId MUTEX_L0A_BASE = MUTEX_VALUE_L1_BASE + DB_SLOT_NUM;
 constexpr MutexId MUTEX_STATE_L0B_BASE = MUTEX_L0A_BASE + DB_SLOT_NUM;
 constexpr MutexId MUTEX_VALUE_L0B = MUTEX_STATE_L0B_BASE + STATE_PIPELINE_MAX_LANE_NUM;
@@ -55,22 +56,22 @@ constexpr MutexId MUTEX_K_PLUS_STATE_L1_BASE = MUTEX_L0C_BASE + L0C_QUEUE_DEPTH;
 constexpr MutexId MUTEX_K_PLUS_STATE_L0B = MUTEX_K_PLUS_STATE_L1_BASE + DB_SLOT_NUM;
 static_assert(MUTEX_K_PLUS_STATE_L0B <= 27, "StateOutput AIC MutexID exceeds 27");
 
-__aicore__ inline void PreloadStaticInputs(
+__aicore__ inline void PreloadChunkInputs(
     AscendC::LocalTensor<bfloat16_t>& kPlusL1Local, AscendC::LocalTensor<bfloat16_t>& qPlusL1Local,
     AscendC::LocalTensor<bfloat16_t>& mL1Local, AscendC::LocalTensor<bfloat16_t>& kTailL1Local,
     AscendC::LocalTensor<bfloat16_t>& aL1Local, const AscendC::GlobalTensor<bfloat16_t>& kPlusGlobal,
     const AscendC::GlobalTensor<bfloat16_t>& qPlusGlobal, const AscendC::GlobalTensor<bfloat16_t>& mGlobal,
     const AscendC::GlobalTensor<bfloat16_t>& kTailGlobal, const AscendC::GlobalTensor<bfloat16_t>& aGlobal,
-    uint64_t chunkDOffset, uint64_t chunkCOffset, MutexId staticMutexId)
+    uint64_t chunkDOffset, uint64_t chunkCOffset, MutexId chunkMatrixMutexId)
 {
     using namespace AscendC;
-    Mutex::Lock<PIPE_MTE2>(staticMutexId);
+    Mutex::Lock<PIPE_MTE2>(chunkMatrixMutexId);
     CopyGmToL1(kPlusL1Local, kPlusGlobal[chunkDOffset], CHUNK_SIZE, HEAD_DIM, HEAD_DIM);
     CopyGmToL1(qPlusL1Local, qPlusGlobal[chunkDOffset], CHUNK_SIZE, HEAD_DIM, HEAD_DIM);
     CopyGmToL1(mL1Local, mGlobal[chunkCOffset], CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
     CopyGmToL1(kTailL1Local, kTailGlobal[chunkDOffset], CHUNK_SIZE, HEAD_DIM, HEAD_DIM);
     CopyGmToL1(aL1Local, aGlobal[chunkCOffset], CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
-    Mutex::Unlock<PIPE_MTE2>(staticMutexId);
+    Mutex::Unlock<PIPE_MTE2>(chunkMatrixMutexId);
 }
 
 __aicore__ inline void PreloadValue(
@@ -205,9 +206,9 @@ __aicore__ inline void IssueStateInputPreload(
     const AscendC::GlobalTensor<bfloat16_t>& kPlusGlobal, const AscendC::GlobalTensor<bfloat16_t>& qPlusGlobal,
     const AscendC::GlobalTensor<bfloat16_t>& mGlobal, const AscendC::GlobalTensor<bfloat16_t>& kTailGlobal,
     const AscendC::GlobalTensor<bfloat16_t>& aGlobal, const AscendC::GlobalTensor<bfloat16_t>& valueGlobal,
-    AscendC::LocalTensor<uint8_t>& staticL1Local, AscendC::LocalTensor<bfloat16_t>& valueL1Local,
-    const KimiDeltaAttnLiteTilingData& data, uint32_t taskId, uint32_t staticSlot, uint32_t chunkId, uint32_t itemId,
-    bool preloadStatic)
+    AscendC::LocalTensor<uint8_t>& chunkMatrixL1Local, AscendC::LocalTensor<bfloat16_t>& valueL1Local,
+    const KimiDeltaAttnLiteTilingData& data, uint32_t taskId, uint32_t chunkMatrixSlot, uint32_t chunkId,
+    uint32_t itemId, bool preloadChunkMatrices)
 {
     using namespace AscendC;
     const uint32_t batchId = taskId / DV_TILE_COUNT;
@@ -218,43 +219,43 @@ __aicore__ inline void IssueStateInputPreload(
     const uint64_t chunkIndex = static_cast<uint64_t>(batchId) * data.chunkCount + chunkId;
     const uint64_t valueOffset = (static_cast<uint64_t>(batchId) * data.seqLen + firstToken) * VALUE_DIM + valueColumn;
     const uint32_t valueSlot = itemId % DB_SLOT_NUM;
-    const MutexId staticMutexId = MUTEX_STATIC_L1_BASE + static_cast<MutexId>(staticSlot);
+    const MutexId chunkMatrixMutexId = MUTEX_CHUNK_MATRIX_L1_BASE + static_cast<MutexId>(chunkMatrixSlot);
     const MutexId valueMutexId = MUTEX_VALUE_L1_BASE + static_cast<MutexId>(valueSlot);
 
-    auto staticSlotL1Local = staticL1Local[staticSlot * STATIC_SLOT_BYTES];
-    auto kPlusL1Local = staticSlotL1Local[STATIC_K_PLUS_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
-    auto qPlusL1Local = staticSlotL1Local[STATIC_Q_PLUS_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
-    auto mL1Local = staticSlotL1Local[STATIC_M_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
-    auto kTailL1Local = staticSlotL1Local[STATIC_K_TAIL_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
-    auto aL1Local = staticSlotL1Local[STATIC_A_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto chunkMatrixSlotL1Local = chunkMatrixL1Local[chunkMatrixSlot * CHUNK_MATRIX_SLOT_BYTES];
+    auto kPlusL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_K_PLUS_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto qPlusL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_Q_PLUS_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto mL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_M_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto kTailL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_K_TAIL_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto aL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_A_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
     auto valueSlotL1Local = valueL1Local[valueSlot * CHUNK_DV_TILE_ELEMS];
-    if (preloadStatic) {
-        PreloadStaticInputs(
+    if (preloadChunkMatrices) {
+        PreloadChunkInputs(
             kPlusL1Local, qPlusL1Local, mL1Local, kTailL1Local, aL1Local, kPlusGlobal, qPlusGlobal, mGlobal,
-            kTailGlobal, aGlobal, chunkIndex * CHUNK_D_ELEMS, chunkIndex * CHUNK_C_ELEMS, staticMutexId);
+            kTailGlobal, aGlobal, chunkIndex * CHUNK_D_ELEMS, chunkIndex * CHUNK_C_ELEMS, chunkMatrixMutexId);
     }
     PreloadValue(valueSlotL1Local, valueGlobal, valueOffset, validLen, valueMutexId);
 }
 
 __aicore__ inline void IssueStateU(
-    AscendC::LocalTensor<uint8_t>& staticL1Local, AscendC::LocalTensor<bfloat16_t>& valueL1Local,
+    AscendC::LocalTensor<uint8_t>& chunkMatrixL1Local, AscendC::LocalTensor<bfloat16_t>& valueL1Local,
     AscendC::LocalTensor<bfloat16_t>& aL0ALocal, AscendC::LocalTensor<bfloat16_t>& valueL0BLocal,
-    AscendC::LocalTensor<float>& resultL0CLocal, AscendC::LocalTensor<float>& uUBLocal, uint32_t staticSlot,
-    uint32_t itemId, bool acquireStatic, uint32_t& l0aOpIdx, uint32_t& l0cOpIdx)
+    AscendC::LocalTensor<float>& mmadL0CQueueLocal, AscendC::LocalTensor<float>& uUBLocal, uint32_t chunkMatrixSlot,
+    uint32_t itemId, bool acquireChunkMatrices, uint32_t& l0aOpIdx, uint32_t& l0cOpIdx)
 {
     using namespace AscendC;
     const uint32_t valueSlot = itemId % DB_SLOT_NUM;
     const uint32_t uPredSlot = itemId % DB_SLOT_NUM;
-    const MutexId staticMutexId = MUTEX_STATIC_L1_BASE + static_cast<MutexId>(staticSlot);
+    const MutexId chunkMatrixMutexId = MUTEX_CHUNK_MATRIX_L1_BASE + static_cast<MutexId>(chunkMatrixSlot);
     const MutexId valueMutexId = MUTEX_VALUE_L1_BASE + static_cast<MutexId>(valueSlot);
-    auto staticSlotL1Local = staticL1Local[staticSlot * STATIC_SLOT_BYTES];
-    auto mL1Local = staticSlotL1Local[STATIC_M_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto chunkMatrixSlotL1Local = chunkMatrixL1Local[chunkMatrixSlot * CHUNK_MATRIX_SLOT_BYTES];
+    auto mL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_M_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
     auto valueSlotL1Local = valueL1Local[valueSlot * CHUNK_DV_TILE_ELEMS];
     auto uSlotUBLocal = uUBLocal[uPredSlot * CHUNK_DV_HALF_ELEMS];
 
-    // 同一 chunk 的首条 lane 取得静态矩阵槽, 最后一条 lane 在 C2 读完 A 后归还.
-    if (acquireStatic) {
-        Mutex::Lock<PIPE_MTE1>(staticMutexId);
+    // 同一 chunk 的首条 lane 取得Chunk 只读矩阵槽, 最后一条 lane 在 C2 读完 A 后归还.
+    if (acquireChunkMatrices) {
+        Mutex::Lock<PIPE_MTE1>(chunkMatrixMutexId);
     }
 
     Mutex::Lock<PIPE_MTE1>(valueMutexId);
@@ -266,7 +267,7 @@ __aicore__ inline void IssueStateU(
     const uint32_t uAIdx = l0aOpIdx++ % DB_SLOT_NUM;
     const uint32_t uCIdx = l0cOpIdx++ % L0C_QUEUE_DEPTH;
     auto uAL0Local = aL0ALocal[uAIdx * L0A_SLOT_ELEMS];
-    auto uCL0Local = resultL0CLocal[uCIdx * L0C_SLOT_ELEMS];
+    auto uCL0Local = mmadL0CQueueLocal[uCIdx * L0C_SLOT_ELEMS];
     LoadA(uAL0Local, mL1Local, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, false, MUTEX_L0A_BASE + uAIdx);
     IssueMmad(
         uCL0Local, uAL0Local, valueL0BLocal, CHUNK_SIZE, DV_TILE, CHUNK_SIZE, MUTEX_L0A_BASE + uAIdx, MUTEX_VALUE_L0B,
@@ -277,19 +278,19 @@ __aicore__ inline void IssueStateU(
 }
 
 __aicore__ inline void IssueStateC1Post(
-    AscendC::LocalTensor<uint8_t>& staticL1Local, AscendC::LocalTensor<bfloat16_t>& stateL1Local,
+    AscendC::LocalTensor<uint8_t>& chunkMatrixL1Local, AscendC::LocalTensor<bfloat16_t>& stateL1Local,
     AscendC::LocalTensor<bfloat16_t>& kPlusStateL1Local, AscendC::LocalTensor<bfloat16_t>& aL0ALocal,
     AscendC::LocalTensor<bfloat16_t>& stateL0BLocal, AscendC::LocalTensor<bfloat16_t>& kPlusStateL0BLocal,
-    AscendC::LocalTensor<float>& resultL0CLocal, AscendC::LocalTensor<float>& predUBLocal, uint32_t lane,
-    uint32_t staticSlot, uint32_t itemId, uint32_t& l0aOpIdx, uint32_t& l0cOpIdx)
+    AscendC::LocalTensor<float>& mmadL0CQueueLocal, AscendC::LocalTensor<float>& predUBLocal, uint32_t lane,
+    uint32_t chunkMatrixSlot, uint32_t itemId, uint32_t& l0aOpIdx, uint32_t& l0cOpIdx)
 {
     using namespace AscendC;
     const uint32_t kPlusStateSlot = itemId % DB_SLOT_NUM;
     const uint32_t uPredSlot = itemId % DB_SLOT_NUM;
     const MutexId stateMutexId = MUTEX_STATE_L0B_BASE + static_cast<MutexId>(lane);
-    auto staticSlotL1Local = staticL1Local[staticSlot * STATIC_SLOT_BYTES];
-    auto kPlusL1Local = staticSlotL1Local[STATIC_K_PLUS_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
-    auto mL1Local = staticSlotL1Local[STATIC_M_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto chunkMatrixSlotL1Local = chunkMatrixL1Local[chunkMatrixSlot * CHUNK_MATRIX_SLOT_BYTES];
+    auto kPlusL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_K_PLUS_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto mL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_M_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
     auto stateSlotL1Local = stateL1Local[lane * STATE_TILE_ELEMS];
     auto stateSlotL0BLocal = stateL0BLocal[lane * STATE_TILE_ELEMS];
     auto kPlusStateSlotL1Local = kPlusStateL1Local[kPlusStateSlot * CHUNK_DV_TILE_ELEMS];
@@ -304,7 +305,7 @@ __aicore__ inline void IssueStateC1Post(
     const uint32_t kPlusStateAIdx = l0aOpIdx++ % DB_SLOT_NUM;
     const uint32_t kPlusStateCIdx = l0cOpIdx++ % L0C_QUEUE_DEPTH;
     auto kPlusStateAL0Local = aL0ALocal[kPlusStateAIdx * L0A_SLOT_ELEMS];
-    auto kPlusStateCL0Local = resultL0CLocal[kPlusStateCIdx * L0C_SLOT_ELEMS];
+    auto kPlusStateCL0Local = mmadL0CQueueLocal[kPlusStateCIdx * L0C_SLOT_ELEMS];
     LoadA(kPlusStateAL0Local, kPlusL1Local, CHUNK_SIZE, CHUNK_SIZE, HEAD_DIM, false, MUTEX_L0A_BASE + kPlusStateAIdx);
     IssueMmadHoldL0B(
         kPlusStateCL0Local, kPlusStateAL0Local, stateSlotL0BLocal, CHUNK_SIZE, DV_TILE, HEAD_DIM,
@@ -316,7 +317,7 @@ __aicore__ inline void IssueStateC1Post(
     const uint32_t predAIdx = l0aOpIdx++ % DB_SLOT_NUM;
     const uint32_t predCIdx = l0cOpIdx++ % L0C_QUEUE_DEPTH;
     auto predAL0Local = aL0ALocal[predAIdx * L0A_SLOT_ELEMS];
-    auto predCL0Local = resultL0CLocal[predCIdx * L0C_SLOT_ELEMS];
+    auto predCL0Local = mmadL0CQueueLocal[predCIdx * L0C_SLOT_ELEMS];
     LoadA(predAL0Local, mL1Local, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, false, MUTEX_L0A_BASE + predAIdx);
     LoadKPlusState(
         kPlusStateL0BLocal, kPlusStateSlotL1Local, MUTEX_K_PLUS_STATE_L1_BASE + static_cast<MutexId>(kPlusStateSlot));
@@ -329,24 +330,24 @@ __aicore__ inline void IssueStateC1Post(
 }
 
 __aicore__ inline void IssueStateC2History(
-    AscendC::LocalTensor<uint8_t>& staticL1Local, AscendC::LocalTensor<bfloat16_t>& aL0ALocal,
-    AscendC::LocalTensor<bfloat16_t>& stateL0BLocal, AscendC::LocalTensor<float>& resultL0CLocal,
-    AscendC::LocalTensor<float>& historyUBLocal, uint32_t lane, uint32_t staticSlot, uint32_t itemId,
+    AscendC::LocalTensor<uint8_t>& chunkMatrixL1Local, AscendC::LocalTensor<bfloat16_t>& aL0ALocal,
+    AscendC::LocalTensor<bfloat16_t>& stateL0BLocal, AscendC::LocalTensor<float>& mmadL0CQueueLocal,
+    AscendC::LocalTensor<float>& historyUBLocal, uint32_t lane, uint32_t chunkMatrixSlot, uint32_t itemId,
     uint32_t& l0aOpIdx, uint32_t& l0cOpIdx)
 {
     using namespace AscendC;
     const uint32_t v2Slot = itemId % DB_SLOT_NUM;
     const MutexId stateMutexId = MUTEX_STATE_L0B_BASE + static_cast<MutexId>(lane);
     const uint16_t v2FlagId = SlotFlagId(FLAG_V2_PHASE_HANDOFF_BASE, v2Slot);
-    auto staticSlotL1Local = staticL1Local[staticSlot * STATIC_SLOT_BYTES];
-    auto qPlusL1Local = staticSlotL1Local[STATIC_Q_PLUS_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto chunkMatrixSlotL1Local = chunkMatrixL1Local[chunkMatrixSlot * CHUNK_MATRIX_SLOT_BYTES];
+    auto qPlusL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_Q_PLUS_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
     auto stateSlotL0BLocal = stateL0BLocal[lane * STATE_TILE_ELEMS];
     auto historySlotUBLocal = historyUBLocal[v2Slot * CHUNK_DV_HALF_ELEMS];
 
     const uint32_t historyAIdx = l0aOpIdx++ % DB_SLOT_NUM;
     const uint32_t historyCIdx = l0cOpIdx++ % L0C_QUEUE_DEPTH;
     auto historyAL0Local = aL0ALocal[historyAIdx * L0A_SLOT_ELEMS];
-    auto historyCL0Local = resultL0CLocal[historyCIdx * L0C_SLOT_ELEMS];
+    auto historyCL0Local = mmadL0CQueueLocal[historyCIdx * L0C_SLOT_ELEMS];
     LoadA(historyAL0Local, qPlusL1Local, CHUNK_SIZE, CHUNK_SIZE, HEAD_DIM, false, MUTEX_L0A_BASE + historyAIdx);
     IssueMmadReleaseL0B(
         historyCL0Local, historyAL0Local, stateSlotL0BLocal, CHUNK_SIZE, DV_TILE, HEAD_DIM,
@@ -355,20 +356,20 @@ __aicore__ inline void IssueStateC2History(
 }
 
 __aicore__ inline void IssueStateC2Remainder(
-    AscendC::LocalTensor<uint8_t>& staticL1Local, AscendC::LocalTensor<bfloat16_t>& rL1Local,
+    AscendC::LocalTensor<uint8_t>& chunkMatrixL1Local, AscendC::LocalTensor<bfloat16_t>& rL1Local,
     AscendC::LocalTensor<bfloat16_t>& aL0ALocal, AscendC::LocalTensor<bfloat16_t>& rL0BLocal,
-    AscendC::LocalTensor<float>& resultL0CLocal, AscendC::LocalTensor<float>& deltaUBLocal,
-    AscendC::LocalTensor<float>& localUBLocal, uint32_t staticSlot, uint32_t itemId, uint32_t rQueueDepth,
-    bool releaseStatic, uint32_t& l0aOpIdx, uint32_t& l0cOpIdx)
+    AscendC::LocalTensor<float>& mmadL0CQueueLocal, AscendC::LocalTensor<float>& deltaUBLocal,
+    AscendC::LocalTensor<float>& localUBLocal, uint32_t chunkMatrixSlot, uint32_t itemId, uint32_t rQueueDepth,
+    bool releaseChunkMatrices, uint32_t& l0aOpIdx, uint32_t& l0cOpIdx)
 {
     using namespace AscendC;
     const uint32_t rSlot = itemId % rQueueDepth;
     const uint32_t v2Slot = itemId % DB_SLOT_NUM;
-    const MutexId staticMutexId = MUTEX_STATIC_L1_BASE + static_cast<MutexId>(staticSlot);
+    const MutexId chunkMatrixMutexId = MUTEX_CHUNK_MATRIX_L1_BASE + static_cast<MutexId>(chunkMatrixSlot);
     const uint16_t v2FlagId = SlotFlagId(FLAG_V2_PHASE_HANDOFF_BASE, v2Slot);
-    auto staticSlotL1Local = staticL1Local[staticSlot * STATIC_SLOT_BYTES];
-    auto kTailL1Local = staticSlotL1Local[STATIC_K_TAIL_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
-    auto aL1Local = staticSlotL1Local[STATIC_A_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto chunkMatrixSlotL1Local = chunkMatrixL1Local[chunkMatrixSlot * CHUNK_MATRIX_SLOT_BYTES];
+    auto kTailL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_K_TAIL_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
+    auto aL1Local = chunkMatrixSlotL1Local[CHUNK_MATRIX_A_SLOT_ADDR].ReinterpretCast<bfloat16_t>();
     auto rSlotL1Local = rL1Local[rSlot * CHUNK_DV_TILE_ELEMS];
     auto deltaSlotUBLocal = deltaUBLocal[v2Slot * STATE_HALF_ELEMS];
     auto localSlotUBLocal = localUBLocal[v2Slot * CHUNK_DV_HALF_ELEMS];
@@ -382,7 +383,7 @@ __aicore__ inline void IssueStateC2Remainder(
     const uint32_t deltaAIdx = l0aOpIdx++ % DB_SLOT_NUM;
     const uint32_t deltaCIdx = l0cOpIdx++ % L0C_QUEUE_DEPTH;
     auto deltaAL0Local = aL0ALocal[deltaAIdx * L0A_SLOT_ELEMS];
-    auto deltaCL0Local = resultL0CLocal[deltaCIdx * L0C_SLOT_ELEMS];
+    auto deltaCL0Local = mmadL0CQueueLocal[deltaCIdx * L0C_SLOT_ELEMS];
     LoadA(deltaAL0Local, kTailL1Local, CHUNK_SIZE, HEAD_DIM, CHUNK_SIZE, true, MUTEX_L0A_BASE + deltaAIdx);
     IssueMmadHoldL0B(
         deltaCL0Local, deltaAL0Local, rL0BLocal, HEAD_DIM, DV_TILE, CHUNK_SIZE, MUTEX_L0A_BASE + deltaAIdx, MUTEX_R_L0B,
@@ -391,10 +392,10 @@ __aicore__ inline void IssueStateC2Remainder(
     const uint32_t localAIdx = l0aOpIdx++ % DB_SLOT_NUM;
     const uint32_t localCIdx = l0cOpIdx++ % L0C_QUEUE_DEPTH;
     auto localAL0Local = aL0ALocal[localAIdx * L0A_SLOT_ELEMS];
-    auto localCL0Local = resultL0CLocal[localCIdx * L0C_SLOT_ELEMS];
+    auto localCL0Local = mmadL0CQueueLocal[localCIdx * L0C_SLOT_ELEMS];
     LoadA(localAL0Local, aL1Local, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, false, MUTEX_L0A_BASE + localAIdx);
-    if (releaseStatic) {
-        Mutex::Unlock<PIPE_MTE1>(staticMutexId);
+    if (releaseChunkMatrices) {
+        Mutex::Unlock<PIPE_MTE1>(chunkMatrixMutexId);
     }
     IssueMmadReleaseL0B(
         localCL0Local, localAL0Local, rL0BLocal, CHUNK_SIZE, DV_TILE, CHUNK_SIZE, MUTEX_L0A_BASE + localAIdx,
@@ -417,7 +418,8 @@ __aicore__ inline void KernelProcessStateUpdateForAIC(
         aGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ bfloat16_t*>(workspaceGMAddr + data.aOffset));
         valueGlobal.SetGlobalBuffer(valueGMAddr);
 
-        LocalTensor<uint8_t> staticL1Local(TPosition::A1, 0, STATIC_SLOT_BYTES * STATE_PIPELINE_MAX_LANE_NUM);
+        LocalTensor<uint8_t> chunkMatrixL1Local(
+            TPosition::A1, 0, CHUNK_MATRIX_SLOT_BYTES * STATE_PIPELINE_MAX_LANE_NUM);
         LocalTensor<bfloat16_t> stateL1Local(
             TPosition::A1, STATE_L1_ADDR, STATE_TILE_ELEMS * STATE_PIPELINE_MAX_LANE_NUM);
         LocalTensor<bfloat16_t> valueL1Local(TPosition::A1, VALUE_L1_ADDR, CHUNK_DV_TILE_ELEMS * DB_SLOT_NUM);
@@ -430,7 +432,8 @@ __aicore__ inline void KernelProcessStateUpdateForAIC(
         LocalTensor<bfloat16_t> valueL0BLocal(TPosition::B2, VALUE_L0B_ADDR, CHUNK_DV_TILE_ELEMS);
         LocalTensor<bfloat16_t> rL0BLocal(TPosition::B2, R_L0B_ADDR, CHUNK_DV_TILE_ELEMS);
         LocalTensor<bfloat16_t> kPlusStateL0BLocal(TPosition::B2, K_PLUS_STATE_L0B_ADDR, CHUNK_DV_TILE_ELEMS);
-        LocalTensor<float> resultL0CLocal(TPosition::CO1, 0, L0C_SLOT_ELEMS * L0C_QUEUE_DEPTH);
+        // L0C 队列循环承载 U、KPlusState、prediction、history、delta 和 local 的 MMAD 输出.
+        LocalTensor<float> mmadL0CQueueLocal(TPosition::CO1, 0, L0C_SLOT_ELEMS * L0C_QUEUE_DEPTH);
         LocalTensor<float> predUBLocal(TPosition::VECCALC, PRED_UB_ADDR, CHUNK_DV_HALF_ELEMS * DB_SLOT_NUM);
         LocalTensor<float> historyUBLocal(TPosition::VECCALC, HISTORY_UB_ADDR, CHUNK_DV_HALF_ELEMS * DB_SLOT_NUM);
         LocalTensor<float> deltaUBLocal(TPosition::VECCALC, DELTA_UB_ADDR, STATE_HALF_ELEMS * DB_SLOT_NUM);
@@ -458,43 +461,44 @@ __aicore__ inline void KernelProcessStateUpdateForAIC(
             if (laneCount == 1) {
                 const uint32_t taskId = static_cast<uint32_t>(waveTaskBase);
                 IssueStateInputPreload(
-                    kPlusGlobal, qPlusGlobal, mGlobal, kTailGlobal, aGlobal, valueGlobal, staticL1Local, valueL1Local,
-                    data, taskId, 0, 0, 0, true);
+                    kPlusGlobal, qPlusGlobal, mGlobal, kTailGlobal, aGlobal, valueGlobal, chunkMatrixL1Local,
+                    valueL1Local, data, taskId, 0, 0, 0, true);
                 IssueStateU(
-                    staticL1Local, valueL1Local, aL0ALocal, valueL0BLocal, resultL0CLocal, uUBLocal, 0, 0, true,
+                    chunkMatrixL1Local, valueL1Local, aL0ALocal, valueL0BLocal, mmadL0CQueueLocal, uUBLocal, 0, 0, true,
                     l0aOpIdx, l0cOpIdx);
 
                 for (uint32_t itemId = 0; itemId < itemCount; ++itemId) {
-                    const uint32_t staticSlot = itemId % DB_SLOT_NUM;
+                    const uint32_t chunkMatrixSlot = itemId % DB_SLOT_NUM;
                     const uint32_t nextItemId = itemId + 1;
                     if (nextItemId < itemCount) {
-                        const uint32_t nextStaticSlot = nextItemId % DB_SLOT_NUM;
+                        const uint32_t nextChunkMatrixSlot = nextItemId % DB_SLOT_NUM;
                         IssueStateInputPreload(
-                            kPlusGlobal, qPlusGlobal, mGlobal, kTailGlobal, aGlobal, valueGlobal, staticL1Local,
-                            valueL1Local, data, taskId, nextStaticSlot, nextItemId, nextItemId, true);
+                            kPlusGlobal, qPlusGlobal, mGlobal, kTailGlobal, aGlobal, valueGlobal, chunkMatrixL1Local,
+                            valueL1Local, data, taskId, nextChunkMatrixSlot, nextItemId, nextItemId, true);
                     }
 
                     IssueStateC1Post(
-                        staticL1Local, stateL1Local, kPlusStateL1Local, aL0ALocal, stateL0BLocal, kPlusStateL0BLocal,
-                        resultL0CLocal, predUBLocal, 0, staticSlot, itemId, l0aOpIdx, l0cOpIdx);
+                        chunkMatrixL1Local, stateL1Local, kPlusStateL1Local, aL0ALocal, stateL0BLocal,
+                        kPlusStateL0BLocal, mmadL0CQueueLocal, predUBLocal, 0, chunkMatrixSlot, itemId, l0aOpIdx,
+                        l0cOpIdx);
                     IssueStateC2History(
-                        staticL1Local, aL0ALocal, stateL0BLocal, resultL0CLocal, historyUBLocal, 0, staticSlot, itemId,
-                        l0aOpIdx, l0cOpIdx);
+                        chunkMatrixL1Local, aL0ALocal, stateL0BLocal, mmadL0CQueueLocal, historyUBLocal, 0,
+                        chunkMatrixSlot, itemId, l0aOpIdx, l0cOpIdx);
 
                     if (nextItemId < itemCount) {
-                        const uint32_t nextStaticSlot = nextItemId % DB_SLOT_NUM;
+                        const uint32_t nextChunkMatrixSlot = nextItemId % DB_SLOT_NUM;
                         IssueStateU(
-                            staticL1Local, valueL1Local, aL0ALocal, valueL0BLocal, resultL0CLocal, uUBLocal,
-                            nextStaticSlot, nextItemId, true, l0aOpIdx, l0cOpIdx);
+                            chunkMatrixL1Local, valueL1Local, aL0ALocal, valueL0BLocal, mmadL0CQueueLocal, uUBLocal,
+                            nextChunkMatrixSlot, nextItemId, true, l0aOpIdx, l0cOpIdx);
                     }
 
                     IssueStateC2Remainder(
-                        staticL1Local, rL1Local, aL0ALocal, rL0BLocal, resultL0CLocal, deltaUBLocal, localUBLocal,
-                        staticSlot, itemId, rQueueDepth, true, l0aOpIdx, l0cOpIdx);
+                        chunkMatrixL1Local, rL1Local, aL0ALocal, rL0BLocal, mmadL0CQueueLocal, deltaUBLocal,
+                        localUBLocal, chunkMatrixSlot, itemId, rQueueDepth, true, l0aOpIdx, l0cOpIdx);
                 }
             } else {
-                // 同一 chunk 的 lane 对应同一 batch 的不同 Dv tile, 共用一份静态矩阵.
-                // 静态矩阵按 chunk 双槽滚动, Value 仍按 item 双槽分别搬入.
+                // 同一 chunk 的 lane 对应同一 batch 的不同 Dv tile, 共用一份Chunk 只读矩阵.
+                // Chunk 只读矩阵按 chunk 双槽滚动, Value 仍按 item 双槽分别搬入.
                 const uint32_t epochCount = itemCount + laneCount;
                 for (uint32_t epoch = 0; epoch < epochCount; ++epoch) {
                     const bool hasC2 = epoch + 1 >= laneCount && epoch < itemCount + laneCount - 1;
@@ -503,29 +507,30 @@ __aicore__ inline void KernelProcessStateUpdateForAIC(
                         const uint32_t lane = itemId % laneCount;
                         const uint32_t chunkId = itemId / laneCount;
                         const uint32_t taskId = static_cast<uint32_t>(waveTaskBase) + lane;
-                        const uint32_t staticSlot = chunkId % DB_SLOT_NUM;
+                        const uint32_t chunkMatrixSlot = chunkId % DB_SLOT_NUM;
                         IssueStateInputPreload(
-                            kPlusGlobal, qPlusGlobal, mGlobal, kTailGlobal, aGlobal, valueGlobal, staticL1Local,
-                            valueL1Local, data, taskId, staticSlot, chunkId, itemId, lane == 0);
+                            kPlusGlobal, qPlusGlobal, mGlobal, kTailGlobal, aGlobal, valueGlobal, chunkMatrixL1Local,
+                            valueL1Local, data, taskId, chunkMatrixSlot, chunkId, itemId, lane == 0);
                         IssueStateU(
-                            staticL1Local, valueL1Local, aL0ALocal, valueL0BLocal, resultL0CLocal, uUBLocal, staticSlot,
-                            itemId, lane == 0, l0aOpIdx, l0cOpIdx);
+                            chunkMatrixL1Local, valueL1Local, aL0ALocal, valueL0BLocal, mmadL0CQueueLocal, uUBLocal,
+                            chunkMatrixSlot, itemId, lane == 0, l0aOpIdx, l0cOpIdx);
                         IssueStateC1Post(
-                            staticL1Local, stateL1Local, kPlusStateL1Local, aL0ALocal, stateL0BLocal,
-                            kPlusStateL0BLocal, resultL0CLocal, predUBLocal, lane, staticSlot, itemId, l0aOpIdx,
+                            chunkMatrixL1Local, stateL1Local, kPlusStateL1Local, aL0ALocal, stateL0BLocal,
+                            kPlusStateL0BLocal, mmadL0CQueueLocal, predUBLocal, lane, chunkMatrixSlot, itemId, l0aOpIdx,
                             l0cOpIdx);
                     }
                     if (hasC2) {
                         const uint32_t itemId = epoch - laneCount + 1;
                         const uint32_t lane = itemId % laneCount;
                         const uint32_t chunkId = itemId / laneCount;
-                        const uint32_t staticSlot = chunkId % DB_SLOT_NUM;
+                        const uint32_t chunkMatrixSlot = chunkId % DB_SLOT_NUM;
                         IssueStateC2History(
-                            staticL1Local, aL0ALocal, stateL0BLocal, resultL0CLocal, historyUBLocal, lane, staticSlot,
-                            itemId, l0aOpIdx, l0cOpIdx);
+                            chunkMatrixL1Local, aL0ALocal, stateL0BLocal, mmadL0CQueueLocal, historyUBLocal, lane,
+                            chunkMatrixSlot, itemId, l0aOpIdx, l0cOpIdx);
                         IssueStateC2Remainder(
-                            staticL1Local, rL1Local, aL0ALocal, rL0BLocal, resultL0CLocal, deltaUBLocal, localUBLocal,
-                            staticSlot, itemId, rQueueDepth, lane + 1 == laneCount, l0aOpIdx, l0cOpIdx);
+                            chunkMatrixL1Local, rL1Local, aL0ALocal, rL0BLocal, mmadL0CQueueLocal, deltaUBLocal,
+                            localUBLocal, chunkMatrixSlot, itemId, rQueueDepth, lane + 1 == laneCount, l0aOpIdx,
+                            l0cOpIdx);
                     }
                 }
             }

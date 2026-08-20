@@ -14,7 +14,7 @@
 
 namespace KDALite {
 
-constexpr uint32_t OUTPUT_HISTORY_UB_ADDR = OUTPUT_RESULT_UB_ADDR + OUTPUT_RESULT_UB_ELEMS * sizeof(float);
+constexpr uint32_t OUTPUT_HISTORY_UB_ADDR = OUTPUT_LOCAL_UB_ADDR + OUTPUT_LOCAL_UB_ELEMS * sizeof(float);
 constexpr uint32_t OUTPUT_BF16_UB_ADDR = OUTPUT_HISTORY_UB_ADDR + CHUNK_SIZE * AIV_DV_TILE * sizeof(float);
 
 constexpr MutexId MUTEX_OUTPUT_HISTORY_UB = 0;
@@ -30,7 +30,7 @@ __aicore__ inline void KernelProcessLocalOutputForAIV(
         outputGlobal.SetGlobalBuffer(outputGMAddr);
         oHistoryGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float*>(workspaceGMAddr + data.oHistoryOffset));
 
-        LocalTensor<float> resultUBLocal(TPosition::VECCALC, OUTPUT_RESULT_UB_ADDR, OUTPUT_RESULT_UB_ELEMS);
+        LocalTensor<float> localUBLocal(TPosition::VECCALC, OUTPUT_LOCAL_UB_ADDR, OUTPUT_LOCAL_UB_ELEMS);
         LocalTensor<float> historyUBLocal(TPosition::VECCALC, OUTPUT_HISTORY_UB_ADDR, CHUNK_SIZE * AIV_DV_TILE);
         LocalTensor<bfloat16_t> outputUBLocal(TPosition::VECCALC, OUTPUT_BF16_UB_ADDR, CHUNK_SIZE * AIV_DV_TILE);
 
@@ -56,7 +56,7 @@ __aicore__ inline void KernelProcessLocalOutputForAIV(
 
             WaitAicToAiv<PIPE_V>(FLAG_OUTPUT_LOCAL_READY);
             Mutex::Lock<PIPE_V>(MUTEX_OUTPUT_HISTORY_UB);
-            Add(historyUBLocal, historyUBLocal, resultUBLocal, CHUNK_SIZE * AIV_DV_TILE);
+            Add(historyUBLocal, historyUBLocal, localUBLocal, CHUNK_SIZE * AIV_DV_TILE);
             Cast(outputUBLocal, historyUBLocal, RoundMode::CAST_RINT, CHUNK_SIZE * AIV_DV_TILE);
             Mutex::Unlock<PIPE_V>(MUTEX_OUTPUT_HISTORY_UB);
 

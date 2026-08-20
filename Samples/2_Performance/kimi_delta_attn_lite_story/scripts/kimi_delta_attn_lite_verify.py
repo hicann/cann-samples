@@ -19,8 +19,8 @@ round-to-nearest-even 位运算.
 
 处理流程:
   1. 读取已经落盘的 BF16 Q/K/V/beta 和 FP32 log_decay.
-  2. 以 FP32 递推计算 O 与 final_state, 写出 Golden 文件.
-  3. O 量化为 BF16 后比较, final_state 按 FP32 比较.
+  2. 以 FP32 递推计算 O 与 final_state, 直接写出 FP32 Golden 文件.
+  3. 将 NPU BF16 输出转为 FP32, 与 FP32 Golden 比较.
 
 环境变量:
   KDA_VERIFY_BACKEND = auto|torch|numpy
@@ -61,9 +61,10 @@ except Exception:  # pragma: no cover - environment dependent
     _HAS_ML_DTYPES = False
 
 
-COMPARE_RTOL = 2.0**-6
-COMPARE_ATOL = 2.0**-6
 COMPARE_BLOCK_ELEMS = 1 << 20
+# FlashKDA/FLA checks both O and final_state with this relative-L2 threshold.
+FLASH_KDA_NRMSE_THRESHOLD = 0.006
+FLASH_KDA_NRMSE_FLOOR = 1.0e-8
 
 
 _BACKEND_REQUEST = os.environ.get("KDA_VERIFY_BACKEND", "auto").strip().lower()
@@ -111,17 +112,6 @@ def bf16_to_fp32(value: np.ndarray) -> np.ndarray:
         return value.astype(np.float32)
     bits = value.view(np.uint16).astype(np.uint32) << np.uint32(16)
     return bits.view(np.float32)
-
-
-def fp32_to_bf16(value: np.ndarray) -> np.ndarray:
-    """Convert FP32 to little-endian BF16 with round-to-nearest-even."""
-    value = np.ascontiguousarray(value, dtype=np.float32)
-    if _HAS_ML_DTYPES:
-        return value.astype(ml_dtypes.bfloat16)
-    bits = value.view(np.uint32).copy()
-    lsb = (bits >> np.uint32(16)) & np.uint32(1)
-    rounded = (bits + np.uint32(0x7FFF) + lsb) >> np.uint32(16)
-    return rounded.astype("<u2")
 
 
 def _check_file_bytes(path: str, shape, item_bytes: int, name: str) -> int:
@@ -310,75 +300,66 @@ def _format_position(flat_index: int, shape) -> str:
     return f"@idx={flat_index}{position}"
 
 
-def compare(name: str, actual: np.ndarray, expected: np.ndarray):
-    """Compare in bounded-size blocks and return report lines."""
+def compare_nrmse(
+    name: str,
+    actual: np.ndarray,
+    expected: np.ndarray,
+    *,
+    threshold: float = FLASH_KDA_NRMSE_THRESHOLD,
+):
+    """Apply FlashKDA/FLA's tensor-wise relative-L2 error rule."""
     if actual.shape != expected.shape:
         raise ValueError(f"{name} shape 不一致：NPU={actual.shape} Golden={expected.shape}")
 
     actual_flat = actual.reshape(-1)
     expected_flat = expected.reshape(-1)
-    fail_count = 0
-    first_fail = None
+    squared_error_sum = 0.0
+    squared_reference_sum = 0.0
     max_abs_error = -1.0
     max_abs_index = 0
-    max_rel_error = -1.0
-    max_rel_index = 0
-    tiny = float(np.finfo(np.float32).tiny)
 
     for begin in range(0, actual_flat.size, COMPARE_BLOCK_ELEMS):
         end = min(begin + COMPARE_BLOCK_ELEMS, actual_flat.size)
-        actual_block = actual_flat[begin:end]
-        expected_block = expected_flat[begin:end]
+        actual_block = actual_flat[begin:end].astype(np.float32, copy=False)
+        expected_block = expected_flat[begin:end].astype(np.float32, copy=False)
 
         for value_name, block in ((f"NPU {name}", actual_block), (f"Golden {name}", expected_block)):
             bad = np.flatnonzero(~np.isfinite(block))
             if bad.size:
                 bad_flat = begin + int(bad[0])
                 bad_pos = tuple(int(index) for index in np.unravel_index(bad_flat, actual.shape))
-                raise ValueError(f"{value_name} 含 NaN/Inf，首个位置={bad_pos}，值={block[int(bad[0])]}")
+                raise ValueError(
+                    f"{value_name} 含 NaN/Inf，首个位置={bad_pos}，值={block[int(bad[0])]}"
+                )
+
+        difference = actual_block.astype(np.float64) - expected_block.astype(np.float64)
+        reference = expected_block.astype(np.float64)
+        squared_error_sum += float(np.dot(difference, difference))
+        squared_reference_sum += float(np.dot(reference, reference))
 
         abs_error = np.abs(actual_block - expected_block)
-        expected_abs = np.abs(expected_block)
-        tolerance = COMPARE_ATOL + COMPARE_RTOL * expected_abs
-        failed = abs_error > tolerance
-        block_fail_count = int(np.count_nonzero(failed))
-        fail_count += block_fail_count
-        if block_fail_count and first_fail is None:
-            local_first = int(np.flatnonzero(failed)[0])
-            first_fail = (
-                begin + local_first,
-                float(actual_block[local_first]),
-                float(expected_block[local_first]),
-                float(abs_error[local_first]),
-                float(tolerance[local_first]),
-            )
+        local_max = int(np.argmax(abs_error))
+        if float(abs_error[local_max]) > max_abs_error:
+            max_abs_error = float(abs_error[local_max])
+            max_abs_index = begin + local_max
 
-        local_abs = int(np.argmax(abs_error))
-        if float(abs_error[local_abs]) > max_abs_error:
-            max_abs_error = float(abs_error[local_abs])
-            max_abs_index = begin + local_abs
-
-        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            rel_error = abs_error / np.maximum(expected_abs, tiny)
-        local_rel = int(np.argmax(rel_error))
-        if float(rel_error[local_rel]) > max_rel_error:
-            max_rel_error = float(rel_error[local_rel])
-            max_rel_index = begin + local_rel
-
+    element_count = actual_flat.size
+    error_rms = float(np.sqrt(squared_error_sum / element_count))
+    reference_rms = float(np.sqrt(squared_reference_sum / element_count))
+    nrmse = error_rms / (reference_rms + FLASH_KDA_NRMSE_FLOOR)
+    passed = nrmse < threshold
     lines = [
-        f"比对 {name}：总元素={actual_flat.size} 失败={fail_count} "
-        f"最大绝对误差={max_abs_error:.6e} {_format_position(max_abs_index, actual.shape)} "
-        f"最大相对误差={max_rel_error:.6e} {_format_position(max_rel_index, actual.shape)} "
-        f"（rtol={COMPARE_RTOL} atol={COMPARE_ATOL}）"
+        f"相对 L2 误差 {name}：NRMSE={nrmse:.6e}（要求<{threshold:.6e}） "
+        f"RMSE={error_rms:.6e} reference_RMS={reference_rms:.6e} "
+        f"最大绝对误差={max_abs_error:.6e} {_format_position(max_abs_index, actual.shape)}"
     ]
-    if first_fail is not None:
-        flat_index, actual_value, expected_value, abs_error, tolerance = first_fail
+    if not passed:
         lines.append(
-            f"  首个失败：{_format_position(flat_index, actual.shape)} "
-            f"npu={actual_value:.7e} golden={expected_value:.7e} "
-            f"abs={abs_error:.7e} tolerance={tolerance:.7e}"
+            f"  最大绝对误差位置：{_format_position(max_abs_index, actual.shape)} "
+            f"npu={float(actual_flat[max_abs_index]):.7e} "
+            f"golden={float(expected_flat[max_abs_index]):.7e}"
         )
-    return fail_count == 0, lines
+    return passed, lines
 
 
 def main() -> int:
@@ -410,6 +391,10 @@ def main() -> int:
                 f"verify: 警告 torch 不可用（{_TORCH_IMPORT_ERROR}），回退 numpy",
                 file=sys.stderr,
             )
+    print(
+        f"verify: compare=nrmse(FlashKDA/FLA threshold={FLASH_KDA_NRMSE_THRESHOLD:.6e})",
+        flush=True,
+    )
     if not _HAS_ML_DTYPES:
         print("verify: bf16 走位运算回退（未装 ml_dtypes）", file=sys.stderr)
 
@@ -439,18 +424,16 @@ def main() -> int:
 
     try:
         start = time.perf_counter()
-        golden_o_fp32, golden_state = recurrent_kda_golden(q, k, v, log_decay, beta)
+        golden_o_fp32, golden_state_fp32 = recurrent_kda_golden(q, k, v, log_decay, beta)
         golden_seconds = time.perf_counter() - start
         require_finite("Golden O(FP32)", golden_o_fp32)
-        require_finite("Golden final_state", golden_state)
+        require_finite("Golden final_state(FP32)", golden_state_fp32)
         del q, k, v, log_decay, beta
 
-        golden_o_bf16 = fp32_to_bf16(golden_o_fp32)
-        del golden_o_fp32
-        golden_o_bf16.tofile(os.path.join(data_dir, "golden_o.bin"))
-        golden_o = bf16_to_fp32(golden_o_bf16)
-        del golden_o_bf16
-        np.ascontiguousarray(golden_state, dtype="<f4").tofile(
+        np.ascontiguousarray(golden_o_fp32, dtype="<f4").tofile(
+            os.path.join(data_dir, "golden_o.bin")
+        )
+        np.ascontiguousarray(golden_state_fp32, dtype="<f4").tofile(
             os.path.join(data_dir, "golden_final_state.bin")
         )
     except (OSError, ValueError, RuntimeError, MemoryError) as error:
@@ -459,9 +442,13 @@ def main() -> int:
 
     try:
         start = time.perf_counter()
-        npu_o = read_bf16(os.path.join(data_dir, "npuout_o.bin"), sequence_shape, "NPU O")
-        npu_state = read_fp32(
-            os.path.join(data_dir, "npuout_final_state.bin"), state_shape, "NPU final_state"
+        npu_o_fp32 = read_bf16(
+            os.path.join(data_dir, "npuout_o.bin"), sequence_shape, "NPU O(BF16)"
+        )
+        npu_state_fp32 = read_bf16(
+            os.path.join(data_dir, "npuout_final_state.bin"),
+            state_shape,
+            "NPU final_state(BF16)",
         )
         read_seconds += time.perf_counter() - start
     except (OSError, ValueError, MemoryError) as error:
@@ -475,22 +462,26 @@ def main() -> int:
     )
     print(
         f"verify: 读入 {read_seconds:.3f}s，Golden(recurrent KDA, fp32/{backend_tag}) "
-        f"{golden_seconds:.3f}s -> {{golden_o,golden_final_state}}.bin"
+        f"{golden_seconds:.3f}s -> {{golden_o,golden_final_state}}.bin(FP32)"
     )
 
     try:
-        o_passed, o_lines = compare("O(BF16)", npu_o, golden_o)
-        del npu_o, golden_o
-        state_passed, state_lines = compare("final_state(FP32)", npu_state, golden_state)
+        o_passed, o_lines = compare_nrmse(
+            "O(BF16->FP32) vs FP32 Golden", npu_o_fp32, golden_o_fp32
+        )
+        del npu_o_fp32, golden_o_fp32
+        state_passed, state_lines = compare_nrmse(
+            "final_state(BF16->FP32) vs FP32 Golden", npu_state_fp32, golden_state_fp32
+        )
     except ValueError as error:
         print(f"比对失败：{error}", file=sys.stderr)
         return 1
 
     print("\n".join(o_lines + state_lines))
     if o_passed and state_passed:
-        print("比对成功 ✓（O 与 final_state 均在容差内）")
+        print("比对成功 ✓（O 与 final_state 均通过 NRMSE 验收）")
         return 0
-    print("比对失败 ✗（O 或 final_state 超出容差）")
+    print("比对失败 ✗（O 或 final_state 未通过 NRMSE 验收）")
     return 1
 
 

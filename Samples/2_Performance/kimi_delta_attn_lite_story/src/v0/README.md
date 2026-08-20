@@ -2,7 +2,7 @@
 
 ## 版本概览
 
-v0 是 KDALite 的功能基线。它把 Chunk KDA 拆成 Prepare、StateUpdate 和 LocalOutput 三个 Kernel，三个 Kernel 在同一个 ACL stream 中依次提交。每个 Kernel 只使用单槽片上缓冲区，不安排跨 task 的 CV 流水。
+v0 是 KDALite 的功能基线。它把 Chunk KDA 拆成 Prepare、StateUpdate 和 LocalOutput 三个 Kernel，三个 Kernel 在同一个 ACL stream 中依次提交。主要共享数据使用单槽，不建立多槽滚动调度；Prepare 在 AIC 读完共享 L1 后会提前归还该槽，因此相邻任务的 AIV 准备仍可与当前任务的 AIC 矩阵乘和写回局部重叠。
 
 | 张量 | Shape | dtype | 说明 |
 | --- | --- | --- | --- |
@@ -12,9 +12,11 @@ v0 是 KDALite 的功能基线。它把 Chunk KDA 拆成 Prepare、StateUpdate �
 | log_decay | `[B,1,S,128]` | FP32 | 已完成门函数，取值不大于 0。 |
 | beta | `[B,1,S]` | BF16 | 已完成 sigmoid。 |
 | O | `[B,1,S,128]` | BF16 | 序列输出。 |
-| final_state | `[B,1,128,128]` | FP32 | 状态布局为 `[Dk,Dv]`。 |
+| final_state | `[B,1,128,128]` | BF16 | 序列结束后的状态，布局为 `[Dk,Dv]`。 |
 
-本版支持可变 `B/S`，固定 `N=1`、`Dk=Dv=128`，初始状态为 0。当前源码的接口、任务切分和片上布局要求 `Dk==Dv`；这是样例支持边界，不是 KDA 数学公式的限制。`CHUNK_SIZE=C` 是编译期常量，支持 16、32 和 64，默认值为 32。Q/K/V 投影、ShortConv、门参数生成、输出归一化、Decode 和反向计算不在本样例范围内。
+本版支持可变 `B/S`，固定 `N=1`、`Dk=Dv=128`，初始状态为 0。本样例的接口、任务切分和片上布局要求 `Dk==Dv`；这是样例支持边界，不是 KDA 数学公式的限制。`CHUNK_SIZE=C` 是编译期常量，支持 16、32 和 64，默认值为 32。Q/K/V 投影、ShortConv、门参数生成、输出归一化、Decode 和反向计算不在本样例范围内。
+
+固定为 1 的 Head 轴不写入数据文件。O 的物理布局为 `[B,S,128]`，占 `256*B*S` 字节；`final_state` 的物理布局为 `[B,128,128]`，占 `32768*B` 字节。AIV 在 UB 中仍以 FP32 维护递推 state，对外输出的 `final_state` 来自同一次状态更新生成的 BF16 shadow。
 
 ## 数学约定与 Chunk 公式
 
@@ -109,7 +111,7 @@ flowchart TB
     P --> S --> O
 ```
 
-三个入口在同一 stream 中异步提交，launch 顺序提供 Kernel 间依赖；`KimiDeltaAttnLiteNPU` 不在内部同步 stream。
+三个入口在同一 stream 中异步提交，launch 顺序提供 Kernel 间依赖；`KimiDeltaAttnLiteNPU` 不在内部同步 stream，三个 Kernel 始终按上述顺序执行。
 
 ### 任务划分与 AIV 分工
 
@@ -134,7 +136,7 @@ outputTasks  = B * Tc * (128/DV_TILE)
 
 ### Workspace
 
-Workspace 采用 SoA 布局，各分段按全部 chunk 连续存放：
+Workspace 按中间量分段存放，每个分段按全部 Chunk 连续排列：
 
 | 分段 | 每 chunk shape | dtype | 生产者 | 消费者 |
 | --- | --- | --- | --- | --- |
@@ -173,7 +175,7 @@ flowchart TB
     C --> G["GM: W 和 U"]
 ```
 
-AIC 的 W 通过 Fixpipe 转为 BF16，U 保持 FP32。U 位于跨 chunk 的状态反馈路径，不能用 BF16 workspace 替代。AIV0/AIV1 都完成 L1 写入后，AIC 才读取完整 M/K_plus；AIC 读完后归还 L1，随后两路 AIV 才进入下一 task。
+AIC 的 W 通过 Fixpipe 转为 BF16，U 保持 FP32。U 会进入跨 Chunk 的状态反馈路径；为保持长序列精度，本实现将 U 保留为 FP32。AIV0/AIV1 都完成 L1 写入后，AIC 才读取完整 M/K_plus；AIC 读完后归还 L1，随后两路 AIV 才进入下一 task。
 
 | 事件 | Set | Wait | 含义 |
 | --- | --- | --- | --- |
@@ -186,7 +188,7 @@ Prepare 的 L1、L0A、L0B、L0C 和每路 AIV UB 都是单槽。默认 C=32 时
 
 ### 输入、输出与计算
 
-StateUpdate 读取 W、Q_plus、K_tail、U 和 G_last，按 chunk 顺序计算 prediction、R、history 和 delta，更新 FP32 state，写出 R、O_history 和最后的 final_state。
+StateUpdate 读取 W、Q_plus、K_tail、U 和 G_last，按 chunk 顺序计算 prediction、R、history 和 delta，更新 FP32 state，写出 R、O_history 和最后的 BF16 `final_state`。`UpdateStateAndShadowVF` 在一次 VF 中同时更新 FP32 state 并生成 BF16 shadow；最后一个 Chunk 完成后，AIV 直接把该 shadow 写入 GM，不再从 FP32 state 另做一次输出转换。
 
 ### AIV0、AIV1 与 AIC 的列切分
 
@@ -194,8 +196,8 @@ StateUpdate 读取 W、Q_plus、K_tail、U 和 G_last，按 chunk 顺序计算 p
 
 | 核心 | 全局 Dv 列 | 本地数据 | 主要工作 |
 | --- | --- | --- | --- |
-| AIV0 | `dvBase+[0,AIV_DV_TILE)` | state/delta 为 `[Dk,AIV_DV_TILE]`，U/prediction/R 为 `[C,AIV_DV_TILE]` | 维护低半区 state，计算低半区 R。 |
-| AIV1 | `dvBase+[AIV_DV_TILE,DV_TILE)` | shape 与 AIV0 相同 | 维护高半区 state，计算高半区 R。 |
+| AIV0 | `dvBase+[0,AIV_DV_TILE)` | state/delta 为 `[Dk,AIV_DV_TILE]`，U/prediction/R 为 `[C,AIV_DV_TILE]` | 维护低半区 FP32 state，生成 BF16 shadow，计算低半区 R，并写 `final_state` 低半区。 |
+| AIV1 | `dvBase+[AIV_DV_TILE,DV_TILE)` | shape 与 AIV0 相同 | 对高半区执行相同流程，并写 `final_state` 高半区。 |
 | AIC | 完整 `DV_TILE` 列 | prediction/history 为 `[C,DV_TILE]`，delta 为 `[Dk,DV_TILE]` | 读取两路 AIV 拼成的 state/R，完成四次矩阵乘。 |
 
 ```mermaid
@@ -204,7 +206,7 @@ flowchart TB
     P["AIC: W@state -> prediction<br/>Q_plus@state -> history"]
     R["两路 AIV: R=U-prediction -> GM + L1"]
     D["AIC: K_tail.T@R -> delta"]
-    N["两路 AIV: state=decay*state+delta"]
+    N["两路 AIV: 同时更新 FP32 state 和 BF16 shadow<br/>末 Chunk shadow -> final_state GM"]
     S --> P --> R --> D --> N
 ```
 
@@ -269,9 +271,11 @@ AIC 发布 local 后，两路 AIV 分别计算并写回自己的列。AIC 等两
 ./build/Samples/2_Performance/kimi_delta_attn_lite_story/kdalite_v0 --size 2 65
 ```
 
-最后一个 chunk 的无效行按 `Q/K/V=0`、`beta=0`、`log_decay=0` 补齐。StateUpdate 按完整 C 行计算，LocalOutput 只写 `validLen` 行。O 按 BF16、final_state 按 FP32 比较，判据为 `abs(npu-golden) <= 2^-6 + 2^-6*abs(golden)`；NaN 或 Inf 直接失败。
+最后一个 chunk 的无效行按 `Q/K/V=0`、`beta=0`、`log_decay=0` 补齐。StateUpdate 按完整 C 行计算，LocalOutput 只写 `validLen` 行。Prepare 将 Q_plus、K_plus、K_tail、M、A 和 W 量化为 BF16；StateUpdate 使用 BF16 state shadow 参与 Cube 计算，并把 R 量化为 BF16。U、O_history 和 AIV 递推 state 保持 FP32，只有对外的 O 与 `final_state` 为 BF16。
 
-Prepare 将 Q_plus、K_plus、K_tail、M、A 和 W 量化为 BF16；StateUpdate 使用 BF16 state 副本参与 Cube 计算，并把 R 量化为 BF16；U、O_history、递推 state 和 final_state 保持 FP32。已验证 C=16/32/64、跨 chunk、尾块、多 Batch、`beta=0/1` 和 `log_decay=0`。C64 只通过随机衰减用例，不能外推到完整模型门值范围。
+默认精度标准对齐 FlashKDA/FLA：将 NPU 的 BF16 O 和 `final_state` 转为 FP32，分别与未量化的 FP32 Recurrent Golden 计算 NRMSE，并要求 `NRMSE < 0.006`；NaN 或 Inf 直接失败。CANN 9.2、C32、`B=1,S=33,core-num=1` 的六类输入全部通过，其中 O 和 `final_state` 最大 NRMSE 分别为 0.003079 和 0.003058。统一大规格 random 输入 `B=32,S=4096` 也通过，两项 NRMSE 分别为 0.003383 和 0.002968。指标来源和完整测试矩阵见 [总 README：复现方法](../../README.md#复现方法)。
+
+实现回归还覆盖 C16/C32/C64、跨 Chunk 尾块、多 Batch、`beta=0/1`、无衰减、强衰减和混合衰减。C64 的随机用例不能替代完整模型门值范围验证。
 
 ## 性能参考
 
@@ -279,9 +283,9 @@ Prepare 将 Q_plus、K_plus、K_tail、M、A 和 W 量化为 BF16；StateUpdate 
 
 | Kernel | Task Duration 中位数 (us) |
 | --- | ---: |
-| Prepare | 17472.701172 |
-| StateUpdate | 15906.120117 |
-| LocalOutput | 7940.161133 |
-| 合计 | 41318.982422 |
+| Prepare | 17450.373047 |
+| StateUpdate | 15919.649414 |
+| LocalOutput | 7958.541992 |
+| 合计 | 41328.564453 |
 
 合计只用于比较同一采集口径下的设备侧 Kernel 工作量，不是 Host 端到端耗时，也不包含数据生成、H2D/D2H、Kernel launch、Golden 和比对。

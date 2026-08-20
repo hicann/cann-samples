@@ -155,11 +155,12 @@ __aicore__ inline void IssueStateV2(
 }
 
 __aicore__ inline void KernelProcessStateUpdateForAIV(
-    __gm__ float* finalStateGMAddr, __gm__ uint8_t* workspaceGMAddr, const KimiDeltaAttnLiteTilingData& data)
+    __gm__ bfloat16_t* finalStateGMAddr, __gm__ uint8_t* workspaceGMAddr, const KimiDeltaAttnLiteTilingData& data)
 {
     using namespace AscendC;
     if ASCEND_IS_AIV {
-        GlobalTensor<float> finalStateGlobal, stateDecayGlobal;
+        GlobalTensor<bfloat16_t> finalStateGlobal;
+        GlobalTensor<float> stateDecayGlobal;
         finalStateGlobal.SetGlobalBuffer(finalStateGMAddr);
         stateDecayGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float*>(workspaceGMAddr + data.stateDecayOffset));
 
@@ -238,11 +239,11 @@ __aicore__ inline void KernelProcessStateUpdateForAIV(
                 const uint32_t dvTileId = taskId % DV_TILE_COUNT;
                 const uint32_t valueColumn = dvTileId * DV_TILE + subAivIdx * AIV_DV_TILE;
                 const MutexId stateMutexId = MUTEX_STATE_UB_BASE + static_cast<MutexId>(lane);
-                auto stateSlotUBLocal = stateUBLocal[lane * STATE_HALF_ELEMS];
+                auto stateShadowSlotUBLocal = stateShadowUBLocal[lane * STATE_HALF_ELEMS];
                 Mutex::Lock<PIPE_MTE3>(stateMutexId);
                 const uint64_t finalStateOffset = static_cast<uint64_t>(batchId) * HEAD_DIM * VALUE_DIM + valueColumn;
                 CopyUbToGmRows(
-                    finalStateGlobal[finalStateOffset], stateSlotUBLocal, HEAD_DIM, AIV_DV_TILE, AIV_DV_TILE,
+                    finalStateGlobal[finalStateOffset], stateShadowSlotUBLocal, HEAD_DIM, AIV_DV_TILE, AIV_DV_TILE,
                     VALUE_DIM);
                 Mutex::Unlock<PIPE_MTE3>(stateMutexId);
             }

@@ -211,25 +211,30 @@ __aicore__ inline void IssuePrepareVpForAIV(
     using namespace AscendC;
     const uint32_t taskId = pairTaskId * PREP_SUB_AIV_NUM + subAivIdx;
     const bool validTask = taskId < data.prepareNumTasks;
-    const uint32_t slotAddr = cvSlot * PREP_SLOT_BYTES;
+    const uint32_t prepUbSlotAddr = cvSlot * PREP_SLOT_BYTES;
     const uint32_t l1SlotAddr = cvSlot * PREP_L1_CV_SLOT_BYTES + subAivIdx * PREP_L1_SLOT_BYTES;
-    const MutexId slotMutexId = MUTEX_PREP_SLOT_BASE + static_cast<MutexId>(cvSlot);
-    const uint16_t inputFlagId = SlotFlagId(FLAG_PREP_INPUT_HANDOFF_BASE, cvSlot);
+    const MutexId prepUbSlotMutexId = MUTEX_PREP_SLOT_BASE + static_cast<MutexId>(cvSlot);
+    const uint16_t l1HandoffFlagId = SlotFlagId(FLAG_PREP_L1_HANDOFF_BASE, cvSlot);
 
     LocalTensor<bfloat16_t> kFactorL1Local(TPosition::A1, l1SlotAddr + PREP_K_FACTOR_L1_ADDR, CHUNK_D_ELEMS);
     LocalTensor<bfloat16_t> qFactorL1Local(TPosition::A1, l1SlotAddr + PREP_Q_FACTOR_L1_ADDR, CHUNK_D_ELEMS);
     LocalTensor<bfloat16_t> kInvFactorL1Local(TPosition::A1, l1SlotAddr + PREP_K_INV_FACTOR_L1_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<bfloat16_t> qUBLocal(TPosition::VECCALC, slotAddr + PREP_Q_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<bfloat16_t> kUBLocal(TPosition::VECCALC, slotAddr + PREP_K_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<float> gUBLocal(TPosition::VECCALC, slotAddr + PREP_G_FP32_SLOT_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<bfloat16_t> betaUBLocal(TPosition::VECCALC, slotAddr + PREP_BETA_BF16_SLOT_ADDR, CHUNK_SIZE);
-    LocalTensor<bfloat16_t> kPlusUBLocal(TPosition::VECCALC, slotAddr + PREP_K_PLUS_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<bfloat16_t> qFactorUBLocal(TPosition::VECCALC, slotAddr + PREP_Q_FACTOR_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<bfloat16_t> kFactorUBLocal(TPosition::VECCALC, slotAddr + PREP_K_FACTOR_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<bfloat16_t> qUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_Q_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<bfloat16_t> kUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_K_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<float> gUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_G_FP32_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<bfloat16_t> betaUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_BETA_BF16_SLOT_ADDR, CHUNK_SIZE);
+    LocalTensor<bfloat16_t> kPlusUBLocal(
+        TPosition::VECCALC, prepUbSlotAddr + PREP_K_PLUS_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<bfloat16_t> qFactorUBLocal(
+        TPosition::VECCALC, prepUbSlotAddr + PREP_Q_FACTOR_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<bfloat16_t> kFactorUBLocal(
+        TPosition::VECCALC, prepUbSlotAddr + PREP_K_FACTOR_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
     LocalTensor<bfloat16_t> kInvFactorUBLocal(
-        TPosition::VECCALC, slotAddr + PREP_K_INV_FACTOR_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<bfloat16_t> kTailUBLocal(TPosition::VECCALC, slotAddr + PREP_K_TAIL_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<float> stateDecayUBLocal(TPosition::VECCALC, slotAddr + PREP_STATE_DECAY_FP32_SLOT_ADDR, HEAD_DIM);
+        TPosition::VECCALC, prepUbSlotAddr + PREP_K_INV_FACTOR_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<bfloat16_t> kTailUBLocal(
+        TPosition::VECCALC, prepUbSlotAddr + PREP_K_TAIL_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<float> stateDecayUBLocal(
+        TPosition::VECCALC, prepUbSlotAddr + PREP_STATE_DECAY_FP32_SLOT_ADDR, HEAD_DIM);
 
     if (validTask) {
         const uint32_t batchId = taskId / data.chunkCount;
@@ -241,17 +246,17 @@ __aicore__ inline void IssuePrepareVpForAIV(
         const uint64_t chunkDOffset = static_cast<uint64_t>(taskId) * CHUNK_D_ELEMS;
 
         if constexpr (CHUNK_SIZE > CUBE_BLOCK) {
-            Mutex::Lock<PIPE_V>(slotMutexId);
+            Mutex::Lock<PIPE_V>(prepUbSlotMutexId);
             Duplicate<uint16_t>(betaUBLocal.ReinterpretCast<uint16_t>(), 0, CHUNK_SIZE);
-            Mutex::Unlock<PIPE_V>(slotMutexId);
+            Mutex::Unlock<PIPE_V>(prepUbSlotMutexId);
         }
-        Mutex::Lock<PIPE_MTE2>(slotMutexId);
+        Mutex::Lock<PIPE_MTE2>(prepUbSlotMutexId);
         CopyPrepareInputs(
             qUBLocal, kUBLocal, gUBLocal, betaUBLocal, qGlobal, kGlobal, gGlobal, betaGlobal, tokenOffset, betaOffset,
             validLen);
-        Mutex::Unlock<PIPE_MTE2>(slotMutexId);
+        Mutex::Unlock<PIPE_MTE2>(prepUbSlotMutexId);
 
-        Mutex::Lock<PIPE_V>(slotMutexId);
+        Mutex::Lock<PIPE_V>(prepUbSlotMutexId);
         asc_vf_call<PrepareTransformsVF>(
             reinterpret_cast<__ubuf__ bfloat16_t*>(qUBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ bfloat16_t*>(kUBLocal.GetPhyAddr()),
@@ -262,22 +267,22 @@ __aicore__ inline void IssuePrepareVpForAIV(
             reinterpret_cast<__ubuf__ bfloat16_t*>(kInvFactorUBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ bfloat16_t*>(kTailUBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ float*>(stateDecayUBLocal.GetPhyAddr()), static_cast<uint16_t>(validLen));
-        Mutex::Unlock<PIPE_V>(slotMutexId);
+        Mutex::Unlock<PIPE_V>(prepUbSlotMutexId);
 
-        WaitAicToAiv<PIPE_MTE3>(inputFlagId);
-        Mutex::Lock<PIPE_MTE3>(slotMutexId);
+        WaitAicToAiv<PIPE_MTE3>(l1HandoffFlagId);
+        Mutex::Lock<PIPE_MTE3>(prepUbSlotMutexId);
         CopyPrepareNdToNzGroupsToL1(kFactorL1Local, kFactorUBLocal, HEAD_DIM);
         CopyPrepareNdToNzGroupsToL1(qFactorL1Local, qFactorUBLocal, HEAD_DIM);
         CopyPrepareNdToNzGroupsToL1(kInvFactorL1Local, kInvFactorUBLocal, HEAD_DIM);
-        SetAivToAic<PIPE_MTE3>(inputFlagId);
+        SetAivToAic<PIPE_MTE3>(l1HandoffFlagId);
         DataCopy(qPlusGlobal[chunkDOffset], qUBLocal, CHUNK_D_ELEMS);
         DataCopy(kTailGlobal[chunkDOffset], kTailUBLocal, CHUNK_D_ELEMS);
         DataCopy(stateDecayGlobal[static_cast<uint64_t>(taskId) * HEAD_DIM], stateDecayUBLocal, HEAD_DIM);
-        Mutex::Unlock<PIPE_MTE3>(slotMutexId);
+        Mutex::Unlock<PIPE_MTE3>(prepUbSlotMutexId);
     } else {
         // 尾部只有一个 task 时, AIV1 不计算, 但必须与 AIV0 保持相同的 mode2 握手次数.
-        WaitAicToAiv<PIPE_MTE3>(inputFlagId);
-        SetAivToAic<PIPE_MTE3>(inputFlagId);
+        WaitAicToAiv<PIPE_MTE3>(l1HandoffFlagId);
+        SetAivToAic<PIPE_MTE3>(l1HandoffFlagId);
     }
 }
 
@@ -288,26 +293,27 @@ __aicore__ inline void IssuePrepareVsForAIV(
     using namespace AscendC;
     const uint32_t taskId = pairTaskId * PREP_SUB_AIV_NUM + subAivIdx;
     const bool validTask = taskId < data.prepareNumTasks;
-    const uint32_t slotAddr = cvSlot * PREP_SLOT_BYTES;
+    const uint32_t prepUbSlotAddr = cvSlot * PREP_SLOT_BYTES;
     const uint32_t l1SlotAddr = cvSlot * PREP_L1_CV_SLOT_BYTES + subAivIdx * PREP_L1_SLOT_BYTES;
-    const MutexId slotMutexId = MUTEX_PREP_SLOT_BASE + static_cast<MutexId>(cvSlot);
-    const uint16_t resultFlagId = SlotFlagId(FLAG_PREP_RESULT_HANDOFF_BASE, cvSlot);
+    const MutexId prepUbSlotMutexId = MUTEX_PREP_SLOT_BASE + static_cast<MutexId>(cvSlot);
+    const uint16_t pairArawFlagId = SlotFlagId(FLAG_PREP_PAIR_ARAW_HANDOFF_BASE, cvSlot);
     const uint16_t wFlagId = SlotFlagId(FLAG_PREP_W_HANDOFF_BASE, cvSlot);
 
     LocalTensor<bfloat16_t> mL1Local(TPosition::A1, l1SlotAddr + PREP_W_M_L1_ADDR, CHUNK_C_ELEMS);
     LocalTensor<bfloat16_t> kPlusL1Local(TPosition::A1, l1SlotAddr + PREP_W_K_PLUS_L1_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<bfloat16_t> betaUBLocal(TPosition::VECCALC, slotAddr + PREP_BETA_BF16_SLOT_ADDR, CHUNK_SIZE);
-    LocalTensor<bfloat16_t> kPlusUBLocal(TPosition::VECCALC, slotAddr + PREP_K_PLUS_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
-    LocalTensor<float> pairUBLocal(TPosition::VECCALC, slotAddr + PREP_PAIR_FP32_UB_ADDR, CHUNK_C_ELEMS);
-    LocalTensor<float> aRawUBLocal(TPosition::VECCALC, slotAddr + PREP_A_RAW_FP32_UB_ADDR, CHUNK_C_ELEMS);
-    LocalTensor<float> mFp32UBLocal(TPosition::VECCALC, slotAddr + PREP_M_FP32_SLOT_ADDR, CHUNK_C_ELEMS);
-    LocalTensor<bfloat16_t> mUBLocal(TPosition::VECCALC, slotAddr + PREP_M_BF16_SLOT_ADDR, CHUNK_C_ELEMS);
-    LocalTensor<bfloat16_t> aUBLocal(TPosition::VECCALC, slotAddr + PREP_A_BF16_SLOT_ADDR, CHUNK_C_ELEMS);
+    LocalTensor<bfloat16_t> betaUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_BETA_BF16_SLOT_ADDR, CHUNK_SIZE);
+    LocalTensor<bfloat16_t> kPlusUBLocal(
+        TPosition::VECCALC, prepUbSlotAddr + PREP_K_PLUS_BF16_SLOT_ADDR, CHUNK_D_ELEMS);
+    LocalTensor<float> pairUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_PAIR_FP32_UB_ADDR, CHUNK_C_ELEMS);
+    LocalTensor<float> aRawUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_A_RAW_FP32_UB_ADDR, CHUNK_C_ELEMS);
+    LocalTensor<float> mFp32UBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_M_FP32_SLOT_ADDR, CHUNK_C_ELEMS);
+    LocalTensor<bfloat16_t> mUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_M_BF16_SLOT_ADDR, CHUNK_C_ELEMS);
+    LocalTensor<bfloat16_t> aUBLocal(TPosition::VECCALC, prepUbSlotAddr + PREP_A_BF16_SLOT_ADDR, CHUNK_C_ELEMS);
 
-    WaitAicToAiv<PIPE_V>(resultFlagId);
+    WaitAicToAiv<PIPE_V>(pairArawFlagId);
     if (validTask) {
         const uint64_t chunkCOffset = static_cast<uint64_t>(taskId) * CHUNK_C_ELEMS;
-        Mutex::Lock<PIPE_V>(slotMutexId);
+        Mutex::Lock<PIPE_V>(prepUbSlotMutexId);
         asc_vf_call<PrepareSolveMVF>(
             reinterpret_cast<__ubuf__ float*>(pairUBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ float*>(aRawUBLocal.GetPhyAddr()),
@@ -315,20 +321,20 @@ __aicore__ inline void IssuePrepareVsForAIV(
             reinterpret_cast<__ubuf__ float*>(mFp32UBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ bfloat16_t*>(mUBLocal.GetPhyAddr()),
             reinterpret_cast<__ubuf__ bfloat16_t*>(aUBLocal.GetPhyAddr()));
-        Mutex::Unlock<PIPE_V>(slotMutexId);
+        Mutex::Unlock<PIPE_V>(prepUbSlotMutexId);
         // Vector 读完 Pair/Araw 后即可归还结果槽. 后续 L1/GM 写回由 Mutex 单独排序.
-        SetAivToAic<PIPE_V>(resultFlagId);
+        SetAivToAic<PIPE_V>(pairArawFlagId);
 
         WaitAicToAiv<PIPE_MTE3>(wFlagId);
-        Mutex::Lock<PIPE_MTE3>(slotMutexId);
+        Mutex::Lock<PIPE_MTE3>(prepUbSlotMutexId);
         CopyPrepareNdToNzGroupsToL1(mL1Local, mUBLocal, CHUNK_SIZE);
         CopyPrepareNdToNzGroupsToL1(kPlusL1Local, kPlusUBLocal, HEAD_DIM);
         SetAivToAic<PIPE_MTE3>(wFlagId);
         DataCopy(mGlobal[chunkCOffset], mUBLocal, CHUNK_C_ELEMS);
         DataCopy(aGlobal[chunkCOffset], aUBLocal, CHUNK_C_ELEMS);
-        Mutex::Unlock<PIPE_MTE3>(slotMutexId);
+        Mutex::Unlock<PIPE_MTE3>(prepUbSlotMutexId);
     } else {
-        SetAivToAic<PIPE_V>(resultFlagId);
+        SetAivToAic<PIPE_V>(pairArawFlagId);
         // 尾部只有一个 task 时不产生 W, 但 mode2 仍要求两路 AIV 完成同样的交接.
         WaitAicToAiv<PIPE_MTE3>(wFlagId);
         SetAivToAic<PIPE_MTE3>(wFlagId);
@@ -364,7 +370,7 @@ __aicore__ inline void KernelProcessPrepareForAIV(
         const uint32_t preloadCount = pairTaskCount < PREP_CV_SLOT_NUM ? pairTaskCount : PREP_CV_SLOT_NUM;
 
         for (uint32_t cvSlot = 0; cvSlot < PREP_CV_SLOT_NUM; ++cvSlot) {
-            SetAivToAic<PIPE_V>(SlotFlagId(FLAG_PREP_RESULT_HANDOFF_BASE, cvSlot));
+            SetAivToAic<PIPE_V>(SlotFlagId(FLAG_PREP_PAIR_ARAW_HANDOFF_BASE, cvSlot));
         }
 
         // 预热阶段连续发射两个 VP, 避免 VS 对结果槽的等待阻塞下一次 VP Transform.
@@ -396,7 +402,7 @@ __aicore__ inline void KernelProcessPrepareForAIV(
 
         // 循环前为每个槽发布空闲信号; 此处统一消费各槽最终归还的信号.
         for (uint32_t cvSlot = 0; cvSlot < PREP_CV_SLOT_NUM; ++cvSlot) {
-            WaitAicToAiv<PIPE_MTE3>(SlotFlagId(FLAG_PREP_INPUT_HANDOFF_BASE, cvSlot));
+            WaitAicToAiv<PIPE_MTE3>(SlotFlagId(FLAG_PREP_L1_HANDOFF_BASE, cvSlot));
         }
     }
 }
