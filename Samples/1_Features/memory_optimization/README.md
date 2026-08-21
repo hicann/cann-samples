@@ -14,3 +14,5 @@
 ### [scale_cache](./scale_cache)
 演示当单次搬运数据量不足时，如何利用L1缓存预取Scale数据，解决带宽利用率下降问题。
 
+### [transpose_batch_matmul](./transpose_batch_matmul)
+演示如何通过 Layout 抽象将转置语义内嵌到 GM→L1 搬运指令中，省去显式 Transpose 算子的全量 GM 读写搬运开销，并利用 batch 维参与多核调度提升硬件利用率。
