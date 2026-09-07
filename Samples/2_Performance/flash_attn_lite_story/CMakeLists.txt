@@ -31,7 +31,7 @@ foreach(SCRIPT_FILE ${FALITE_SCRIPTS})
 endforeach()
 
 set(FALITE_FORMAL_VERSIONS
-    v0 v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 v11
+    v00 v01 v02 v03 v04 v05 v06 v07 v08 v09 v10 v11 v12
 )
 set(FALITE_VERSION_TARGETS "")
 
@@ -113,7 +113,7 @@ foreach(VERSION_DIR ${VERSION_DIRS})
 endforeach()
 
 if(NOT FALITE_VERSION_TARGETS)
-    message(FATAL_ERROR "${_cann_sample_path} 未发现正式 src/vN 版本目录")
+    message(FATAL_ERROR "${_cann_sample_path} 未发现 src/vNN 版本目录")
 endif()
 
 add_custom_target(falite DEPENDS ${FALITE_VERSION_TARGETS})

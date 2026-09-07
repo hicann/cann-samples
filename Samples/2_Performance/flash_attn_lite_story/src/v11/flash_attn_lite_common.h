@@ -24,7 +24,7 @@ enum class PLayoutMode : uint32_t
 constexpr uint32_t HEAD_DIM = 128;
 // CV_PIPELINE_SLOT_NUM 是 C1/V1 预发射深度, 也是跨 C1->C2 或 V1->V2
 // 保存 V/P/alpha 的代际数.
-constexpr uint32_t CV_PIPELINE_SLOT_NUM = 5;
+constexpr uint32_t CV_PIPELINE_SLOT_NUM = 4;
 // 相邻异步组件和外层 task 使用标准双缓冲.
 constexpr uint32_t DB_SLOT_NUM = 2;
 // Cube 到 Fixpipe 的内部结果队列深度.
