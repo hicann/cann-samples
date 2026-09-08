@@ -46,3 +46,6 @@ Scalar 单元性能优化专题，分析 Ascend 950 上 ScalarBound 问题的根
 
 ### [simd_vf_story](./simd_vf_story)
 SIMD VF 编程范式实践，覆盖 Broadcast（尾轴/首轴/中间轴）、Elemwise 逐元素与 Reduce 归约算子的 SIMD VF 实现与优化分析，展示不同写法间的性能差异与优化原理。
+
+### [vf_data_transform_story](./vf_data_transform_story)
+围绕 Ascend 950 Vector 核上的 SIMD VF 数据变换，按五类场景（窄化 Cast、扩展 Cast、位操作映射、VF 实现 ND2NZ、BF16 ↔ FP32 计算 + ND2NZ 融合）整理可运行样例与优化技巧，覆盖 DINTLV 交错载入、互补 RegLayout 两路 Cast、Or 合并、B16 pack Store、UNPACK4 展开、位操作 raw-field 转换、DATA_BLOCK_COPY 布局转换、Pack+Or 融合 NZ 写出等关键技术。

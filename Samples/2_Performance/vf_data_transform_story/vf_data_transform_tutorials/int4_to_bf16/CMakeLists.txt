@@ -9,18 +9,14 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(matmul_story)
-add_subdirectory(grouped_matmul_story)
-add_subdirectory(rms_norm_quant_story)
-add_subdirectory(full_quant_fused_infer_attention_score_story)
-add_subdirectory(moe_init_routing_story)
-add_subdirectory(moe_dispatch_and_combine_story)
-add_subdirectory(kv_rms_norm_rope_cache_story)
-add_subdirectory(simd_vf_story)
-add_subdirectory(vf_data_transform_story)
-add_subdirectory(simt_scatter_story)
-add_subdirectory(flash_attn_lite_story)
-add_subdirectory(kimi_delta_attn_lite_story)
-add_subdirectory(softmax_regbase_story)
-add_subdirectory(simt_histogram_story)
-add_subdirectory(gelu_eltwise_regbase_story)
+add_subdirectory(0_unpack4_load)
+add_subdirectory(1_single_cast)
+add_subdirectory(2_separate_views)
+add_subdirectory(3_b8_predicate)
+
+add_custom_target(vf_data_transform_int4_to_bf16_tutorial DEPENDS
+    vf_data_transform_int4_to_bf16_0_unpack4_load
+    vf_data_transform_int4_to_bf16_1_single_cast
+    vf_data_transform_int4_to_bf16_2_separate_views
+    vf_data_transform_int4_to_bf16
+)

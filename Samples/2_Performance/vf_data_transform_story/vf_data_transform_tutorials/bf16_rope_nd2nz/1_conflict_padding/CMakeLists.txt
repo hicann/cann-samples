@@ -9,18 +9,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(matmul_story)
-add_subdirectory(grouped_matmul_story)
-add_subdirectory(rms_norm_quant_story)
-add_subdirectory(full_quant_fused_infer_attention_score_story)
-add_subdirectory(moe_init_routing_story)
-add_subdirectory(moe_dispatch_and_combine_story)
-add_subdirectory(kv_rms_norm_rope_cache_story)
-add_subdirectory(simd_vf_story)
-add_subdirectory(vf_data_transform_story)
-add_subdirectory(simt_scatter_story)
-add_subdirectory(flash_attn_lite_story)
-add_subdirectory(kimi_delta_attn_lite_story)
-add_subdirectory(softmax_regbase_story)
-add_subdirectory(simt_histogram_story)
-add_subdirectory(gelu_eltwise_regbase_story)
+vf_data_transform_add_stage(
+    vf_data_transform_bf16_rope_nd2nz
+    conflict_padding.asc
+    bf16_rope_nd2nz/1_conflict_padding
+)

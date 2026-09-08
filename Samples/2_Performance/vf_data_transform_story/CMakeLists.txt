@@ -9,18 +9,16 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-add_subdirectory(matmul_story)
-add_subdirectory(grouped_matmul_story)
-add_subdirectory(rms_norm_quant_story)
-add_subdirectory(full_quant_fused_infer_attention_score_story)
-add_subdirectory(moe_init_routing_story)
-add_subdirectory(moe_dispatch_and_combine_story)
-add_subdirectory(kv_rms_norm_rope_cache_story)
-add_subdirectory(simd_vf_story)
-add_subdirectory(vf_data_transform_story)
-add_subdirectory(simt_scatter_story)
-add_subdirectory(flash_attn_lite_story)
-add_subdirectory(kimi_delta_attn_lite_story)
-add_subdirectory(softmax_regbase_story)
-add_subdirectory(simt_histogram_story)
-add_subdirectory(gelu_eltwise_regbase_story)
+cann_sample_check_arch(dav-3510)
+
+set(VF_DATA_TRANSFORM_TUTORIALS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vf_data_transform_tutorials)
+set(VF_DATA_TRANSFORM_INSTALL_PREFIX "2_Performance/vf_data_transform_story/vf_data_transform_tutorials")
+set(VF_DATA_TRANSFORM_ASCENDC_COMPILE_OPTS
+    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
+    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
+)
+
+add_subdirectory(vf_data_transform_tutorials)
+
+# Aggregate all tutorial stages under one story-level build target.
+add_custom_target(vf_data_transform_story DEPENDS vf_data_transform_tutorials)
