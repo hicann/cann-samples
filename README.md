@@ -118,7 +118,7 @@ toolkit 安装包文件名格式如下：
 
 #### 4. asc-devkit子模块与Toolkit约束
 
-   - **仓库与路径**：子模块路径为`third_party/asc-devkit`，对应上游仓库[asc-devkit](https://gitcode.com/cann/asc-devkit)。Tensor API位于其`include/tensor_api`与`impl/tensor_api`目录。普通执行 `git submodule update --init third_party/asc-devkit` 时，检出的是主仓固定的子模块commit（当前为`ad3d3bf04`，即`v9.0.0-106-gad3d3bf04`），不会自动获取分支最新代码；`.gitmodules`中记录的`branch = feature/tensor_api_from_9.0.0`仅在该分支维护者主动执行`git submodule update --remote`更新依赖指针时生效，普通使用请勿执行`--remote`，以免引入未经本仓适配验证的新版本。
+   - **仓库与路径**：`third_party/asc-devkit`对应上游仓库[asc-devkit](https://gitcode.com/cann/asc-devkit)，当前固定在`feature/tensor_api_from_9.0.0`分支的commit `04e3587dceb4792be9351e1057bf41772b5ffcd6`。Tensor API位于其`include/tensor_api`与`impl/tensor_api`目录。
    - **获取源码**：克隆本仓库时建议执行 `git clone --recurse-submodules <仓库 URL>`；若已克隆未带子模块，在仓库根目录执行：
      ```bash
      git submodule update --init third_party/asc-devkit
