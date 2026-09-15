@@ -135,13 +135,13 @@ __aicore__ inline void MatmulKernelSwat<ProblemShape, BlockMmad, BlockScheduler>
     auto layoutC = MakeLayoutC{}(m, n); // ND layout for C
 
     // A,B,C Gm Tensor
-    auto gmA = MakeTensor(
+    auto gmA = AscendC::Te::MakeTensor(
         AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeA*>(blockMmadParams_.aGmAddr)),
         layoutA);
-    auto gmB = MakeTensor(
+    auto gmB = AscendC::Te::MakeTensor(
         AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeB*>(blockMmadParams_.bGmAddr)),
         layoutB);
-    auto gmC = MakeTensor(
+    auto gmC = AscendC::Te::MakeTensor(
         AscendC::Te::MakeMemPtr<AscendC::Te::Location::GM>(reinterpret_cast<__gm__ TypeC*>(blockMmadParams_.cGmAddr)),
         layoutC);
 
