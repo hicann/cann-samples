@@ -41,7 +41,8 @@ stages:
             with:
               repo_name: 'cann-samples'
               target_branch: ${{ env.TARGET_BRANCH }}
-              repo_url: ${{ vars.CI_PATH }}
+              comment: ${{ atomgit.event.comment.body }}
+              token: ${{ secrets.TESTTOKEN }}
           -
             name: show_output
             run: |
