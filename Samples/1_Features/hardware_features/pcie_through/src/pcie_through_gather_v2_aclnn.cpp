@@ -56,16 +56,6 @@ struct HostMemGuard {
     bool registered = false;       // 是否已通过 aclrtHostRegister 注册映射
     void *devPtr = nullptr;        // 映射后的 Device 侧地址
     size_t bytes = 0;
-
-    ~HostMemGuard()
-    {
-        if (registered && ptr != nullptr) {
-            aclrtHostUnregister(ptr);
-        }
-        if (ptr != nullptr) {
-            aclrtFreeHost(ptr);
-        }
-    }
 };
 
 /**
@@ -289,6 +279,12 @@ int main(int argc, char **argv)
     }
 
     aclrtDestroyStream(stream);
+    if (outMem.registered) { aclrtHostUnregister(outMem.ptr); }
+    if (idxMem.registered) { aclrtHostUnregister(idxMem.ptr); }
+    if (xMem.registered) { aclrtHostUnregister(xMem.ptr); }
+    if (outMem.ptr != nullptr) { aclrtFreeHost(outMem.ptr); }
+    if (idxMem.ptr != nullptr) { aclrtFreeHost(idxMem.ptr); }
+    if (xMem.ptr != nullptr) { aclrtFreeHost(xMem.ptr); }
     aclrtResetDevice(deviceId);
     aclFinalize();
 
