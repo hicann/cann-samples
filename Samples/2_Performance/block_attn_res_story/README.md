@@ -6,6 +6,9 @@
 block_attn_res_story/
 ├── CMakeLists.txt
 ├── README.md
+├── docs/                                       # 性能优化技术文档
+│   ├── block_attn_res_performance.md           # 两阶段推理算子性能优化指南
+│   └── images/                                 # 文档配图
 └── block_attn_res_recipes/                     # 算子实现与示例代码
     ├── CMakeLists.txt
     ├── README.md
@@ -30,3 +33,7 @@ block_attn_res_story/
 ## 算子示例
 
 - [block_attn_res](./block_attn_res_recipes/examples/block_attn_res/README.md)：BlockAttnRes Prepare、Update 与两阶段串联优化实践
+
+## 优化指南
+
+- [block_attn_res_performance](./docs/block_attn_res_performance.md)：BlockAttnRes 两阶段推理算子性能优化指南

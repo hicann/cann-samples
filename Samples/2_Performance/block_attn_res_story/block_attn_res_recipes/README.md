@@ -41,3 +41,7 @@ block_attn_res_recipes/
 - 输入输出说明见[样例 README](examples/block_attn_res/README.md)。
 - 支持范围、构建步骤、运行参数和性能采集说明见[样例 README](examples/block_attn_res/README.md)。
 - 运行样例时自动生成数据并校验结果，校验脚本输出精度统计及通过或失败状态。
+
+## 性能优化指南
+
+两阶段推理拆分、性能建模、模板选择、Kernel 流水和融合收益详见 [BlockAttnRes 两阶段推理算子性能优化指南](../docs/block_attn_res_performance.md)。
