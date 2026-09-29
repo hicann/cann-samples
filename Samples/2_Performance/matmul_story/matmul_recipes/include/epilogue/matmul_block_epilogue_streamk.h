@@ -229,14 +229,22 @@ public:
                 static_cast<uint32_t>(copyUb2GmParams_.srcGap * sizeof(OutType) / BLOCK_BYTE_SIZE),
                 static_cast<uint32_t>(copyUb2GmParams_.dstGap * sizeof(OutType)), 0};
 
-            LocalTensor<OutType> ubCastDst{AscendC::TPosition::VECIN, 0, AscendC::TOTAL_UB_SIZE};
             // V->MTE3：V 侧包 Cast，MTE3 侧包 DataCopyPad。
-            AscendC::Mutex::Lock<PIPE_V>(ubMutex);
-            Cast(ubCastDst, ubAddTensor, RoundMode::CAST_RINT, copyGm2UbParams_.burstLen);
-            AscendC::Mutex::Unlock<PIPE_V>(ubMutex);
-            AscendC::Mutex::Lock<PIPE_MTE3>(ubMutex);
-            DataCopyPad<OutType, PaddingMode::Compact>(cGlobal_[copyUb2GmParams_.offsetCGm], ubCastDst, ub2gmExtParams);
-            AscendC::Mutex::Unlock<PIPE_MTE3>(ubMutex);
+            if constexpr (AscendC::IsSameType<OutType, float>::value) {
+                AscendC::Mutex::Lock<PIPE_MTE3>(ubMutex);
+                DataCopyPad<OutType, PaddingMode::Compact>(
+                    cGlobal_[copyUb2GmParams_.offsetCGm], ubAddTensor, ub2gmExtParams);
+                AscendC::Mutex::Unlock<PIPE_MTE3>(ubMutex);
+            } else {
+                LocalTensor<OutType> ubCastDst{AscendC::TPosition::VECIN, 0, AscendC::TOTAL_UB_SIZE};
+                AscendC::Mutex::Lock<PIPE_V>(ubMutex);
+                Cast(ubCastDst, ubAddTensor, RoundMode::CAST_RINT, copyGm2UbParams_.burstLen);
+                AscendC::Mutex::Unlock<PIPE_V>(ubMutex);
+                AscendC::Mutex::Lock<PIPE_MTE3>(ubMutex);
+                DataCopyPad<OutType, PaddingMode::Compact>(
+                    cGlobal_[copyUb2GmParams_.offsetCGm], ubCastDst, ub2gmExtParams);
+                AscendC::Mutex::Unlock<PIPE_MTE3>(ubMutex);
+            }
         }
         AscendC::ReleaseMutexID(ubMutex);
     }

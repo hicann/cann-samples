@@ -27,11 +27,11 @@ public:
     MatmulTilingBase() = default;
     virtual ~MatmulTilingBase() = default;
 
-    virtual void GetTilingData(
-        uint64_t m, uint64_t n, uint64_t k, uint64_t dataTypeSize, bool transA, bool transB, MatmulTilingData& tilingData)
+    virtual void GetTilingData(uint64_t m, uint64_t n, uint64_t k, uint64_t dataTypeSize, bool transA, bool transB,
+                               MatmulTilingData& tilingData, bool isHf32 = true)
     {
         InitCompileInfo();
-        InitShapeArgs(m, n, k, dataTypeSize, transA, transB);
+        InitShapeArgs(m, n, k, dataTypeSize, transA, transB, isHf32);
         DoOpTiling(tilingData);
         PrintTilingData(tilingData);
     };

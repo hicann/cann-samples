@@ -25,16 +25,14 @@
 
 默认启用HF32（Hybrid Float32）模式以获得更好的性能。HF32是一种兼顾精度与性能的浮点格式，在矩阵乘法场景下相比传统Float32可获得更高的计算吞吐。
 
-如需切换为传统Float32模式，需修改以下两个源文件：
+如需切换为传统Float32模式，在调用 `GetTilingData` 时把最后一个参数 `isHf32` 传为 `false` 即可：
 
-1. **`matmul_a32w32_streamk.asc`**（第121行附近）
-2. **`matmul_a32w32_swat.asc`**（第119行附近）
-
-在各自的 `tilingEngine->GetTilingData(m, n, k, dataTypeSize, transA, transB, tilingData);` 语句后面新增一行：
-
+```cpp
+// matmul_a32w32_streamk.asc / matmul_a32w32_swat.asc 中
+tilingEngine->GetTilingData(m, n, k, dataTypeSize, transA, transB, tilingData, false);
 ```
-tilingData.isHf32 = false;
-```
+
+> `isHf32` 必须在 tiling 前传入：它会参与 host 侧能力检查（如 StreamK 的对齐判定）并写入 tiling 结果，`GetTilingData` 返回后再修改 `tilingData.isHf32` 不会重算相关 tiling 参数。
 
 ### StreamK 输入范围限制
 
