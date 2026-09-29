@@ -10,7 +10,7 @@
 set -euo pipefail
 
 if [[ $# -lt 4 || $# -gt 5 ]]; then
-    echo "Usage: $0 <cannsim|msopprof> <tutorial> <build-dir> <output-dir> [trace|full]" >&2
+    echo "Usage: $0 <npusim|msopprof> <tutorial> <build-dir> <output-dir> [trace|full]" >&2
     exit 2
 fi
 
@@ -18,7 +18,7 @@ profile_mode=$1
 tutorial=$2
 build_dir=$3
 output_dir=$4
-cannsim_case=${5:-trace}
+simulation_case=${5:-trace}
 binary_root="${build_dir}/Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorials"
 
 case "${tutorial}" in
@@ -91,25 +91,30 @@ esac
 mkdir -p "${output_dir}"
 
 case "${profile_mode}" in
-    cannsim)
-        if [[ "${cannsim_case}" != "trace" && "${cannsim_case}" != "full" ]]; then
-            echo "CANNsim case must be trace or full: ${cannsim_case}" >&2
+    npusim|cannsim)
+        if [[ "${simulation_case}" != "trace" && "${simulation_case}" != "full" ]]; then
+            echo "simulation case must be trace or full: ${simulation_case}" >&2
             exit 2
         fi
-        simulator_command=cannsim
+        # 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
         if command -v npusim >/dev/null 2>&1; then
             simulator_command=npusim
+        elif command -v cannsim >/dev/null 2>&1; then
+            simulator_command=cannsim
+        else
+            echo "No simulator found: install CANN 9.2.0 or later for npusim." >&2
+            exit 127
         fi
         for stage_index in "${!stage_names[@]}"; do
             stage_name=${stage_names[stage_index]}
             binary_path="${binary_root}/${tutorial}/${stage_name}/${stage_binaries[stage_index]}"
             "${simulator_command}" record "${binary_path}" -s Ascend950 -g vf -n 0 \
-                -u "--case ${cannsim_case}" -o "${output_dir}/${stage_name}"
+                -u "--case ${simulation_case}" -o "${output_dir}/${stage_name}"
         done
         ;;
     msopprof)
         if [[ $# -ne 4 ]]; then
-            echo "msopprof mode does not accept a CANNsim case" >&2
+            echo "msopprof mode does not accept a simulation case" >&2
             exit 2
         fi
         for run_index in 1 2 3; do

@@ -1,5 +1,7 @@
 # BF16 RoPE 与 ND2NZ：Pack+Or 融合写出
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ## 引言
 
 旋转位置编码（RoPE）把一行前后两个 64 元素半段视为 real 和 imag，在 FP32 域执行旋转，再回落到 BF16：
@@ -96,7 +98,7 @@ AscendC::Reg::Or(packedB16, packedLow, packedHigh, fullPackedMask);
 
 合并后的 B16 register 直接通过 `DATA_BLOCK_COPY` 写到 NZ。该路径每行保留 4 次必要 Load 和 1 次 NZ Store，不产生中间 ND Store/Load。
 
-基线的 UB stride 为 96，同一条 Store 的 8 个目标 block 落入同一个 bank。CANNsim 测得 `RV_VSSTB` 平均 duration 为 56.93 cycles，VF 用时 993 cycles；计算与布局已经融合，跨步 Store 的 bank conflict 是当前可定位瓶颈。
+基线的 UB stride 为 96，同一条 Store 的 8 个目标 block 落入同一个 bank。npusim 测得 `RV_VSSTB` 平均 duration 为 56.93 cycles，VF 用时 993 cycles；计算与布局已经融合，跨步 Store 的 bank conflict 是当前可定位瓶颈。
 
 ## 优化阶段一：1_conflict_padding
 
@@ -115,7 +117,7 @@ constexpr uint32_t kPaddedRowsPerTile = kRowsPerTile + 1U;  // 97
 
 ## 性能结果
 
-以下结果使用 CANNsim Ascend950PR_9589 CAMODEL V100 采集，命令参数为 `--case trace`、`-g vf -n 0`。每个 AIV 处理一个 96 行 tile；`VF cycles` 取 core 0 业务 VF 的 `avg_cycles`。
+以下结果使用 npusim Ascend950PR_9589 CAMODEL V100 采集，命令参数为 `--case trace`、`-g vf -n 0`。每个 AIV 处理一个 96 行 tile；`VF cycles` 取 core 0 业务 VF 的 `avg_cycles`。
 
 | 阶段 | UB stride | Vector 执行 IPC | `RV_VSSTB` 平均 duration | VF cycles | 有效输入 B/cycle | 有效输出 B/cycle |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

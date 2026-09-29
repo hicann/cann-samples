@@ -1,5 +1,7 @@
 # 【cann-samples系列】RmsNormQuant：Ascend950 上的高性能 Vector 算子分阶段优化实践
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 [cann-samples](https://gitcode.com/cann/cann-samples) 是算子领域高性能实战演进样例与体系化调优知识库，致力于为开发者提供可复用的优化方法论和最佳实践代码。本系列文章将陆续介绍仓库中的典型样例，分享我们在算子优化过程中的思考与经验。
 
 > **实验平台**：Ascend 950PR（64 Vector Core 仿真环境）\
@@ -133,11 +135,11 @@ cmake --build build --target rms_norm_quant_story
 
 **执行仿真：**
 
-本文的性能数据均通过 cannsim 仿真获取。以 Step 0 为例：
+本文的性能数据均通过 npusim 仿真获取。以 Step 0 为例：
 
 ```bash
 mkdir -p record && cd record/
-cannsim record ~/cann-samples/build/Samples/2_Performance/rms_norm_quant_story/rms_norm_quant_0_naive -s Ascend950 --gen-report
+npusim record ~/cann-samples/build/Samples/2_Performance/rms_norm_quant_story/rms_norm_quant_0_naive -s Ascend950 --gen-report
 ```
 
 **分析流水：**

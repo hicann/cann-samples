@@ -1,5 +1,7 @@
 # packed INT4 转 BF16：UNPACK4 与单路 Cast
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ## 引言
 
 INT4 权重或中间结果通常以一个 byte 存放两个有符号 nibble。转换为 BF16 时，关键不是先用通用位操作拆分 low/high nibble，而是让 Load 直接生成 Cast 可以消费的寄存器排布，再用一条 Cast 完成数值转换。
@@ -59,7 +61,7 @@ AscendC::Reg::LoadAlign<int4x2_t, AscendC::Reg::LoadDist::DIST_UNPACK4_B8>(
 
 一次 Load 读取 64 B packed input，并把 128 个有符号 nibble 放到数值转换可以直接消费的位置，因此热循环中不需要 `ShiftLeft`、`ShiftRight` 或 `Select` 拆分 low/high nibble。为了单独观察 Load 侧的变化，本阶段仍通过 INT4→HALF→BF16 两级 Cast 生成完整 BF16 输出。
 
-CANNsim 实测为 699 cycles，有效输入吞吐为 29.30 B/cycle，有效输出吞吐为 117.20 B/cycle。
+npusim 实测为 699 cycles，有效输入吞吐为 29.30 B/cycle，有效输出吞吐为 117.20 B/cycle。
 
 ## 优化阶段一：1_single_cast
 
@@ -74,7 +76,7 @@ AscendC::Reg::Cast<bfloat16_t, int4x2_t, kInt4ToBf16CastTraitZero>(
 
 Cast 使用 `RegLayout::ZERO`、`MaskMergeMode::ZEROING` 和 `CAST_RINT`。这一步去掉 HALF 中间寄存器及第二次 Cast；结果已经按 `x[0], x[1], ...` 连续排列，随后使用一次 `DIST_NORM_B16` Store 写出。
 
-CANNsim 降至 453 cycles，相比阶段 0 减少 35.2%，有效输出吞吐提升至 180.84 B/cycle。直接 Cast 是本路径的主要性能收益。
+npusim 降至 453 cycles，相比阶段 0 减少 35.2%，有效输出吞吐提升至 180.84 B/cycle。直接 Cast 是本路径的主要性能收益。
 
 ## 优化阶段二：2_separate_views
 
@@ -88,7 +90,7 @@ const uint16_t groupTimes =
     static_cast<uint16_t>(computePackedBytes / kPackedBytesPerGroup);
 ```
 
-这样可以避免把逻辑 INT4 数量误作物理 byte 数量。该修改不增加 Vector 指令，也不改变最终 Load/Cast/Store 链，CANNsim 仍为 453 cycles。
+这样可以避免把逻辑 INT4 数量误作物理 byte 数量。该修改不增加 Vector 指令，也不改变最终 Load/Cast/Store 链，npusim 仍为 453 cycles。
 
 ## 优化阶段三：3_b8_predicate
 
@@ -103,11 +105,11 @@ AscendC::Reg::MaskReg fullPackedMask =
 
 包含 `int4x2_t` 的 Cast 固定采用 `ZEROING`，不使用不支持的 `MERGING`。mask 在 VF 循环外创建，各组重复使用。该阶段的热路径已收敛为一次 UNPACK4 Load、一次 Cast 和一次 Store。
 
-CANNsim 为 453 cycles。前一阶段在 `-O3` 下已经得到等价的循环不变量处理，因此显式外提不改变 cycle；它的作用是固定正确的 predicate 语义，使代码可以直接复用。
+npusim 为 453 cycles。前一阶段在 `-O3` 下已经得到等价的循环不变量处理，因此显式外提不改变 cycle；它的作用是固定正确的 predicate 语义，使代码可以直接复用。
 
 ## 性能结果
 
-以下数据由 CANNsim 在 Ascend 950 上使用 `--case trace` 采集。每个 AIV 处理一个 40960 元素 tile；`VF cycles` 取 core 0 业务 kernel 的 `avg_cycles`。
+以下数据由 npusim 在 Ascend 950 上使用 `--case trace` 采集。每个 AIV 处理一个 40960 元素 tile；`VF cycles` 取 core 0 业务 kernel 的 `avg_cycles`。
 
 | 阶段 | VF cycles | 相比上一步 | 输入 B/cycle | 输出 B/cycle |
 | --- | ---: | ---: | ---: | ---: |

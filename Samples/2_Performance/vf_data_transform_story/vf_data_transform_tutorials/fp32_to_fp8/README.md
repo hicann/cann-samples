@@ -1,5 +1,7 @@
 # FP32 转 FP8 E4M3FN：DINTLV 与 B16 pack 写出
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ## 引言
 
 FP32 转 FP8 E4M3FN 是低精度推理和通信压缩中常见的 4:1 窄化转换。本教程使用 `CAST_RINT`、`NO_SAT` 和 `ZEROING` 完成转换，重点减少窄化前后的寄存器整理和 UB 写回。
@@ -76,7 +78,7 @@ Pack<uint8_t, uint16_t, HighLowPart::LOWEST>(oddPackedB8, oddPackedB16);
 Interleave(interleavedOutputReg0, interleavedOutputReg1, evenPackedB8, oddPackedB8);
 ```
 
-每个 tile 因而包含 640 次 Pack 和 160 次 Interleave。CANNsim 测得 1250 cycles，显式寄存器整理是首要瓶颈。
+每个 tile 因而包含 640 次 Pack 和 160 次 Interleave。npusim 测得 1250 cycles，显式寄存器整理是首要瓶颈。
 
 ## 优化阶段一：1_complementary_cast
 
@@ -100,7 +102,7 @@ StoreAlign<uint8_t, StoreDist::DIST_NORM_B8>(
     output + groupOffset, packedOutputReg, halfB8Mask);
 ```
 
-CANNsim 为 379 cycles，较基线减少 69.7%，等效提速 3.30 倍。ZERO/TWO layout 与 Or 共同消除了两级双路 Pack 和 Interleave，热循环只剩最后一级显式压缩。
+npusim 为 379 cycles，较基线减少 69.7%，等效提速 3.30 倍。ZERO/TWO layout 与 Or 共同消除了两级双路 Pack 和 Interleave，热循环只剩最后一级显式压缩。
 
 ## 优化阶段二：2_pack_b16_store
 
@@ -113,7 +115,7 @@ StoreAlign<uint8_t, StoreDist::DIST_PACK_B16>(
     output + groupOffset, mergedOutputReg, storeB8Mask);
 ```
 
-该阶段把每组的显式 Pack 删除，主数据通路已经收敛到双输出 Load、两次 Cast、一次 Or 和一次 Store。CANNsim 仍为 379 cycles，说明当前 tile 上显式 Pack 与 pack Store 的差异没有改变关键路径；但中间寄存器和显式整理指令已经消除，代码可直接作为 B16 pack 写出模板复用。
+该阶段把每组的显式 Pack 删除，主数据通路已经收敛到双输出 Load、两次 Cast、一次 Or 和一次 Store。npusim 仍为 379 cycles，说明当前 tile 上显式 Pack 与 pack Store 的差异没有改变关键路径；但中间寄存器和显式整理指令已经消除，代码可直接作为 B16 pack 写出模板复用。
 
 ## 优化阶段三：3_shared_b8_mask
 
@@ -130,7 +132,7 @@ StoreAlign<uint8_t, StoreDist::DIST_PACK_B16>(
     output + groupOffset, mergedOutputReg, fullB8Mask);
 ```
 
-CANNsim 仍为 379 cycles。当前 `-O3` 已对前一阶段的固定 predicate 做出等价处理，因此这一改动没有额外 cycle 收益；显式共享仍能准确表达 predicate 粒度，避免复用时误把 128 B 输出长度当成 pack Store 的源 mask 范围。
+npusim 仍为 379 cycles。当前 `-O3` 已对前一阶段的固定 predicate 做出等价处理，因此这一改动没有额外 cycle 收益；显式共享仍能准确表达 predicate 粒度，避免复用时误把 128 B 输出长度当成 pack Store 的源 mask 范围。
 
 ## 性能结果
 
@@ -138,7 +140,7 @@ CANNsim 仍为 379 cycles。当前 `-O3` 已对前一阶段的固定 predicate �
 
 ```bash
 bash Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorials/scripts/profile_tutorial.sh \
-  cannsim fp32_to_fp8 build /tmp/vf_data_transform_cannsim/fp32_to_fp8 trace
+  npusim fp32_to_fp8 build /tmp/vf_data_transform_npusim/fp32_to_fp8 trace
 ```
 
 | 阶段 | VF cycles | 相对上一阶段 | 输入 B/cycle | 输出 B/cycle | 每 tile 的主要冗余 |

@@ -1,5 +1,7 @@
 # Scalar如何影响昇腾NPU算子性能：原理与优化实践
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ---
 
 ## 摘要
@@ -73,7 +75,7 @@ ScalarBound对性能的影响主要体现在两个层面：
 |------|------|
 | 芯片平台 | Ascend 950 |
 | CANN版本 | 9.0（具体版本随发布更新） |
-| Profiling工具 | msprof+cannsim |
+| Profiling工具 | msprof+npusim |
 | 用例总规模 | 约8000+个用例（含不同shape/精度组合） |
 
 > **说明**：本文所有性能数据均基于上述特定环境采集。不同芯片型号或不同CANN版本下，具体数值可能存在差异，但优化趋势和结论具有通用性。
@@ -457,7 +459,7 @@ x1ScalePingPongID_ ^= 1;
 
 ```
 Step 1: 采集Profiling数据
-    └─ 工具：msprof或者cannsim仿真
+    └─ 工具：msprof或者npusim仿真
     └─ 关键命令：msprof --application=./your_op --output=./prof_data
     └─ 输出：各流水线耗时（含Scalar）、instr_popped_log.dump文件等
 

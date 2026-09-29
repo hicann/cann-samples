@@ -1,5 +1,7 @@
 # FALite v00：一个 Mix 核组顺序完成全部任务
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ## 本版内容
 
 v00 固定发射一个 Mix 核组，由 1 个 AIC 和 2 个 AIV 顺序完成全部 Query 分块任务。两次矩阵乘之间的 S、P、DeltaO 都通过 GM（全局内存）交接，片上工作区只有一套。
@@ -213,9 +215,9 @@ causal 下只发射 `j=0...i`；对角 item 的 V1 在求最大值与指数和�
 
 截图来自 `B=1,N=1,S=2048,D=128` 的完整 PipeTimeline trace，窗口为 `[368.8,408.8] μs`。它展示各 Pipe 的忙区和空隙，不能把某个空隙直接解释为 DONE 或 P_READY 的精确等待时长。
 
-![v00 CANNSIM 流水截图](../../images/cannsim_trace/falite_v00_cannsim.png)
+![v00 npusim 流水截图](../../images/npusim_trace/falite_v00_npusim.png)
 
-此图来自 `B=1,N=1,S=512,D=128` 的完整 CANNSIM trace，窗口为 `[18,32] μs`，用于查看单 Mix 的组件与同步泳道；它与上方真机截图不是同一 shape。
+此图来自 `B=1,N=1,S=512,D=128` 的完整 npusim trace，窗口为 `[18,32] μs`，用于查看单 Mix 的组件与同步泳道；它与上方真机截图不是同一 shape。
 
 本版在 `B=1,N=1,S=131072` 下的 Task Duration 中位数为 `2574789.750000 μs`（固定 1 个 AIC）。完整采集环境、核数差异和 MFU 口径统一见[总 README 的整体结果](../../README.md#整体结果)。本文不按示意图的宽度比较版本收益。
 

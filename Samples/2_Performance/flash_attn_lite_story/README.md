@@ -186,7 +186,7 @@ AIC 用 L1 暂存输入、L0A/L0B 装载矩阵、L0C 累加结果；两路 AIV �
 | 长序列性能 | `B=N=1,S=131072,D=128`；Ver.0 使用 1 个 Mix 核组，其余阶段使用 32 组 |
 | 耗时指标 | `msopprof` BasicInfo 的 Kernel `Task Duration(us)`，重复采集后取中位数 |
 | 真机流水 | 单 Mix 核组、`B=N=1,S=2048,D=128` 的 `PipeTimeline`，用于观察搬运与计算的重叠 |
-| 向量函数（VF）分析 | NPUSIM，`--core-num 1 --size 1 1 1024`，仿真频率 1.65 GHz；观察 AIV0 的 PUSHQ 与 RVECEX，比较同一 item 的 Vector 计算 |
+| 向量函数（VF）分析 | npusim，`--core-num 1 --size 1 1 1024`，仿真频率 1.65 GHz；观察 AIV0 的 PUSHQ 与 RVECEX，比较同一 item 的 Vector 计算 |
 
 ### 性能指标
 
@@ -204,7 +204,7 @@ $t_{\mathrm{kernel}}$ 的单位为秒，表中的 μs 需乘 $10^{-6}$ 后代入
 
 ### 流水分析
 
-真机流水用于观察搬运与计算的重叠，NPUSIM 用于查看 VF 调用及内部向量指令；版本性能以长序列耗时比较。每张截图标出观察窗口，跨版本分析时结合对应的 task/item 和计算分支。
+真机流水用于观察搬运与计算的重叠，npusim 用于查看 VF 调用及内部向量指令；版本性能以长序列耗时比较。每张截图标出观察窗口，跨版本分析时结合对应的 task/item 和计算分支。
 
 示意图解释发射顺序和数据依赖，虚框表示可能等待。图中色块按便于阅读的尺寸绘制，实际时长以流水截图和测量数值为准。
 
@@ -297,7 +297,7 @@ if outputRows > 0:
 
 ![Ver.0 的真机流水](./images/pipe_trace/falite_v00_pipe.png)
 
-> 代码 `v00`，截图窗口 `[368.8,408.8]` μs。[仿真流水](./images/cannsim_trace/falite_v00_cannsim.png)展示了 `B=N=1,S=512` 时 C1 到 V2 的同步过程。
+> 代码 `v00`，截图窗口 `[368.8,408.8]` μs。[仿真流水](./images/npusim_trace/falite_v00_npusim.png)展示了 `B=N=1,S=512` 时 C1 到 V2 的同步过程。
 
 长序列耗时为 2,574,789.75 μs，整卡 MFU 为 0.3954%。此时只使用一个 Mix 核组，其他核组空闲；各 Query 块的输出互不覆盖，下一步可以把这些独立任务分给更多核组。
 
@@ -554,17 +554,17 @@ Ver.4 的三种配置均使用基础 Vector 通路。`R=3→4` 的耗时相差�
 
 #### VF 与 IPC
 
-进一步查看 V1/V2 内部的指令执行情况，为 Vector 优化建立对照。下面用单 Mix 核组、`B=N=1,S=1024,D=128` 的 NPUSIM 结果，分析第 4 个 Query 块与第 2 个 K/V 块，即 `i=3,j=1`：它是非首块、非对角块，执行普通递推分支。这类 VF 在前面的 task 中已经调用过，本节与 Ver.5 均取 AIV0 负责的 64 行进行对照。
+进一步查看 V1/V2 内部的指令执行情况，为 Vector 优化建立对照。下面用单 Mix 核组、`B=N=1,S=1024,D=128` 的 npusim 结果，分析第 4 个 Query 块与第 2 个 K/V 块，即 `i=3,j=1`：它是非首块、非对角块，执行普通递推分支。这类 VF 在前面的 task 中已经调用过，本节与 Ver.5 均取 AIV0 负责的 64 行进行对照。
 
-PUSHQ 中的 VF 色块表示一次向量函数调用，RVECEX 展示其中的向量计算指令。本文的计算指令 IPC 定义为“NPUSIM 中 RVECEX 动态指令数 ÷ 完整计算窗口的周期数”，用于比较同一阶段的局部向量计算效率。指令按所属 VF 计数，时间覆盖这一阶段从开始到结束的完整跨度。1.65 GHz 下，`cycles = 耗时(ns) × 1.65`。
+PUSHQ 中的 VF 色块表示一次向量函数调用，RVECEX 展示其中的向量计算指令。本文的计算指令 IPC 定义为“npusim 中 RVECEX 动态指令数 ÷ 完整计算窗口的周期数”，用于比较同一阶段的局部向量计算效率。指令按所属 VF 计数，时间覆盖这一阶段从开始到结束的完整跨度。1.65 GHz 下，`cycles = 耗时(ns) × 1.65`。
 
 下图顶部双向箭头标出完整计算窗口，底部 `Totals` 行末给出选中的指令数。IPC 的分母使用顶部窗口换算的周期数。底部 `Wall Duration` 显示各指令时长之和，`Selection extent` 显示选中指令的覆盖范围。各图缩放不同，比较时以标注数值为准。
 
-![Ver.4 的 V1：Softmax 与 CastPack 两次 VF 调用](./images/cannsim_trace/falite_v09_v1_ipc.png)
+![Ver.4 的 V1：Softmax 与 CastPack 两次 VF 调用](./images/npusim_trace/falite_v09_v1_ipc.png)
 
 > 代码 `v09`，V1 测量区间 `[13890.303,14515.152]` ns，耗时 624.848 ns。先执行 Softmax，随后执行 CastPack；两次 VF 的完整窗口存在重叠，耗时取首个开始到最后结束的跨度。
 
-![Ver.4 的 V2：分开执行乘法与加法](./images/cannsim_trace/falite_v09_v2_ipc.png)
+![Ver.4 的 V2：分开执行乘法与加法](./images/npusim_trace/falite_v09_v2_ipc.png)
 
 > 代码 `v09`，V2 测量区间 `[15973.939,16286.667]` ns，耗时 312.727 ns。
 
@@ -631,11 +631,11 @@ IPC 表示平均每个时钟周期执行的指令数。若后一条指令必须�
 
 保持 `R=4`、L0C 四槽，取与 Ver.4 相同的 `i=3,j=1`，对照 V1/V2 的指令数、计算指令 IPC 和执行时间。
 
-![Ver.5 的 V1：融合 Softmax 与 CastPack](./images/cannsim_trace/falite_v11_v1_ipc.png)
+![Ver.5 的 V1：融合 Softmax 与 CastPack](./images/npusim_trace/falite_v11_v1_ipc.png)
 
 > 代码 `v11`，V1 测量区间 `[12540.000,12990.909]` ns，耗时 450.909 ns。
 
-![Ver.5 的 V2：融合乘加更新输出](./images/cannsim_trace/falite_v11_v2_ipc.png)
+![Ver.5 的 V2：融合乘加更新输出](./images/npusim_trace/falite_v11_v2_ipc.png)
 
 > 代码 `v11`，V2 测量区间 `[14053.333,14256.364]` ns，耗时 203.030 ns。
 
@@ -736,14 +736,14 @@ msopprof --aic-metrics=PipeTimeline \
     ./build/Samples/2_Performance/flash_attn_lite_story/falite_v11 --dry-run --core-num 1 --size 1 1 2048
 ```
 
-仿真流水使用 NPUSIM 采集，要求 **CANN 9.2.0 及以上版本**。下面采集单个 Mix 核组、序列长度为 1024 的流水，供 VF 与 IPC 分析使用：
+仿真流水使用 npusim 采集，要求 **CANN 9.2.0 及以上版本**。下面采集单个 Mix 核组、序列长度为 1024 的流水，供 VF 与 IPC 分析使用：
 
 ```bash
-npusim record -s Ascend950 -g GEN_REPORT -o <report-output> \
+npusim record -s Ascend950 -g -o <report-output> \
     "./build/Samples/2_Performance/flash_attn_lite_story/falite_v11 --dry-run --core-num 1 --size 1 1 1024"
 ```
 
-`-s` 指定仿真芯片，`-g GEN_REPORT` 生成分析报告，`-o` 指定报告输出目录。执行前将 `<report-output>` 替换为实际目录；上面的 `<profiling-output>` 同理。
+`-s` 指定仿真芯片，`-g` 生成分析报告，`-o` 指定报告输出目录。执行前将 `<report-output>` 替换为实际目录；上面的 `<profiling-output>` 同理。
 
 ## 后续方向
 

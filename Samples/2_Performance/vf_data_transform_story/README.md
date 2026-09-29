@@ -1,8 +1,10 @@
 # SIMD VF 数据变换性能优化实践
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 数据类型转换和布局转换常出现在量化、反量化、位置编码以及算子融合的边界。单次转换的计算量不大，但寄存器 lane 排布、UB 访存方式和写回布局会直接决定 Vector 流水的效率。
 
-本专题面向 Ascend 950（`dav-3510`），提供 7 个可独立构建、运行和验证的 tutorial，共包含 7 个基线和 18 个后续阶段。每个 tutorial 固定 host、shape、tile 和双缓冲框架，从当前优化路径的第一个技巧开始，逐项引入后续技巧，并使用 CANNsim trace 解释性能变化。
+本专题面向 Ascend 950（`dav-3510`），提供 7 个可独立构建、运行和验证的 tutorial，共包含 7 个基线和 18 个后续阶段。每个 tutorial 固定 host、shape、tile 和双缓冲框架，从当前优化路径的第一个技巧开始，逐项引入后续技巧，并使用 npusim trace 解释性能变化。
 
 ## 目录结构
 
@@ -42,7 +44,7 @@ vf_data_transform_story/
 
 ## 性能结果汇总
 
-下表对比每条优化路径的起点和最终阶段。数据均来自各阶段保留的 Ascend950PR_9589 CANNsim `trace` 报告；不同 tutorial 的 tile 大小和有效字节数不同，不应直接横向比较 cycles。
+下表对比每条优化路径的起点和最终阶段。数据均来自各阶段保留的 Ascend950PR_9589 npusim `trace` 报告；不同 tutorial 的 tile 大小和有效字节数不同，不应直接横向比较 cycles。
 
 | Tutorial | 起点 VF cycles | 最终 VF cycles | 路径总体结果 |
 | --- | ---: | ---: | ---: |
@@ -108,14 +110,14 @@ python3 -m pip install -r requirements.txt
 
 ## 性能采集
 
-教程优先使用 CANNsim 分析单核 VF 流水。统一脚本会对指定 tutorial 的全部阶段运行同一个 `trace` case：
+教程优先使用 npusim 分析单核 VF 流水。统一脚本会对指定 tutorial 的全部阶段运行同一个 `trace` case：
 
 ```bash
 bash Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorials/scripts/profile_tutorial.sh \
-  cannsim bf16_nd2nz build /tmp/vf_data_transform_cannsim trace
+  npusim bf16_nd2nz build /tmp/vf_data_transform_npusim trace
 ```
 
-脚本在新版本工具包中优先调用 `npusim`，并兼容仍使用 `cannsim` 命令的版本。若当前 Python 环境没有 `plotly`，先安装报告渲染依赖：
+脚本优先调用 `npusim`，未找到时自动回退到旧版仿真器。若当前 Python 环境没有 `plotly`，先安装报告渲染依赖：
 
 ```bash
 python3 -m pip install plotly
@@ -141,7 +143,7 @@ python3 Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorial
   /tmp/vf_data_transform_msopprof
 ```
 
-CANNsim 的 VF 局部收益和真机端到端收益应分别解读；GM 搬运或 kernel 固定开销占主导时，两者不会按相同比例变化。
+npusim 的 VF 局部收益和真机端到端收益应分别解读；GM 搬运或 kernel 固定开销占主导时，两者不会按相同比例变化。
 
 ## 通用优化方法
 
@@ -199,6 +201,6 @@ bank = (byte_offset / 32) % 16
 
 教程阶段只改变当前要分析的数据通路，host、shape、tile、核数、缓冲数和转换语义保持一致。每个阶段先通过 full、tail 和 guard 的逐 bit 校验，再比较性能。
 
-CANNsim 统一运行 `trace` 用例，读取 core 0 业务 kernel 的 `avg_cycles`。指令数按 VF execution 数归一化，有效 B/cycle 只计算当前 tile 的业务字节。文档直接列出数据和瓶颈变化，不依赖报告截图。
+npusim 统一运行 `trace` 用例，读取 core 0 业务 kernel 的 `avg_cycles`。指令数按 VF execution 数归一化，有效 B/cycle 只计算当前 tile 的业务字节。文档直接列出数据和瓶颈变化，不依赖报告截图。
 
 相互依赖的 lane 和 Store 优化可能在中间阶段暂时增加整理指令。这类阶段应保留真实数据，说明回退来源和后续解决方式，不用不同 shape 或测量口径制造表面收益。

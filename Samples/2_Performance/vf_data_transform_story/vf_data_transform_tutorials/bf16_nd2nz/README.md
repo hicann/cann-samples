@@ -1,5 +1,7 @@
 # BF16 ND2NZ：DATA_BLOCK_COPY 与 UB bank conflict
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ## 引言
 
 ND2NZ 将连续矩阵 `ND[M, N]` 转换为分块布局 `NZ[N/16, M_align, 16]`，常用于矩阵乘前的数据整理。本教程固定 `N=128`、`N0=16`，使用 SIMD VF 完成 BF16 ND2NZ：先用一条 `DATA_BLOCK_COPY` Store 写出一行中的 8 个 NZ block，再通过 UB padding 消除跨步写出的 bank conflict。
@@ -87,7 +89,7 @@ AscendC::Reg::StoreAlign<bfloat16_t, AscendC::Reg::DataCopyMode::DATA_BLOCK_COPY
 bank(block) = (block * 192 + row) % 16 = row % 16
 ```
 
-8 个 block 的 bank 完全相同。CANNsim 记录到 192 次 Vector Load 和 193 个 Vector Store pipe 事件，VF 用时 1672 cycles；Load/Store IPC 仅为 0.234。功能结果正确，但跨步 Store 的写写冲突成为主要瓶颈。
+8 个 block 的 bank 完全相同。npusim 记录到 192 次 Vector Load 和 193 个 Vector Store pipe 事件，VF 用时 1672 cycles；Load/Store IPC 仅为 0.234。功能结果正确，但跨步 Store 的写写冲突成为主要瓶颈。
 
 ## 优化阶段一：1_conflict_padding
 
@@ -106,7 +108,7 @@ constexpr uint32_t kPaddedRowsPerTile = kRowsPerTile + 1U;  // 193
 
 ## 性能结果
 
-以下结果使用 CANNsim Ascend950PR_9589 CAMODEL V100 采集，命令参数为 `--case trace`、`-g vf -n 0`。每个 AIV 处理一个 192 行 tile；`VF cycles` 取 core 0 业务 VF 的 `avg_cycles`，有效 B/cycle 按单方向 49152 B 计算。
+以下结果使用 npusim Ascend950PR_9589 CAMODEL V100 采集，命令参数为 `--case trace`、`-g vf -n 0`。每个 AIV 处理一个 192 行 tile；`VF cycles` 取 core 0 业务 VF 的 `avg_cycles`，有效 B/cycle 按单方向 49152 B 计算。
 
 | 阶段 | UB stride | VF cycles | Load/Store IPC | 单方向有效 B/cycle | 瓶颈 |
 | --- | ---: | ---: | ---: | ---: | --- |

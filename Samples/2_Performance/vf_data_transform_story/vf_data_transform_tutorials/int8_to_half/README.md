@@ -1,5 +1,7 @@
 # INT8 转 HALF：紧凑载入与交织写出
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ## 引言
 
 INT8 转 HALF 是反量化数据通路中的 1:2 扩展转换。一个 B8 Vector 寄存器可容纳 256 个 INT8，而一个 B16 寄存器只能容纳 128 个 HALF，因此扩展后需要形成两路结果并恢复连续顺序。
@@ -71,7 +73,7 @@ Cast<half, int8_t, kInt8ToHalfCastTraitZero>(outputReg0, inputReg0B8, fullB8Mask
 Cast<half, int8_t, kInt8ToHalfCastTraitZero>(outputReg1, inputReg1B8, fullB8Mask);
 ```
 
-每个 tile 包含 256 次 UnPack 和 256 次普通 Store。CANNsim 测得 446 cycles；这些显式拆分操作是后续互补 Cast 要消除的对象。
+每个 tile 包含 256 次 UnPack 和 256 次普通 Store。npusim 测得 446 cycles；这些显式拆分操作是后续互补 Cast 要消除的对象。
 
 ## 优化阶段一：1_complementary_cast
 
@@ -94,7 +96,7 @@ StoreAlign<half, StoreDist::DIST_NORM_B16>(
     output + groupOffset + kElementsPerGroup / 2U, interleavedOutputReg1, fullB16Mask);
 ```
 
-CANNsim 为 574 cycles，比基线增加 28.7%。这是一个依赖尚未闭合的过渡阶段：互补 Cast 只有与 INTLV Store 配合，才能避免新增的 Interleave 和第二次 Store，因此本阶段用于解释 lane 关系，不适合单独集成。
+npusim 为 574 cycles，比基线增加 28.7%。这是一个依赖尚未闭合的过渡阶段：互补 Cast 只有与 INTLV Store 配合，才能避免新增的 Interleave 和第二次 Store，因此本阶段用于解释 lane 关系，不适合单独集成。
 
 ## 优化阶段二：2_intlv_b16_store
 
@@ -107,7 +109,7 @@ StoreAlign<half, StoreDist::DIST_INTLV_B16>(
     output + groupOffset, outputReg0, outputReg1, fullB16Mask);
 ```
 
-这一步同时删除每组一次 Interleave 和第二次普通 Store，主数据通路收敛为一次 Load、两次 Cast、一次 Store。CANNsim 降至 458 cycles，较上一阶段减少 20.2%，等效提速 1.25 倍。交织 Store 的单条执行时间高于普通 Store，因此指令数减少并不保证相对所有过渡实现都更快。
+这一步同时删除每组一次 Interleave 和第二次普通 Store，主数据通路收敛为一次 Load、两次 Cast、一次 Store。npusim 降至 458 cycles，较上一阶段减少 20.2%，等效提速 1.25 倍。交织 Store 的单条执行时间高于普通 Store，因此指令数减少并不保证相对所有过渡实现都更快。
 
 ## 优化阶段三：3_b8_cast_mask
 
@@ -122,7 +124,7 @@ Cast<half, int8_t, kInt8ToHalfCastTraitZero>(outputReg0, inputReg, fullB8Mask);
 Cast<half, int8_t, kInt8ToHalfCastTraitOne>(outputReg1, inputReg, fullB8Mask);
 ```
 
-CANNsim 仍为 458 cycles。当前 `-O3` 已对前一阶段循环内的固定 predicate 做出等价处理，因此本步没有额外 cycle 收益；显式使用 B8 mask 仍是保证 widening Cast 正确性和可复用性的必要条件。
+npusim 仍为 458 cycles。当前 `-O3` 已对前一阶段循环内的固定 predicate 做出等价处理，因此本步没有额外 cycle 收益；显式使用 B8 mask 仍是保证 widening Cast 正确性和可复用性的必要条件。
 
 ## 性能结果
 
@@ -130,7 +132,7 @@ CANNsim 仍为 458 cycles。当前 `-O3` 已对前一阶段循环内的固定 pr
 
 ```bash
 bash Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorials/scripts/profile_tutorial.sh \
-  cannsim int8_to_half build /tmp/vf_data_transform_cannsim/int8_to_half trace
+  npusim int8_to_half build /tmp/vf_data_transform_npusim/int8_to_half trace
 ```
 
 | 阶段 | VF cycles | 相对上一阶段 | 输入 B/cycle | 输出 B/cycle | 每 tile 的主要冗余 |
@@ -140,7 +142,7 @@ bash Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorials/s
 | `2_intlv_b16_store` | 458 | 1.25x | 71.55 | 143.09 | B8 mask 在循环内创建 |
 | `3_b8_cast_mask` | 458 | 1.00x | 71.55 | 143.09 | 目标数据通路 |
 
-表中全部数值来自当前四个阶段随源码保留的同批 CANNsim 报告。另一次单版本采集得到 439 cycles，但采集批次不同；为保证阶段加速比口径一致，此处统一采用可从阶段报告直接复核的 458 cycles，不混用跨批次数据。
+表中全部数值来自当前四个阶段随源码保留的同批 npusim 报告。另一次单版本采集得到 439 cycles，但采集批次不同；为保证阶段加速比口径一致，此处统一采用可从阶段报告直接复核的 458 cycles，不混用跨批次数据。
 
 从依赖完整性看，阶段一的性能回退来自“互补 Cast 已启用、INTLV Store 尚未启用”的寄存器 Interleave 过渡。阶段二闭合这项依赖后，cycle 从 574 降至 458。最终版本相对紧凑 Load 过渡基线仍增加 2.7%，说明当前独立转换在该 CAMODEL 上受 INTLV Store 时延限制。实际集成时，若两路 HALF 能直接进入下游计算并省去交织写回，紧凑 Load 和互补 Cast 的指令规模优势才更容易转化为端到端收益。
 

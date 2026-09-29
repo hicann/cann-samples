@@ -1,5 +1,7 @@
 # 【cann-samples系列】Kimi Delta Attention Lite：Ascend 950 Kernel 实现与版本设计
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 [cann-samples](https://gitcode.com/cann/cann-samples) 是面向算子开发者的样例与优化实践仓库。本文介绍 Kimi Delta Attention（KDA）核心计算在 Ascend 950 上的实现方法、数据路径和性能变化。
 
 Kimi K3 的注意力层由 69 层 KDA 和 24 层 Gated MLA 组成。KDA 是一种线性 Attention 机制，以固定大小的矩阵状态保存历史信息，为长序列计算提供了不同于全量 KV Cache 的实现路径。
@@ -719,9 +721,9 @@ Mix 组
 | AIV0 | StateOutput 的前 16 个 Dv 列；v2/v3 Prepare 中的一个完整 Chunk | 计算衰减、前向代入、R 和低半区状态；整理 AIC 输入和结果。 |
 | AIV1 | StateOutput 的后 16 个 Dv 列；v2/v3 Prepare 中的另一个完整 Chunk | 执行与 AIV0 对称的列半区工作，或独立处理成对任务中的另一个 Chunk。 |
 
-后文的 CANNSIM 流水图按这个层级展开：AIC 关注 MTE2、MTE1、Cube 和 FIXP；AIV 关注 MTE2、PUSHQ 和 MTE3。PUSHQ 下的 `VF` 表示一次 Vector Function 任务，`PUSH_PB` 表示向 VF 传入参数。没有活动的泳道会省略。
+后文的 npusim 流水图按这个层级展开：AIC 关注 MTE2、MTE1、Cube 和 FIXP；AIV 关注 MTE2、PUSHQ 和 MTE3。PUSHQ 下的 `VF` 表示一次 Vector Function 任务，`PUSH_PB` 表示向 VF 传入参数。没有活动的泳道会省略。
 
-真机 PipeTimeline 只给出采样后的 `VECTOR` 忙碌区间，不再细分 VF 和 `PUSH_PB`。因此 CANNSIM 用于核对任务入队和执行顺序，PipeTimeline 用于观察真机上的宏观忙碌区间与重叠。
+真机 PipeTimeline 只给出采样后的 `VECTOR` 忙碌区间，不再细分 VF 和 `PUSH_PB`。因此 npusim 用于核对任务入队和执行顺序，PipeTimeline 用于观察真机上的宏观忙碌区间与重叠。
 
 ### AIC 与两路 AIV 的数据交接
 
@@ -866,11 +868,11 @@ KDA_DATA_CASE=strong_decay ./build/Samples/2_Performance/kimi_delta_attn_lite_st
 | --- | --- | --- | --- |
 | 统一真机性能 | CANN 9.2、C32、全核、`B=32,S=65536` | 比较 v0～v3 的 Kernel 时间 | 不是 Host 端到端耗时 |
 | 真机 PipeTimeline | CANN 9.2、C32、`B=32,S=4096`、core0 | 观察核内 Pipe 的 active、空洞和重叠 | 不同 Pipe 的 active 不能相加成 Kernel 时间 |
-| CANNSIM | CANN 9.2、C32、1 个 Mix 组、`B=1,S=256` | 核对发射顺序和 AIC/AIV 同步 | 仿真周期不能替代真机性能 |
+| npusim | CANN 9.2、C32、1 个 Mix 组、`B=1,S=256` | 核对发射顺序和 AIC/AIV 同步 | 仿真周期不能替代真机性能 |
 
 三类数据的规格和用途不同，数值不可直接换算或合并。
 
-CANNSIM 表格中的“调度跨度”取自 `npusim.log` 中同一 Kernel 的 task begin/done 差值；组件 active、`MMAD` 次数和重叠率则从对应 Kernel 的 core0 trace 统计。
+npusim 表格中的“调度跨度”取自 `npusim.log` 中同一 Kernel 的 task begin/done 差值；组件 active、`MMAD` 次数和重叠率则从对应 Kernel 的 core0 trace 统计。
 
 统一性能采集一次覆盖该版本的全部 Kernel。下例是 v3；重复三次后，对同名 Kernel 的 `Task Duration` 分别取中位数，再求和：
 
@@ -882,9 +884,9 @@ msopprof --warm-up=5 --launch-count=2 \
   --dry-run --size 32 65536
 ```
 
-`--launch-count` 是一次采集覆盖的 Kernel 数；v0 设为 3，v1～v3 设为 2。`--warm-up=5` 先预热 5 次，`--replay-mode=kernel` 复放被采集的 Kernel。需要查看流水时，将指标改为 `PipeTimeline`；CANNSIM 只用于核对发射与同步顺序。
+`--launch-count` 是一次采集覆盖的 Kernel 数；v0 设为 3，v1～v3 设为 2。`--warm-up=5` 先预热 5 次，`--replay-mode=kernel` 复放被采集的 Kernel。需要查看流水时，将指标改为 `PipeTimeline`；npusim 只用于核对发射与同步顺序。
 
-后文的 CANNSIM 图来自 Chrome Trace 视图。AIC 展开 `MTE2_EXEC/MTE1_EXEC/CUBE_EXEC/FIXP_EXEC`；AIV0/AIV1 分别展开 `MTE2_EXEC`、PUSHQ 下的 `PUSHQ_EXEC` 与 `PUSH_PB`、以及 `MTE3_EXEC`。
+后文的 npusim 图来自 Chrome Trace 视图。AIC 展开 `MTE2_EXEC/MTE1_EXEC/CUBE_EXEC/FIXP_EXEC`；AIV0/AIV1 分别展开 `MTE2_EXEC`、PUSHQ 下的 `PUSHQ_EXEC` 与 `PUSH_PB`、以及 `MTE3_EXEC`。
 
 后文截图统一保留 AIV0 和 AIV1。即使两路调度对称，也保留两条泳道，以便检查 16+16 列切分和“两路都完成后 AIC 才继续”的同步关系。
 
@@ -969,13 +971,13 @@ v0 的三个 Kernel 都是 `__mix(1,2)__`，但采用单槽执行。下图只按
 
 统一规格下，v0 的 Prepare、StateUpdate、LocalOutput 分别耗时 17450.373047、15919.649414、7958.541992 us，合计 41328.564453 us。
 
-Prepare 和 StateUpdate 是主要耗时，独立 LocalOutput 也占总 Kernel 时间的 19.26%。在 `B=1,S=256,C=32,core-num=1` 的 CANNSIM 短规格中，三个 Kernel 的调度跨度分别为 70128、42713、16786 cycles，各 Kernel 调度跨度之和为 129627 cycles。周期只用于观察分阶段执行和单槽发射造成的空洞，不与真机时间直接换算。
+Prepare 和 StateUpdate 是主要耗时，独立 LocalOutput 也占总 Kernel 时间的 19.26%。在 `B=1,S=256,C=32,core-num=1` 的 npusim 短规格中，三个 Kernel 的调度跨度分别为 70128、42713、16786 cycles，各 Kernel 调度跨度之和为 129627 cycles。周期只用于观察分阶段执行和单槽发射造成的空洞，不与真机时间直接换算。
 
 **StateUpdate Kernel 仿真流水**
 
-![v0 StateUpdate CANNSIM 流水](./images/cannsim_trace/v0_stateupdate_cannsim_trace.png)
+![v0 StateUpdate npusim 流水](./images/npusim_trace/v0_stateupdate_npusim_trace.png)
 
-*图：v0 StateUpdate CANNSIM trace 中的 `[84,000, 90,000] ns` 稳态窗口。AIV0/AIV1 各处理 Dv 的 16 列并发布 state/R，AIC 在两半就绪后处理完整 32 列；窗口展示 AIC 的 MTE2/MTE1/Cube/Fixpipe 与两路 AIV 的 MTE2、PUSHQ/PUSH_PB、MTE3 交接，和前面的手绘图相对应。*
+*图：v0 StateUpdate npusim trace 中的 `[84,000, 90,000] ns` 稳态窗口。AIV0/AIV1 各处理 Dv 的 16 列并发布 state/R，AIC 在两半就绪后处理完整 32 列；窗口展示 AIC 的 MTE2/MTE1/Cube/Fixpipe 与两路 AIV 的 MTE2、PUSHQ/PUSH_PB、MTE3 交接，和前面的手绘图相对应。*
 
 v0 的主要开销来自以下数据路径：
 
@@ -1060,13 +1062,13 @@ StateOutput 中，同组 AIV0/AIV1 各维护 16 个 Value 通道，合起来对�
 
 v1 的 Prepare 为 8797.722656 us，StateOutput 为 13432.345703 us，合计 22230.068359 us。相对 v0 下降 46.2114%，加速 1.8591x。
 
-在 `B=1,S=256,C=32,core-num=1` 的 CANNSIM 短规格中，Prepare/StateOutput 的调度跨度为 36860/37385 cycles，合计 74245 cycles，较同规格 v0 的三个 Kernel 合计缩短 42.72%。Kernel 融合同时减少了 GM 数据量和一个完整阶段边界。
+在 `B=1,S=256,C=32,core-num=1` 的 npusim 短规格中，Prepare/StateOutput 的调度跨度为 36860/37385 cycles，合计 74245 cycles，较同规格 v0 的三个 Kernel 合计缩短 42.72%。Kernel 融合同时减少了 GM 数据量和一个完整阶段边界。
 
 **StateOutput Kernel 仿真流水**
 
-![v1 StateOutput CANNSIM 流水](./images/cannsim_trace/v1_stateoutput_cannsim_trace.png)
+![v1 StateOutput npusim 流水](./images/npusim_trace/v1_stateoutput_npusim_trace.png)
 
-*图：v1 StateOutput CANNSIM trace 中的 `[66,000, 72,000] ns` 稳态窗口。每个双槽节拍中，AIC 依次发射 `K+@state`、prediction、history、下一 Chunk 的 U、delta 和 local；两路 AIV 分别处理 16 列 R/state/O。截图同时保留 AIC 的 MTE2/MTE1/Cube/Fixpipe 与两路 AIV 的 MTE2、PUSHQ/PUSH_PB、MTE3。*
+*图：v1 StateOutput npusim trace 中的 `[66,000, 72,000] ns` 稳态窗口。每个双槽节拍中，AIC 依次发射 `K+@state`、prediction、history、下一 Chunk 的 U、delta 和 local；两路 AIV 分别处理 16 列 R/state/O。截图同时保留 AIC 的 MTE2/MTE1/Cube/Fixpipe 与两路 AIV 的 MTE2、PUSHQ/PUSH_PB、MTE3。*
 
 v1 的数据路径变化如下：
 
@@ -1246,21 +1248,21 @@ StateOutput 中，AIC 至少一条相关 Pipe 忙碌的时间只占本地 span �
 
 本文的重叠率定义为“两组忙碌区间的交集长度，除以两组 active 时间中的较小值”。这些数据说明流水仍有空闲区间，但不足以判定该 Kernel 由单一组件限制。
 
-在 `B=1,S=256,C=32,core-num=1` 的 CANNSIM 短规格中，Prepare/StateOutput 的调度跨度为 22343/29224 cycles，合计 51567 cycles，较同规格 v1 缩短 30.54%。Prepare 包含 16 次 `MMAD`，对应 `8 Chunk×2`；StateOutput 包含 192 次 `MMAD`，对应 `4 state task×8 Chunk×6`。
+在 `B=1,S=256,C=32,core-num=1` 的 npusim 短规格中，Prepare/StateOutput 的调度跨度为 22343/29224 cycles，合计 51567 cycles，较同规格 v1 缩短 30.54%。Prepare 包含 16 次 `MMAD`，对应 `8 Chunk×2`；StateOutput 包含 192 次 `MMAD`，对应 `4 state task×8 Chunk×6`。
 
 StateOutput 中，Cube 与 Vector Function 的重叠率为 39.24%，Cube/Fixpipe 为 57.00%，Fixpipe/Vector Function 为 38.35%。这些比例按“两组忙碌区间的交集长度，除以两组 active 时间中的较小值”计算。
 
 **Prepare Kernel 仿真流水**
 
-![v2 Prepare CANNSIM 流水](./images/cannsim_trace/v2_prepare_cannsim_trace.png)
+![v2 Prepare npusim 流水](./images/npusim_trace/v2_prepare_npusim_trace.png)
 
-*图：v2 Prepare CANNSIM trace 中的 `[2, 19] µs` 窗口。AIV0/AIV1 分别处理两个不同的完整 Chunk，因此两路都保留；AIC 等两侧 factor 就绪后，依次为两块 Chunk 计算 Pair/Araw 并定向写回。长 VP/VS 与间歇出现的 Cpair 对应前面的双槽手绘图。*
+*图：v2 Prepare npusim trace 中的 `[2, 19] µs` 窗口。AIV0/AIV1 分别处理两个不同的完整 Chunk，因此两路都保留；AIC 等两侧 factor 就绪后，依次为两块 Chunk 计算 Pair/Araw 并定向写回。长 VP/VS 与间歇出现的 Cpair 对应前面的双槽手绘图。*
 
 **StateOutput Kernel 仿真流水**
 
-![v2 StateOutput CANNSIM 流水](./images/cannsim_trace/v2_stateoutput_cannsim_trace.png)
+![v2 StateOutput npusim 流水](./images/npusim_trace/v2_stateoutput_npusim_trace.png)
 
-*图：v2 StateOutput CANNSIM trace 中的 `[34,000, 40,000] ns` 稳态窗口。AIC 按 `C1(e) -> C2(e-3)` 发射，AIV0/AIV1 按 `V1(e-1) -> V2(e-4)` 处理各自的 16 列；多条状态链已经形成交错，但 AIC 组件之间仍有空档。*
+*图：v2 StateOutput npusim trace 中的 `[34,000, 40,000] ns` 稳态窗口。AIC 按 `C1(e) -> C2(e-3)` 发射，AIV0/AIV1 按 `V1(e-1) -> V2(e-4)` 处理各自的 16 列；多条状态链已经形成交错，但 AIC 组件之间仍有空档。*
 
 尽管 Prepare 和调度均有改进，StateOutput 仍占 v2 总时间的 66.73%：
 
@@ -1292,9 +1294,9 @@ Prepare 仍有两个时间槽。AIV 的稳态次序近似为 `VS(t) -> VP(t+2)`�
 
 **Prepare Kernel 仿真流水**
 
-![v3 Prepare CANNSIM 流水](./images/cannsim_trace/v3_prepare_cannsim_trace.png)
+![v3 Prepare npusim 流水](./images/npusim_trace/v3_prepare_npusim_trace.png)
 
-*图：v3 Prepare CANNSIM trace 中的 `[2, 19] µs` 窗口。AIV0/AIV1 分别处理不同的完整 Chunk；AIC 的 Cpair 簇之间新增 Cw 簇，对应手绘图中的 `Cpair -> VS -> Cw` 所有权传递。图中可见 Cw 与下一代 VP/Cpair 已开始交错。*
+*图：v3 Prepare npusim trace 中的 `[2, 19] µs` 窗口。AIV0/AIV1 分别处理不同的完整 Chunk；AIC 的 Cpair 簇之间新增 Cw 簇，对应手绘图中的 `Cpair -> VS -> Cw` 所有权传递。图中可见 Cw 与下一代 VP/Cpair 已开始交错。*
 
 StateOutput 直接计算 `prediction=W@state`，不再保存和回读 `K_plus@state`。每个 Chunk 任务的 `MMAD` 从 6 次降到 5 次。
 
@@ -1444,15 +1446,15 @@ Fixpipe active 虽然最大，但上述 active 与 overlap 数据不足以判定
 
 *图：v3 StateOutput 真机流水中 core0 的 `[190, 202] µs` 稳定窗口，使用与 v2 相同的 12 µs 窗口宽度和泳道。AIC 的四条流水更紧密；两路 AIV 的 MTE3 缩短为 state/R 交接。PipeTimeline 没有阶段标记，因此这里不把单个色块强行命名为 C1/V1/C2/V2。*
 
-在 `B=1,S=256,C=32,core-num=1` 的 CANNSIM 短规格中，v3 Prepare/StateOutput 的调度跨度为 23333/20743 cycles，合计 44076 cycles，较同规格 v2 再缩短 14.53%。Prepare 的 `MMAD` 从 16 次增至 24 次，跨度增长 4.43%；StateOutput 的 `MMAD` 从 192 次降至 160 次，跨度下降 29.02%。
+在 `B=1,S=256,C=32,core-num=1` 的 npusim 短规格中，v3 Prepare/StateOutput 的调度跨度为 23333/20743 cycles，合计 44076 cycles，较同规格 v2 再缩短 14.53%。Prepare 的 `MMAD` 从 16 次增至 24 次，跨度增长 4.43%；StateOutput 的 `MMAD` 从 192 次降至 160 次，跨度下降 29.02%。
 
 StateOutput 中，Cube/Vector Function 重叠率从 v2 的 39.24% 提高到 47.47%。Cube/Fixpipe 从 57.00% 提高到 79.60%，Fixpipe/Vector Function 从 38.35% 提高到 81.39%。
 
 **StateOutput Kernel 仿真流水**
 
-![v3 StateOutput CANNSIM 流水](./images/cannsim_trace/v3_stateoutput_cannsim_trace.png)
+![v3 StateOutput npusim 流水](./images/npusim_trace/v3_stateoutput_npusim_trace.png)
 
-*图：v3 StateOutput CANNSIM trace 中的 `[34,000, 40,000] ns` 稳态窗口。AIC 按 `C1Pre(e) -> C2Core(e-3) -> C1Post(e) -> OutputFix(e-3)` 推进，AIV0/AIV1 按 `V2(e-4) -> V1(e-1)` 先发布旧状态、再生成新 R。Cube/Fixpipe 与两路 VF 更密集，MTE3 只保留短交接。*
+*图：v3 StateOutput npusim trace 中的 `[34,000, 40,000] ns` 稳态窗口。AIC 按 `C1Pre(e) -> C2Core(e-3) -> C1Post(e) -> OutputFix(e-3)` 推进，AIV0/AIV1 按 `V2(e-4) -> V1(e-1)` 先发布旧状态、再生成新 R。Cube/Fixpipe 与两路 VF 更密集，MTE3 只保留短交接。*
 
 ---
 
@@ -1473,7 +1475,7 @@ StateOutput 中，Cube/Vector Function 重叠率从 v2 的 39.24% 提高到 47.4
 
 ![KDALite v0～v3 架构演进](./images/kdalite_architecture_evolution.png)
 
-下表给出 `B=1,S=256,C=32,core-num=1` 单 Mix 组 CANNSIM 调度跨度。它用于比较调度和同步开销，不等同于真机耗时，也不用于计算主性能加速比。
+下表给出 `B=1,S=256,C=32,core-num=1` 单 Mix 组 npusim 调度跨度。它用于比较调度和同步开销，不等同于真机耗时，也不用于计算主性能加速比。
 
 | 版本 | Prepare (cycles) | StateUpdate/StateOutput (cycles) | LocalOutput (cycles) | 各 Kernel 调度跨度之和 (cycles) |
 | --- | ---: | ---: | ---: | ---: |

@@ -1,6 +1,8 @@
 # VF 数据变换 Tutorials
 
-本目录按功能点组织 7 篇 SIMD VF 数据变换教程，共 25 个可执行阶段。每篇教程从当前优化路径的第一个技巧开始，逐步改变寄存器 lane 排布、Load/Store 分布模式或 UB 布局，并用相同输入和 CANNsim trace 对比修改前后的流水。
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
+本目录按功能点组织 7 篇 SIMD VF 数据变换教程，共 25 个可执行阶段。每篇教程从当前优化路径的第一个技巧开始，逐步改变寄存器 lane 排布、Load/Store 分布模式或 UB 布局，并用相同输入和 npusim trace 对比修改前后的流水。
 
 ## 代码组织
 
@@ -60,7 +62,7 @@ vf_data_transform_tutorials/
 | `full` | 完整 tile 的多核正确性验证 |
 | `tail` | 非整 tile、非整寄存器组和 guard 验证 |
 | `perf` | 多 tile 的端到端性能采集 |
-| `trace` | 每核一个 tile 的 CANNsim VF 流水分析 |
+| `trace` | 每核一个 tile 的 npusim VF 流水分析 |
 | `all` | 顺序运行 `full`、`tail` 和 `perf`；命令行缺省值 |
 
 Cast 和 raw-field tutorial 只复制有效输出，补齐区不会写回 GM。ND2NZ tutorial 按标准 NZ `[N/16, M_align, 16]` 生成 golden，并额外检查 `M` 尾部对齐区。

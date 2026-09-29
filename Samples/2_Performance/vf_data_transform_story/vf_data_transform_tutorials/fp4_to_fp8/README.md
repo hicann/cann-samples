@@ -1,5 +1,7 @@
 # FP4 E2M1 转 FP8 E4M3FN：raw-field 映射
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ## 引言
 
 Ascend 950 没有 FP4 E2M1 到 FP8 E4M3FN 的单次浮点 Cast 接口。若先把 FP4 解码成更高精度数值，再转换为 FP8，会引入多级转换和更宽的中间数据通路。本教程直接变换 sign、exponent 和 mantissa 的 raw field，使用整数位操作生成 FP8 raw byte。
@@ -55,7 +57,7 @@ cmake --build build --target vf_data_transform_fp4_to_fp8_tutorial -j4
 
 本阶段使用普通 B8 Load，low/high 两路结果经 Interleave 合成连续输出。这样首先验证 raw-field 公式，不把 Load 排布变化混入同一步。
 
-CANNsim 实测为 1301 cycles，有效输入吞吐为 25.19 B/cycle，有效输出吞吐为 50.37 B/cycle。
+npusim 实测为 1301 cycles，有效输入吞吐为 25.19 B/cycle，有效输出吞吐为 50.37 B/cycle。
 
 ## 优化阶段一：1_unpack_packed_byte
 
@@ -70,7 +72,7 @@ AscendC::Reg::LoadAlign<uint8_t, AscendC::Reg::LoadDist::DIST_US_B8>(
 
 每个 byte 的 low/high nibble 现在可以通过 B16 pair mask 的一次 `Select` 合成，不再执行额外 Interleave。本阶段仍分别对 low/high 候选值执行 And，以便单独观察 Load 排布优化。
 
-CANNsim 降至 826 cycles，相比阶段 0 减少 36.5%；有效输出吞吐提高到 79.34 B/cycle。
+npusim 降至 826 cycles，相比阶段 0 减少 36.5%；有效输出吞吐提高到 79.34 B/cycle。
 
 ## 优化阶段二：2_shift_select_and
 
@@ -86,7 +88,7 @@ AscendC::Reg::Select(selectedReg, lowScaledReg, highScaledReg, pairB16Mask);
 AscendC::Reg::And(outputReg, selectedReg, rawFieldMaskReg, fullB8Mask);
 ```
 
-热路径由此减少一次 And。CANNsim 降至 698 cycles，相比阶段 1 减少 15.5%，有效输出吞吐提高到 93.89 B/cycle。
+热路径由此减少一次 And。npusim 降至 698 cycles，相比阶段 1 减少 15.5%，有效输出吞吐提高到 93.89 B/cycle。
 
 ## 优化阶段三：3_hoist_constants
 
@@ -103,7 +105,7 @@ AscendC::Reg::Duplicate<int8_t, AscendC::Reg::MaskMergeMode::ZEROING>(
     rawFieldMaskReg, static_cast<int8_t>(0x9C), fullB8Mask);
 ```
 
-CANNsim 仍为 698 cycles，说明当前 `-O3` 已对前一阶段的循环不变量完成等价优化。显式外提固定了常量寄存器的生命周期，避免复用代码时依赖编译器的隐式判断。
+npusim 仍为 698 cycles，说明当前 `-O3` 已对前一阶段的循环不变量完成等价优化。显式外提固定了常量寄存器的生命周期，避免复用代码时依赖编译器的隐式判断。
 
 ## 优化阶段四：4_fold_scale
 
@@ -113,11 +115,11 @@ raw-field 数据通路输出的是 `x/64`。若下游已有 `value * scale`，�
 
 这是跨算子的接口优化，本阶段 VF 热路径与阶段 3 相同，host 日志显式给出 `downstream_scale=64`。
 
-CANNsim 仍为 698 cycles。局部 kernel 的指令数不变；只有下游本来就存在 scale 时，`×64` 才能无额外 Vector 开销地折叠。
+npusim 仍为 698 cycles。局部 kernel 的指令数不变；只有下游本来就存在 scale 时，`×64` 才能无额外 Vector 开销地折叠。
 
 ## 性能结果
 
-以下数据由 CANNsim 在 Ascend 950 上使用 `--case trace` 采集。每个 AIV 处理一个 65536 元素 tile；`VF cycles` 取 core 0 业务 kernel 的 `avg_cycles`。
+以下数据由 npusim 在 Ascend 950 上使用 `--case trace` 采集。每个 AIV 处理一个 65536 元素 tile；`VF cycles` 取 core 0 业务 kernel 的 `avg_cycles`。
 
 | 阶段 | VF cycles | 相比上一步 | 输入 B/cycle | 输出 B/cycle |
 | --- | ---: | ---: | ---: | ---: |

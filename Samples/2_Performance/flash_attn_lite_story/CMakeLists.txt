@@ -10,7 +10,8 @@
 
 cann_sample_check_arch(dav-3510)
 
-#! CANNsim 对 mode2 多代复用支持不完整. 仅仿真时解除下一行注释,
+# 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+#! npusim 对 mode2 多代复用支持不完整. 仅仿真时解除下一行注释,
 #! 使全部 AIC/AIV CrossCore 同步切换为 mode4; 真机默认使用 mode2.
 # set(SIM_COMPATIBLE ON)
 

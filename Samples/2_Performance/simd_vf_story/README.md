@@ -1,6 +1,8 @@
 # 常见范式的 SIMD VF 实现
 
-本文用一组可运行样例，介绍两类范式在 SIMD VF 内的实现方式，并用 cannsim trace 数据说明：同一个算法，哪种写法快、为什么快、为什么得这么写。
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
+本文用一组可运行样例，介绍两类范式在 SIMD VF 内的实现方式，并用 npusim trace 数据说明：同一个算法，哪种写法快、为什么快、为什么得这么写。
 
 - **逻辑 broadcast 模式**（尾轴 / 首轴 / 中间轴）：把 shape 中长度为 1 的轴按逻辑重复到目标长度，优化重点是把外层循环收进 VF，减少 VF 发起与 PB 传参。
 - **计算范式 elemwise / reduce**（逐元素、归约）：分水岭是相邻迭代之间有没有循环携带依赖，它决定瓶颈类型，也决定该用哪种优化。
@@ -1115,7 +1117,7 @@ reduce 两个轴、各写法横向对比（`PUSHQ VF cycles`）：
 
 ## 总结
 
-这几类样例的共同思路是：先写最自然、功能正确的 VF，再用 cannsim 流水验证直觉，回到源码和流水一起看。但两部分的优化重点不同：
+这几类样例的共同思路是：先写最自然、功能正确的 VF，再用 npusim 流水验证直觉，回到源码和流水一起看。但两部分的优化重点不同：
 
 - **broadcast 模式**的瓶颈是 VF 调用过碎、`RVECSU`/`PUSH_PB` 偏重。共同优化路径是逐步把外层循环收入 VF，让更多计算停留在 VF 硬循环里，从而减少 `asc_vf_call` 次数和 PB 传参，也更容易让 Vector 单元形成连续流水。具体经验：
   1. naive实现若按行或按分块多次发起 VF，先尝试把外层循环放进 VF。
@@ -1151,5 +1153,6 @@ cmake --build build --target simd_vf_story                           # 或：一
 ./build/Samples/2_Performance/simd_vf_story/reduce/simd_vf_story_reduce_reduce_sum_ar_binary
 # 自带 host golden 校验，末行打印 PASSED / FAILED
 
-cannsim record ./build/.../simd_vf_story_reduce_reduce_sum_ar_binary -s Ascend950 --gen-report   # 打点，trace 落在 cannsim_traces/
+npusim record -s Ascend950 -g -o ./npusim_traces \
+  "./build/Samples/2_Performance/simd_vf_story/reduce/simd_vf_story_reduce_reduce_sum_ar_binary"
 ```

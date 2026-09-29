@@ -1,15 +1,17 @@
 # Simulation based VF Profiling
 
-基于 `cannsim` 的 VF 性能分析手段。
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
+基于 `npusim` 的 VF 性能分析手段。
 
 
-## 一、为什么用 CANNSim 观测 VF 性能
+## 一、为什么用 npusim 观测 VF 性能
 
-VectorFunction（VF）编写完成后，上板 profiling 只能看到端到端耗时，难以精确判断瓶颈究竟来自计算指令、load/store、标量控制，还是某类 single-issue 指令。若想单独观察 VF 的指令级行为，`cannsim` 是更适合作为第一步的分析工具。
+VectorFunction（VF）编写完成后，上板 profiling 只能看到端到端耗时，难以精确判断瓶颈究竟来自计算指令、load/store、标量控制，还是某类 single-issue 指令。若想单独观察 VF 的指令级行为，`npusim` 是更适合作为第一步的分析工具。
 
-`cannsim` 能够提供 cycle 级仿真结果，帮助开发者快速定位 VF 的性能瓶颈。
+`npusim` 能够提供 cycle 级仿真结果，帮助开发者快速定位 VF 的性能瓶颈。
 
-本样例通过一个最小工程，展示如何利用 CANNSim 仿真准确获取 VF 的执行 Trace。
+本样例通过一个最小工程，展示如何利用 npusim 仿真准确获取 VF 的执行 Trace。
 
 
 ## 二、为获取准确的 VF 数据所做的工作
@@ -60,7 +62,7 @@ cmake -S . -B build -DNPU_ARCH=dav-3510
 运行前请确认：
 
 - 已安装 CANN Toolkit，并执行过 `${install_path}/ascend-toolkit/set_env.sh`
-- 可使用 `cannsim`
+- 可使用 `npusim`
 - CMake 版本满足仓库根 README 的要求
 
 ### 编译与运行
@@ -74,10 +76,10 @@ cmake -S . -B build -DNPU_ARCH=dav-3510
 cmake --build build --target simulation_based_vf_profiling
 ```
 
-用 `cannsim` 运行并生成报告：
+用 `npusim` 运行并生成报告：
 
 ```bash
-cannsim record ./build/Samples/3_Utilities/simulation-based-vf-profiling/simulation_based_vf_profiling -s Ascend950 --gen-report
+npusim record ./build/Samples/3_Utilities/simulation-based-vf-profiling/simulation_based_vf_profiling -s Ascend950 --gen-report
 ```
 
 #### 使用 bisheng 独立编译
@@ -90,10 +92,10 @@ cd Samples/3_Utilities/simulation-based-vf-profiling
 bisheng main.asc -o simulation_based_vf_profiling --npu-arch=dav-3510 -O3 --cce-simd-vf-fusion=false
 ```
 
-用 `cannsim` 运行并生成报告：
+用 `npusim` 运行并生成报告：
 
 ```bash
-cannsim record ./simulation_based_vf_profiling -s Ascend950 --gen-report
+npusim record ./simulation_based_vf_profiling -s Ascend950 --gen-report
 ```
 
 运行成功后，终端会看到：
@@ -105,5 +107,5 @@ Kernel launched successfully!
 同时会生成形如下面的产物目录：
 
 ```text
-cannsim_<时间戳>_simulation_based_vf_profiling/
+npusim_<时间戳>_simulation_based_vf_profiling/
 ```

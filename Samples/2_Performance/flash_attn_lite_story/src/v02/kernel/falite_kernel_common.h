@@ -21,7 +21,8 @@ namespace FALite {
 using MutexID = uint8_t;
 
 // 真机使用 CrossCore mode2 同步一个 Mix 组（1 AIC + 2 AIV）。
-// CANNsim 使用 mode4 分别同步 AIV0 和 AIV1，以兼容多轮仿真。
+// 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+// npusim 使用 mode4 分别同步 AIV0 和 AIV1，以兼容多轮仿真。
 constexpr uint8_t GROUP_CROSS_MODE = 2;
 #ifdef SIM_COMPATIBLE
 constexpr uint8_t PAIR_CROSS_MODE = 4;

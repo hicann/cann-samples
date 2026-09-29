@@ -21,7 +21,8 @@ namespace KDALite {
 using MutexId = uint8_t;
 
 // 上板时使用 mode2 同步同一 Mix 组的 1 个 AIC 和 2 个 AIV. 仿真模式改用
-// mode4 分别同步两路 AIV, 规避 CANNsim 对多轮 mode2 支持不完整的问题.
+// 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+// mode4 分别同步两路 AIV, 规避 npusim 对多轮 mode2 支持不完整的问题.
 constexpr uint8_t GROUP_CROSS_MODE = 2;
 #ifdef SIM_COMPATIBLE
 constexpr uint8_t PAIR_CROSS_MODE = 4;

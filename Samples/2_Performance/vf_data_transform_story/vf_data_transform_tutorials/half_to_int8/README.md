@@ -1,5 +1,7 @@
 # HALF 转 INT8：DINTLV 与互补 lane 合并
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 ## 引言
 
 HALF 转 INT8 常用于量化输出和算子边界的数据类型转换。本教程使用 `CAST_RINT` 和 `NO_SAT`，逐元素完成：
@@ -78,7 +80,7 @@ Pack<uint8_t, uint16_t, HighLowPart::LOWEST>(packedOutputReg1, outputReg1B16);
 Interleave(interleavedOutputReg0, interleavedOutputReg1, packedOutputReg0, packedOutputReg1);
 ```
 
-为把最后的写回优化留到阶段三，前三个阶段都使用低半区和高半区的两次 masked Store。基线每个 tile 包含 256 次 Pack、128 次 Interleave 和 256 次 Store，CANNsim 测得 780 cycles；额外的寄存器整理是首要瓶颈。
+为把最后的写回优化留到阶段三，前三个阶段都使用低半区和高半区的两次 masked Store。基线每个 tile 包含 256 次 Pack、128 次 Interleave 和 256 次 Store，npusim 测得 780 cycles；额外的寄存器整理是首要瓶颈。
 
 ## 优化阶段一：1_complementary_cast
 
@@ -101,7 +103,7 @@ Cast<int8_t, half, kHalfToInt8CastTraitOne>(outputReg1, inputReg1, fullB16Mask);
 Add<int8_t>(mergedOutputReg, outputReg0, outputReg1, fullB8Mask);
 ```
 
-CANNsim 为 445 cycles，较基线减少 42.9%，等效提速 1.75 倍。Pack 和 Interleave 已经消失，当前主要开销转为算术合并以及同一地址上的两次分区 Store。
+npusim 为 445 cycles，较基线减少 42.9%，等效提速 1.75 倍。Pack 和 Interleave 已经消失，当前主要开销转为算术合并以及同一地址上的两次分区 Store。
 
 ## 优化阶段二：2_or_merge
 
@@ -115,7 +117,7 @@ Or(outputReg0, outputReg0, outputReg1, fullB8Mask);
 
 这一写法直接表达“有效位互不重叠”的数据关系，同时不再需要第三个合并结果寄存器。该阶段仍保留两次分区 Store，避免混入连续写回带来的收益。
 
-CANNsim 为 433 cycles，较上一阶段减少 2.7%，等效提速 1.03 倍。热循环中的合并指令已收敛为每组一次 Or，瓶颈进一步集中到重复 Store。
+npusim 为 433 cycles，较上一阶段减少 2.7%，等效提速 1.03 倍。热循环中的合并指令已收敛为每组一次 Or，瓶颈进一步集中到重复 Store。
 
 ## 优化阶段三：3_contiguous_store
 
@@ -128,7 +130,7 @@ StoreAlign<int8_t, StoreDist::DIST_NORM_B8>(
     output + groupOffset, outputReg0, fullB8Mask);
 ```
 
-这一步把每组两次 masked Store 减为一次连续 Store，同时删除低半区和高半区 mask。CANNsim 为 315 cycles，较上一阶段减少 27.3%，等效提速 1.37 倍。最终热循环达到前述结构下限，继续优化时应优先考虑与上下游计算融合，减少 UB 或 GM 往返。
+这一步把每组两次 masked Store 减为一次连续 Store，同时删除低半区和高半区 mask。npusim 为 315 cycles，较上一阶段减少 27.3%，等效提速 1.37 倍。最终热循环达到前述结构下限，继续优化时应优先考虑与上下游计算融合，减少 UB 或 GM 往返。
 
 ## 性能结果
 
@@ -136,7 +138,7 @@ StoreAlign<int8_t, StoreDist::DIST_NORM_B8>(
 
 ```bash
 bash Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorials/scripts/profile_tutorial.sh \
-  cannsim half_to_int8 build /tmp/vf_data_transform_cannsim/half_to_int8 trace
+  npusim half_to_int8 build /tmp/vf_data_transform_npusim/half_to_int8 trace
 ```
 
 | 阶段 | VF cycles | 相对上一阶段 | 输入 B/cycle | 输出 B/cycle | 每 tile 的主要冗余 |

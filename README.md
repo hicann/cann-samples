@@ -5,6 +5,8 @@
   提供高性能实现示例与体系化调优知识库，从入门概念到极致性能，覆盖 MatMul、MoE、Attention 等核心算子的完整优化链路
 </p>
 
+> 使用 npusim 进行仿真需要 CANN 9.2.0 及以上版本。
+
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Perf%20Stories-13-blueviolet.svg" alt="Perf Stories">
@@ -46,7 +48,7 @@
 | 维度 | 说明 |
 |------|------|
 | ⚡ 体系化调优知识库 | 从入门概念到极致性能，覆盖 MatMul、MoE、Attention 等核心算子的完整优化链路 |
-| 🔬 端到端可复现 | 每个 story 提供 baseline→优化分步教程与可运行 recipe，配合 cannsim trace 量化性能差异 |
+| 🔬 端到端可复现 | 每个 story 提供 baseline→优化分步教程与可运行 recipe，配合 npusim trace 量化性能差异 |
 | 🧠 硬件特性深挖 | 直击 ScalarBound、流水线排布、寄存器 Spill、SIMT / SIMD VF 编程等底层优化点 |
 | 🧩 多数据类型覆盖 | 支持 BF16 / FP16 / HiFloat8 / MXFP4 / MXFP8 等多种精度与量化方案 |
 | 🎯 多代际硬件适配 | 覆盖 Ascend 950（`dav-3510`）与 Ascend 910B/C（`dav-2201`）平台 |
@@ -253,7 +255,7 @@ python3 scripts/check_env.py
 │   │   ├── grouped_matmul_story             # 分组矩阵乘性能优化实践
 │   │   └── ...                              # 其它性能调优样例
 │   ├── 3_Utilities                          # 开发工具集
-│   │   └── simulation-based-vf-profiling     # 基于 cannsim 的 VF 性能分析
+│   │   └── simulation-based-vf-profiling     # 基于 npusim 的 VF 性能分析
 │   └── CMakeLists.txt
 ├── third_party                              # 外部依赖（Git 子模块）
 │   ├── asc-devkit                          # asc-devkit：Ascend C Tensor API 头文件
