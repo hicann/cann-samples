@@ -4,9 +4,9 @@
 
 v03 保留 v02 的单槽调度，把 P 改为 AIV UB→共享 L1→AIC L0A。AIV 在 UB 内完成 BF16 转换和 NZ 排布，两路 AIV 各写共享 P L1 的一半。S、P、DeltaO 至此全部在片上交接，Host 不再申请中间 workspace。
 
-本文按 Host、AIC 和 AIV 实现解释任务归属、数据布局与同步。共同数学推导见[总 README 的算法基础](../../README.md#算法基础)，术语和硬件空间见[Ascend 950 上的 FALite 实现](../../README.md#ascend-950-上的-falite-实现)。
+本文按 Host、AIC 和 AIV 实现解释任务归属、数据布局与同步。共同数学推导见[总 README 的计算原理](../../README.md#计算原理)，术语和硬件空间见[硬件映射](../../README.md#硬件映射)。
 
-输入输出为 BF16 `[B,N,S,128]`，`Br=Bc=D=128`；`B/N/S` 均为正整数，`S` 无需按 128 对齐。入口固定调用同起点、等长度的方阵 causal 实例，功能保证范围为 `B*N*S<=131072`；该范围不是 Host 的主动拒绝条件。完整接口约束和未支持能力见[样例定位](../../README.md#falite-样例定位)。
+输入输出为 BF16 `[B,N,S,128]`，`Br=Bc=D=128`；`B/N/S` 均为正整数，`S` 无需按 128 对齐。入口固定调用同起点、等长度的方阵 causal 实例，功能保证范围为 `B*N*S<=131072`；该范围不是 Host 的主动拒绝条件。完整接口约束和未支持能力见[样例定位](../../README.md#功能范围)。
 
 ## task 归属与两路 AIV 分工
 
@@ -212,7 +212,7 @@ causal 下只发射 `j=0...i`；对角 item 的 V1 在求最大值与指数和�
 
 截图来自 `B=1,N=1,S=2048,D=128` 的完整 PipeTimeline trace，窗口为 `[140.107,180.107] μs`。它展示各 Pipe 的忙区和空隙，不能把某个空隙直接解释为 DONE 或 P_READY 的精确等待时长。
 
-总文档记录本版在 `B=1,N=1,S=131072`、32 个 AIC 下的 Task Duration 中位数为 `58697.125000 μs`。完整采集环境、核数差异和 MFU 口径统一见[总 README 的统一性能结果](../../README.md#统一性能结果)。本文不按示意图的宽度比较版本收益。
+总文档记录本版在 `B=1,N=1,S=131072`、32 个 AIC 下的 Task Duration 中位数为 `58697.125000 μs`。完整采集环境、核数差异和 MFU 口径统一见[总 README 的整体结果](../../README.md#整体结果)。本文不按示意图的宽度比较版本收益。
 
 ## 代码阅读入口与运行
 
@@ -233,7 +233,7 @@ cmake --build build --target falite_v03 -j
 ./build/Samples/2_Performance/flash_attn_lite_story/falite_v03 --core-num 2 --size 2 3 257
 ```
 
-该用例包含多个 Batch/Head 和非整块尾行。精度标准和更多运行选项见[总 README 的编译、运行与复现](../../README.md#编译运行与复现)。
+该用例包含多个 Batch/Head 和非整块尾行。精度标准和更多运行选项见[总 README 的验证与复现](../../README.md#验证与复现)。
 
 ## 与相邻版本的区别
 

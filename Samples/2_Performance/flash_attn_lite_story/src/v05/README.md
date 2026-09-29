@@ -4,7 +4,7 @@
 
 v05 保留两个 item 一组的 CV 调度，将 L0A/L0B/L0C 也改为双槽。C1 调整 Q/K 的装载顺序；C2 让 P 的 L1→L0A 和 V 的 GM→L1 分别等待 P 就绪，解除 v04 的“装完 P 再搬 V”依赖。
 
-本版固定使用 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，计算同起点、等长度的方阵 causal Attention；`B/N/S` 为正整数，`S` 无需对齐，功能保证范围为 `B*N*S<=131072`。完整能力边界见[总文档的样例定位](../../README.md#falite-样例定位)，共同公式见[算法基础](../../README.md#算法基础)。
+本版固定使用 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，计算同起点、等长度的方阵 causal Attention；`B/N/S` 为正整数，`S` 无需对齐，功能保证范围为 `B*N*S<=131072`。完整能力边界见[总文档的样例定位](../../README.md#功能范围)，共同公式见[计算原理](../../README.md#计算原理)。
 
 Host 令 `tr=ceil(S/128)`、`numTasks=B*N*tr`，启动 `useAicNum=min(numTasks,可用核数)` 个 Mix 组。第 `aicIdx` 组处理 `taskId=aicIdx+k*useAicNum`；`batchHeadIdx=taskId/tr`，`i=taskId%tr`。一个 task 负责一个 Query tile 的全部输出，同一 task 的 K/V item 编号为 `j=0...i`。相邻至多两个 item 组成一组，`slot=j%2`。
 
@@ -162,11 +162,11 @@ L0A/L0B/L0C 从各一槽增为两槽，Mutex 随物理槽编号；C1 改为先�
 
 ## 流水示意与性能参考
 
-统一口径下，本版 Task Duration 为 26319.761719 μs，因果有效 Cube MFU 为 38.6810%；条件和完整对比见[总文档性能表](../../README.md#统一性能结果)。
+统一口径下，本版 Task Duration 为 26319.761719 μs，因果有效 Cube MFU 为 38.6810%；条件和完整对比见[总文档性能表](../../README.md#整体结果)。
 
 ![v05 CV 与 L0 双槽流水示意图](../../images/pipeline/falite_v05_pipeline.png)
 
-示意图展示连续两组与同 item 就绪依赖，省略反向复用及核内 Mutex。图中的 P 就绪边概括了两条 Pipe 的通知；精确位置见 C2 伪代码。色块宽度不是实测耗时。
+示意图上部列连续两组的本核发射顺序，中部画同 item 就绪依赖；行间位置不表示时间对齐。P 就绪边同时涉及 MTE1/MTE2，且需要两路 AIV 的通知；精确位置见 C2 伪代码。反向复用及核内 Mutex 未展开。
 
 ![v05 上板流水截图](../../images/pipe_trace/falite_v05_pipe.png)
 
@@ -183,4 +183,4 @@ PipeTimeline 截图使用 `B=N=1,S=2048`、单 Mix 核组，窗口为 `[77.589,1
 | [AIV 实现](kernel/falite_kernel_aiv.h) | `KernelProcessForAIV`、`VectorStage1/2`、`CopyPWorkToL1` 和最终输出 VF |
 | [同步封装](kernel/falite_kernel_common.h) | flag ID、Set/Wait 所在 Pipe、`GetKvTileCount` 与 `GetTileValidRows` |
 
-从仓库根目录可构建 `cmake --build build --target falite_v05 -j`，运行 `./build/Samples/2_Performance/flash_attn_lite_story/falite_v05 --core-num 1 --size 1 1 385` 阅读满组、奇数尾组和非整块输出路径；完整配置与精度标准见[编译、运行与复现](../../README.md#编译运行与复现)。
+从仓库根目录可构建 `cmake --build build --target falite_v05 -j`，运行 `./build/Samples/2_Performance/flash_attn_lite_story/falite_v05 --core-num 1 --size 1 1 385` 阅读满组、奇数尾组和非整块输出路径；完整配置与精度标准见[验证与复现](../../README.md#验证与复现)。

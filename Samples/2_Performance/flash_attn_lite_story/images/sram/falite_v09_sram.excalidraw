@@ -29,8 +29,8 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "v09 SRAM",
-      "originalText": "v09 SRAM",
+      "text": "Ver.4 / Ver.5 · 片上 SRAM",
+      "originalText": "Ver.4 / Ver.5 · 片上 SRAM",
       "fontSize": 34,
       "fontFamily": 5,
       "textAlign": "left",
@@ -45,7 +45,7 @@
       "x": 58,
       "y": 80,
       "width": 1500,
-      "height": 26.0,
+      "height": 26,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
@@ -207,7 +207,7 @@
       "type": "text",
       "id": "l1_segment_0_label",
       "x": 222,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#7c3aed",
@@ -271,7 +271,7 @@
       "id": "l1_divider_1",
       "x": 320.2607552218192,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -298,7 +298,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -307,7 +307,7 @@
       "type": "text",
       "id": "l1_segment_1_label",
       "x": 322.2607552218192,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#7c3aed",
@@ -371,7 +371,7 @@
       "id": "l1_divider_2",
       "x": 420.52151044363836,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -398,7 +398,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -407,7 +407,7 @@
       "type": "text",
       "id": "l1_segment_2_label",
       "x": 422.52151044363836,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#7c3aed",
@@ -471,7 +471,7 @@
       "id": "l1_divider_3",
       "x": 520.7822656654575,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -498,7 +498,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -507,7 +507,7 @@
       "type": "text",
       "id": "l1_segment_3_label",
       "x": 522.7822656654575,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#7c3aed",
@@ -571,7 +571,7 @@
       "id": "l1_divider_4",
       "x": 621.0430208872767,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -598,7 +598,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -607,7 +607,7 @@
       "type": "text",
       "id": "l1_segment_4_label",
       "x": 623.0430208872767,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#059669",
@@ -671,7 +671,7 @@
       "id": "l1_divider_5",
       "x": 721.3037761090959,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -698,7 +698,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -707,7 +707,7 @@
       "type": "text",
       "id": "l1_segment_5_label",
       "x": 723.3037761090959,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#059669",
@@ -771,7 +771,7 @@
       "id": "l1_divider_6",
       "x": 821.5645313309151,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -798,7 +798,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -807,7 +807,7 @@
       "type": "text",
       "id": "l1_segment_6_label",
       "x": 823.5645313309151,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#2563eb",
@@ -871,7 +871,7 @@
       "id": "l1_divider_7",
       "x": 921.8252865527343,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -898,7 +898,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -907,7 +907,7 @@
       "type": "text",
       "id": "l1_segment_7_label",
       "x": 923.8252865527343,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#2563eb",
@@ -971,7 +971,7 @@
       "id": "l1_divider_8",
       "x": 1022.0860417745535,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -998,7 +998,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -1007,7 +1007,7 @@
       "type": "text",
       "id": "l1_segment_8_label",
       "x": 1024.0860417745535,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#d97706",
@@ -1071,7 +1071,7 @@
       "id": "l1_divider_9",
       "x": 1122.3467969963726,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -1098,7 +1098,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -1107,7 +1107,7 @@
       "type": "text",
       "id": "l1_segment_9_label",
       "x": 1124.3467969963726,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#d97706",
@@ -1171,7 +1171,7 @@
       "id": "l1_divider_10",
       "x": 1222.6075522181918,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -1198,7 +1198,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -1207,7 +1207,7 @@
       "type": "text",
       "id": "l1_segment_10_label",
       "x": 1224.6075522181918,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#d97706",
@@ -1271,7 +1271,7 @@
       "id": "l1_divider_11",
       "x": 1322.868307440011,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -1298,7 +1298,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -1307,7 +1307,7 @@
       "type": "text",
       "id": "l1_segment_11_label",
       "x": 1324.868307440011,
-      "y": 195.0,
+      "y": 195,
       "width": 96.2607552218192,
       "height": 22.1,
       "strokeColor": "#d97706",
@@ -1371,7 +1371,7 @@
       "id": "l1_free_divider",
       "x": 1423.1290626618302,
       "y": 170,
-      "width": 0.0,
+      "width": 0,
       "height": 78,
       "strokeColor": "#94a3b8",
       "backgroundColor": "transparent",
@@ -1398,7 +1398,7 @@
           0
         ],
         [
-          0.0,
+          0,
           78
         ]
       ]
@@ -1407,7 +1407,7 @@
       "type": "text",
       "id": "l1_free_label",
       "x": 1425.1290626618302,
-      "y": 195.0,
+      "y": 195,
       "width": 242.8709373381697,
       "height": 19.5,
       "strokeColor": "#64748b",
@@ -1538,7 +1538,7 @@
       "id": "l0a_segment_0",
       "x": 221,
       "y": 281,
-      "width": 724.0,
+      "width": 724,
       "height": 70,
       "strokeColor": "#e2e8f0",
       "backgroundColor": "#e2e8f0",
@@ -1564,8 +1564,8 @@
       "type": "text",
       "id": "l0a_segment_0_label",
       "x": 222,
-      "y": 302.0,
-      "width": 721.0,
+      "y": 302,
+      "width": 721,
       "height": 22.1,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -1599,9 +1599,9 @@
     {
       "type": "rectangle",
       "id": "l0a_segment_1",
-      "x": 946.0,
+      "x": 946,
       "y": 281,
-      "width": 724.0,
+      "width": 724,
       "height": 70,
       "strokeColor": "#e2e8f0",
       "backgroundColor": "#e2e8f0",
@@ -1626,9 +1626,9 @@
     {
       "type": "line",
       "id": "l0a_divider_1",
-      "x": 945.0,
+      "x": 945,
       "y": 280,
-      "width": 0.0,
+      "width": 0,
       "height": 72,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -1655,7 +1655,7 @@
           0
         ],
         [
-          0.0,
+          0,
           72
         ]
       ]
@@ -1663,9 +1663,9 @@
     {
       "type": "text",
       "id": "l0a_segment_1_label",
-      "x": 947.0,
-      "y": 302.0,
-      "width": 721.0,
+      "x": 947,
+      "y": 302,
+      "width": 721,
       "height": 22.1,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -1795,7 +1795,7 @@
       "id": "l0b_segment_0",
       "x": 221,
       "y": 386,
-      "width": 724.0,
+      "width": 724,
       "height": 70,
       "strokeColor": "#e2e8f0",
       "backgroundColor": "#e2e8f0",
@@ -1821,8 +1821,8 @@
       "type": "text",
       "id": "l0b_segment_0_label",
       "x": 222,
-      "y": 407.0,
-      "width": 721.0,
+      "y": 407,
+      "width": 721,
       "height": 22.1,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -1856,9 +1856,9 @@
     {
       "type": "rectangle",
       "id": "l0b_segment_1",
-      "x": 946.0,
+      "x": 946,
       "y": 386,
-      "width": 724.0,
+      "width": 724,
       "height": 70,
       "strokeColor": "#e2e8f0",
       "backgroundColor": "#e2e8f0",
@@ -1883,9 +1883,9 @@
     {
       "type": "line",
       "id": "l0b_divider_1",
-      "x": 945.0,
+      "x": 945,
       "y": 385,
-      "width": 0.0,
+      "width": 0,
       "height": 72,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -1912,7 +1912,7 @@
           0
         ],
         [
-          0.0,
+          0,
           72
         ]
       ]
@@ -1920,9 +1920,9 @@
     {
       "type": "text",
       "id": "l0b_segment_1_label",
-      "x": 947.0,
-      "y": 407.0,
-      "width": 721.0,
+      "x": 947,
+      "y": 407,
+      "width": 721,
       "height": 22.1,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -2078,7 +2078,7 @@
       "type": "text",
       "id": "l0c_segment_0_label",
       "x": 222,
-      "y": 512.0,
+      "y": 512,
       "width": 358.5,
       "height": 22.1,
       "strokeColor": "#475569",
@@ -2142,7 +2142,7 @@
       "id": "l0c_divider_1",
       "x": 582.5,
       "y": 490,
-      "width": 0.0,
+      "width": 0,
       "height": 72,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -2169,7 +2169,7 @@
           0
         ],
         [
-          0.0,
+          0,
           72
         ]
       ]
@@ -2178,7 +2178,7 @@
       "type": "text",
       "id": "l0c_segment_1_label",
       "x": 584.5,
-      "y": 512.0,
+      "y": 512,
       "width": 358.5,
       "height": 22.1,
       "strokeColor": "#475569",
@@ -2213,7 +2213,7 @@
     {
       "type": "rectangle",
       "id": "l0c_segment_2",
-      "x": 946.0,
+      "x": 946,
       "y": 491,
       "width": 361.5,
       "height": 70,
@@ -2240,9 +2240,9 @@
     {
       "type": "line",
       "id": "l0c_divider_2",
-      "x": 945.0,
+      "x": 945,
       "y": 490,
-      "width": 0.0,
+      "width": 0,
       "height": 72,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -2269,7 +2269,7 @@
           0
         ],
         [
-          0.0,
+          0,
           72
         ]
       ]
@@ -2277,8 +2277,8 @@
     {
       "type": "text",
       "id": "l0c_segment_2_label",
-      "x": 947.0,
-      "y": 512.0,
+      "x": 947,
+      "y": 512,
       "width": 358.5,
       "height": 22.1,
       "strokeColor": "#475569",
@@ -2342,7 +2342,7 @@
       "id": "l0c_divider_3",
       "x": 1307.5,
       "y": 490,
-      "width": 0.0,
+      "width": 0,
       "height": 72,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -2369,7 +2369,7 @@
           0
         ],
         [
-          0.0,
+          0,
           72
         ]
       ]
@@ -2378,7 +2378,7 @@
       "type": "text",
       "id": "l0c_segment_3_label",
       "x": 1309.5,
-      "y": 512.0,
+      "y": 512,
       "width": 358.5,
       "height": 22.1,
       "strokeColor": "#475569",
@@ -2571,7 +2571,7 @@
       "type": "text",
       "id": "ub_segment_0_label",
       "x": 222,
-      "y": 702.0,
+      "y": 702,
       "width": 123.52138179690321,
       "height": 22.1,
       "strokeColor": "#2563eb",
@@ -2635,7 +2635,7 @@
       "id": "ub_divider_1",
       "x": 347.5213817969032,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -2662,7 +2662,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -2671,7 +2671,7 @@
       "type": "text",
       "id": "ub_segment_1_label",
       "x": 349.5213817969032,
-      "y": 702.0,
+      "y": 702,
       "width": 123.52138179690321,
       "height": 22.1,
       "strokeColor": "#2563eb",
@@ -2735,7 +2735,7 @@
       "id": "ub_divider_2",
       "x": 475.0427635938064,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -2762,7 +2762,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -2771,7 +2771,7 @@
       "type": "text",
       "id": "ub_segment_2_label",
       "x": 477.0427635938064,
-      "y": 702.0,
+      "y": 702,
       "width": 123.52138179690321,
       "height": 22.1,
       "strokeColor": "#d97706",
@@ -2835,7 +2835,7 @@
       "id": "ub_divider_3",
       "x": 602.5641453907097,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -2862,7 +2862,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -2871,7 +2871,7 @@
       "type": "text",
       "id": "ub_segment_3_label",
       "x": 604.5641453907097,
-      "y": 702.0,
+      "y": 702,
       "width": 123.52138179690321,
       "height": 22.1,
       "strokeColor": "#d97706",
@@ -2935,7 +2935,7 @@
       "id": "ub_divider_4",
       "x": 730.0855271876129,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -2962,7 +2962,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -2971,7 +2971,7 @@
       "type": "text",
       "id": "ub_segment_4_label",
       "x": 732.0855271876129,
-      "y": 702.0,
+      "y": 702,
       "width": 123.52138179690321,
       "height": 22.1,
       "strokeColor": "#059669",
@@ -3035,7 +3035,7 @@
       "id": "ub_divider_5",
       "x": 857.6069089845162,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3062,7 +3062,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3071,7 +3071,7 @@
       "type": "text",
       "id": "ub_segment_5_label",
       "x": 859.6069089845162,
-      "y": 702.0,
+      "y": 702,
       "width": 123.52138179690321,
       "height": 22.1,
       "strokeColor": "#059669",
@@ -3135,7 +3135,7 @@
       "id": "ub_divider_6",
       "x": 985.1282907814194,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3162,7 +3162,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3171,7 +3171,7 @@
       "type": "text",
       "id": "ub_segment_6_label",
       "x": 987.1282907814194,
-      "y": 702.0,
+      "y": 702,
       "width": 77.67898725376752,
       "height": 22.1,
       "strokeColor": "#7c3aed",
@@ -3235,7 +3235,7 @@
       "id": "ub_divider_7",
       "x": 1066.807278035187,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3262,7 +3262,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3271,7 +3271,7 @@
       "type": "text",
       "id": "ub_segment_7_label",
       "x": 1068.807278035187,
-      "y": 702.0,
+      "y": 702,
       "width": 77.67898725376752,
       "height": 22.1,
       "strokeColor": "#7c3aed",
@@ -3335,7 +3335,7 @@
       "id": "ub_divider_8",
       "x": 1148.4862652889544,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3362,7 +3362,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3399,7 +3399,7 @@
       "id": "ub_divider_9",
       "x": 1218.6230252772511,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3426,7 +3426,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3463,7 +3463,7 @@
       "id": "ub_divider_10",
       "x": 1288.7597852655479,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3490,7 +3490,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3527,7 +3527,7 @@
       "id": "ub_divider_11",
       "x": 1358.8965452538446,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3554,7 +3554,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3591,7 +3591,7 @@
       "id": "ub_divider_12",
       "x": 1429.0333052421413,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3618,7 +3618,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3655,7 +3655,7 @@
       "id": "ub_divider_13",
       "x": 1499.170065230438,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3682,7 +3682,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3719,7 +3719,7 @@
       "id": "ub_free_divider",
       "x": 1569.3068252187347,
       "y": 670,
-      "width": 0.0,
+      "width": 0,
       "height": 92,
       "strokeColor": "#94a3b8",
       "backgroundColor": "transparent",
@@ -3746,7 +3746,7 @@
           0
         ],
         [
-          0.0,
+          0,
           92
         ]
       ]
@@ -3755,7 +3755,7 @@
       "type": "text",
       "id": "ub_free_label",
       "x": 1571.3068252187347,
-      "y": 702.0,
+      "y": 702,
       "width": 96.69317478126504,
       "height": 19.5,
       "strokeColor": "#64748b",
@@ -3821,7 +3821,7 @@
       "id": "stats_zoom_leader_v0",
       "x": 1358.8965452538446,
       "y": 764,
-      "width": 0.0,
+      "width": 0,
       "height": 40,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3848,7 +3848,7 @@
           0
         ],
         [
-          0.0,
+          0,
           40
         ]
       ]
@@ -3856,7 +3856,7 @@
     {
       "type": "line",
       "id": "stats_zoom_leader_h",
-      "x": 1296.0,
+      "x": 1296,
       "y": 804,
       "width": 62.89654525384458,
       "height": 0,
@@ -3893,9 +3893,9 @@
     {
       "type": "arrow",
       "id": "stats_zoom_leader_v1",
-      "x": 1296.0,
+      "x": 1296,
       "y": 804,
-      "width": 0.0,
+      "width": 0,
       "height": 23,
       "strokeColor": "#475569",
       "backgroundColor": "transparent",
@@ -3924,7 +3924,7 @@
           0
         ],
         [
-          0.0,
+          0,
           23
         ]
       ],

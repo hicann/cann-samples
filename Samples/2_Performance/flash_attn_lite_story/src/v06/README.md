@@ -4,7 +4,7 @@
 
 v06 将 V 的 GM→L1 搬运从 C2 前移到 C1，和 K 一起装入；C2 只消费片上的 P/V。Q L1 与 OAcc/最终输出 UB 增加 task 级双槽，而 item 仍按两个一组调度，L0 仍为双槽。
 
-本版固定使用 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，计算同起点、等长度的方阵 causal Attention；`B/N/S` 为正整数，`S` 无需对齐，功能保证范围为 `B*N*S<=131072`。完整能力边界见[总文档的样例定位](../../README.md#falite-样例定位)，共同公式见[算法基础](../../README.md#算法基础)。
+本版固定使用 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，计算同起点、等长度的方阵 causal Attention；`B/N/S` 为正整数，`S` 无需对齐，功能保证范围为 `B*N*S<=131072`。完整能力边界见[总文档的样例定位](../../README.md#功能范围)，共同公式见[计算原理](../../README.md#计算原理)。
 
 Host 令 `tr=ceil(S/128)`、`numTasks=B*N*tr`，启动 `useAicNum=min(numTasks,可用核数)` 个 Mix 组。第 `aicIdx` 组处理 `taskId=aicIdx+k*useAicNum`；`batchHeadIdx=taskId/tr`，`i=taskId%tr`。一个 task 负责一个 Query tile 的全部输出，同一 task 的 K/V item 编号为 `j=0...i`。相邻至多两个 item 组成一组，`slot=j%2`。
 
@@ -173,11 +173,11 @@ V 的搬入前移到 C1；独立 K/V Mutex 合并为跨 C1/C2 持有的同槽 Mu
 
 ## 流水示意与性能参考
 
-统一口径下，本版 Task Duration 为 24255.705078 μs，因果有效 Cube MFU 为 41.9726%；条件和完整对比见[总文档性能表](../../README.md#统一性能结果)。
+统一口径下，本版 Task Duration 为 24255.705078 μs，因果有效 Cube MFU 为 41.9726%；条件和完整对比见[总文档性能表](../../README.md#整体结果)。
 
 ![v06 K/V 预取与分组流水示意图](../../images/pipeline/falite_v06_pipeline.png)
 
-示意图展示两组 item 及同 item 依赖，省略反向复用和 Mutex，task I/O 双槽也未展开。K/V 提前装入不同 L1 区域，V 保留到对应 C2；色块宽度不是实测耗时。
+示意图上部列两组 item 的本核发射顺序，中部画同 item 就绪依赖；行间位置不表示时间对齐。反向复用、Mutex 和 task I/O 双槽未展开。K/V 提前装入不同 L1 区域，V 保留到对应 C2。
 
 ![v06 上板流水截图](../../images/pipe_trace/falite_v06_pipe.png)
 
@@ -194,4 +194,4 @@ PipeTimeline 截图使用 `B=N=1,S=2048`、单 Mix 核组，窗口为 `[68.998,1
 | [AIV 实现](kernel/falite_kernel_aiv.h) | `KernelProcessForAIV`、`VectorStage1/2`、`CopyPWorkToL1` 和最终输出 VF |
 | [同步封装](kernel/falite_kernel_common.h) | flag ID、Set/Wait 所在 Pipe、`GetKvTileCount` 与 `GetTileValidRows` |
 
-从仓库根目录可构建 `cmake --build build --target falite_v06 -j`，运行 `./build/Samples/2_Performance/flash_attn_lite_story/falite_v06 --core-num 1 --size 1 1 513` 阅读五个 task 的 I/O 翻转、奇数尾组和一行尾块；完整配置与精度标准见[编译、运行与复现](../../README.md#编译运行与复现)。
+从仓库根目录可构建 `cmake --build build --target falite_v06 -j`，运行 `./build/Samples/2_Performance/flash_attn_lite_story/falite_v06 --core-num 1 --size 1 1 513` 阅读五个 task 的 I/O 翻转、奇数尾组和一行尾块；完整配置与精度标准见[验证与复现](../../README.md#验证与复现)。

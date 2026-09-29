@@ -4,7 +4,7 @@
 
 v04 将同一 task 的相邻两个 item 放进两套片上工作槽，先发射两次 C1，再发射两次 C2；AIV 对应先做两次 V1，再做两次 V2。这样 AIC 和 AIV 可以处理不同 item，但 AIC 的 L0A/L0B/L0C 仍各只有一槽。
 
-本版固定使用 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，计算同起点、等长度的方阵 causal Attention；`B/N/S` 为正整数，`S` 无需对齐，功能保证范围为 `B*N*S<=131072`。完整能力边界见[总文档的样例定位](../../README.md#falite-样例定位)，共同公式见[算法基础](../../README.md#算法基础)。
+本版固定使用 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，计算同起点、等长度的方阵 causal Attention；`B/N/S` 为正整数，`S` 无需对齐，功能保证范围为 `B*N*S<=131072`。完整能力边界见[总文档的样例定位](../../README.md#功能范围)，共同公式见[计算原理](../../README.md#计算原理)。
 
 Host 令 `tr=ceil(S/128)`、`numTasks=B*N*tr`，启动 `useAicNum=min(numTasks,可用核数)` 个 Mix 组。第 `aicIdx` 组处理 `taskId=aicIdx+k*useAicNum`；`batchHeadIdx=taskId/tr`，`i=taskId%tr`。一个 task 负责一个 Query tile 的全部输出，同一 task 的 K/V item 编号为 `j=0...i`。相邻至多两个 item 组成一组，`slot=j%2`。
 
@@ -153,11 +153,11 @@ K/V/P L1、S/DeltaO/PWork/alpha 改为双槽，S/P/O_READY 按槽编号，删除
 
 ## 流水示意与性能参考
 
-统一口径下，本版 Task Duration 为 31164.513672 μs，因果有效 Cube MFU 为 32.6677%；条件和完整对比见[总文档性能表](../../README.md#统一性能结果)。
+统一口径下，本版 Task Duration 为 31164.513672 μs，因果有效 Cube MFU 为 32.6677%；条件和完整对比见[总文档性能表](../../README.md#整体结果)。
 
 ![v04 分组双槽流水示意图](../../images/pipeline/falite_v04_pipeline.png)
 
-示意图展示连续两组的允许重叠及同 item 就绪依赖，省略反向复用和核内 Mutex；色块宽度不是实测耗时，L0 仍为单槽。
+示意图列连续两组的本核发射顺序，将 AIV 向右错开，展示 C1(1) 与 V1(0)、C2(0) 与 V1(1) 可重叠的关系。橙色为 C2/V2，粗边框跟踪 item 0；组号按 AIC 标注，两路 AIV 使用同样的 item 分组。横向位置不是实际时刻，也不是代码中的 epoch。同 item 的数据就绪、反向复用和核内 Mutex 连线未展开，L0 仍为单槽。
 
 ![v04 上板流水截图](../../images/pipe_trace/falite_v04_pipe.png)
 
@@ -174,4 +174,4 @@ PipeTimeline 截图使用 `B=N=1,S=2048`、单 Mix 核组，窗口为 `[88.796,1
 | [AIV 实现](kernel/falite_kernel_aiv.h) | `KernelProcessForAIV`、`VectorStage1/2`、`CopyPWorkToL1` 和最终输出 VF |
 | [同步封装](kernel/falite_kernel_common.h) | flag ID、Set/Wait 所在 Pipe、`GetKvTileCount` 与 `GetTileValidRows` |
 
-从仓库根目录可构建 `cmake --build build --target falite_v04 -j`，运行 `./build/Samples/2_Performance/flash_attn_lite_story/falite_v04 --core-num 1 --size 1 1 385` 阅读满组、单 item 尾组和非整块输出路径；完整配置与精度标准见[编译、运行与复现](../../README.md#编译运行与复现)。
+从仓库根目录可构建 `cmake --build build --target falite_v04 -j`，运行 `./build/Samples/2_Performance/flash_attn_lite_story/falite_v04 --core-num 1 --size 1 1 385` 阅读满组、单 item 尾组和非整块输出路径；完整配置与精度标准见[验证与复现](../../README.md#验证与复现)。

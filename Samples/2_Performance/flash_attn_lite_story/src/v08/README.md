@@ -4,7 +4,7 @@
 
 v08 将上一版的预发射深度从 2 增至 3，同时将 L0C 结果槽从 2 增至 3。调度仍是连续的 C1/C2 与 V1/V2 循环，Vector 仍使用分开的 Softmax、Cast/Pack 和普通输出乘加。本文记 `R=CV_PIPELINE_SLOT_NUM=3`，`L0C_QUEUE_DEPTH=3`。
 
-本版固定使用 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，计算同起点、等长度的方阵 causal Attention。`B/N/S` 为正整数，`S` 无需对齐，功能保证范围为 `B*N*S<=131072`。完整能力边界见[样例定位](../../README.md#falite-样例定位)，共同推导见[算法基础](../../README.md#算法基础)。
+本版固定使用 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，计算同起点、等长度的方阵 causal Attention。`B/N/S` 为正整数，`S` 无需对齐，功能保证范围为 `B*N*S<=131072`。完整能力边界见[样例定位](../../README.md#功能范围)，共同推导见[计算原理](../../README.md#计算原理)。
 
 S、P、DeltaO 全部在片上交接，没有 GM workspace。Host 提交 Kernel 后返回，调用方读取输出或释放输入输出前仍需同步 stream。
 
@@ -256,13 +256,13 @@ v07→v08 同时增加 R 与 L0C 深度，版本差异表示整套配置的变�
 
 ![v08 连续调度示意图](../../images/pipeline/falite_v08_pipeline.png)
 
-上半图展示较新 C1/V1 与较早 C2/V2 的允许重叠，包含填充和排空；下半图展示同 item 就绪依赖。epoch 是各核自己的循环编号，色块按源码和槽位约束定性排列。反向归还及核内 Mutex 未全部画出，图宽不能用于比较实际耗时。
+上部按本核 epoch 排列，每列先左后右：AIC 发射 C1(e)、C2(e−R+1)，AIV 发射 V1(e−1)、V2(e−R)，越界阶段留空。这样可看到 V1 比同 item 的 C1 晚一轮、V2 比 C2 晚一轮的调度错位；同号 epoch 不代表跨核同时执行。括线标出首个 C2 前的 R 次 C1，橙色表示 C2/V2，粗边框跟踪 item 0。空白不是实测等待。下部画同 item 的数据就绪依赖。UB 槽归还与核内 Mutex 未展开；FIXP 写入前仍须确认两路 AIV 均已归还目标槽。
 
 ![v08 上板流水截图](../../images/pipe_trace/falite_v08_pipe.png)
 
 截图来自 `B=1,N=1,S=2048` 的完整 PipeTimeline trace，展示一个 Mix 核组，窗口为 `[45.915,85.915] μs`。它呈现各 Pipe 的忙区与空隙，不能把某个空隙直接命名为一个 CrossCore Wait 的精确时长。
 
-按[总文档的统一性能口径](../../README.md#性能模型与验证口径)，本版 `B=1,N=1,S=131072`、32 个 AIC 的 Kernel 耗时为 15132.375000 μs，有效 Cube MFU 为 67.2779%。完整比较见[统一性能结果](../../README.md#统一性能结果)。
+按[总文档的统一性能口径](../../README.md#实验方法)，本版 `B=1,N=1,S=131072`、32 个 AIC 的 Kernel 耗时为 15132.375000 μs，有效 Cube MFU 为 67.2779%。完整比较见[整体结果](../../README.md#整体结果)。
 
 ## 代码阅读入口与运行
 
@@ -285,4 +285,4 @@ cmake --build build --target falite_v08 -j
 ./build/Samples/2_Performance/flash_attn_lite_story/falite_v08 --core-num 1 --size 1 1 385
 ```
 
-该用例包含短 task、填充与排空、跨阶段槽首次复用和一行尾块。精度标准及更多选项见[编译、运行与复现](../../README.md#编译运行与复现)。
+该用例包含短 task、填充与排空、跨阶段槽首次复用和一行尾块。精度标准及更多选项见[验证与复现](../../README.md#验证与复现)。

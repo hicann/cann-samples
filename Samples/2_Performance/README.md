@@ -39,7 +39,7 @@ Softmax 算子的 RegBase 递进优化专题，演示 reduce + element-wise 混�
 围绕 Ascend 950（`dav-3510`）实现的 BlockAttnRes 两阶段计算 Recipe，包含 Prepare、Update 和 E2E 三个可运行目标，展示历史残差在线 Softmax 状态生成、局部结果原地更新以及两阶段串联校验。
 
 ### [flash_attn_lite_story](./flash_attn_lite_story)
-【建设中】Flash Attention Lite 教学样例（Ascend 950），以 causal Attention 前向计算为载体，通过 v00～v12 展示从单 Mix 核组到多核任务分配、`1 AIC + 2 AIV` 数据交接、双缓冲、C1 预发射和 Vector 通路优化。
+Flash Attention Lite 教学样例（Ascend 950），以 causal Attention 前向计算为载体，通过 Ver.0~6 展示从单 Mix 核组到多核任务分配、`1 AIC + 2 AIV` 数据交接、双缓冲、C1 预发射和 Vector 通路优化。
 
 ### [kimi_delta_attn_lite_story](./kimi_delta_attn_lite_story)
 【建设中】Kimi Delta Attention Lite 教学样例（Ascend 950），以 Recurrent KDA 为正确性定义，在设备端实现 Chunk KDA，并通过 v0～v3 展示三 Kernel 基线、Kernel 融合、Cube 与 Vector 协作以及多状态链流水优化。

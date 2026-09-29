@@ -4,7 +4,7 @@
 
 v12 沿用 v11 的压缩 Vector 通路，只把 `R` 从 4 增至 5：首个 C2 前最多发射五个 C1，V/P/alpha 各保留五代；L0C 仍为四槽，按矩阵乘发射序号轮转。
 
-固定规格为 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，`B/N/S` 为正整数，`S` 无需对齐；功能保证范围为 `B*N*S<=131072`。Kernel 固定发射同起点、等长度的方阵 causal 模板。共同公式与完整能力边界见[总文档](../../README.md#falite-样例定位)。
+固定规格为 BF16 `Q/K/V/O [B,N,S,128]`、`Br=Bc=D=128`，`B/N/S` 为正整数，`S` 无需对齐；功能保证范围为 `B*N*S<=131072`。Kernel 固定发射同起点、等长度的方阵 causal 模板。共同公式与完整能力边界见[总文档](../../README.md#功能范围)。
 
 Host 计算 `tr=ceil(S/128)`、`numTasks=B*N*tr`。一个 Mix 组包含 1 AIC 和 2 AIV，按 `taskId=aicIdx+k*useAicNum` 遍历任务；`batchHeadIdx=taskId/tr`，Query tile 编号 `i=taskId%tr`，该 task 只处理 `j=0...i` 的 K/V item。`--core-num=0` 时采用设备核数，非零时采用合法请求值，再令 `useAicNum=min(numTasks,所选核数)`；请求超过设备核数时报错。
 
@@ -215,13 +215,13 @@ L0C 没有第五槽：一个 FP32 128×128 结果占 64 KiB，五槽需 320 KiB�
 
 ![v12 连续滚动流水示意图](../../images/pipeline/falite_v12_pipeline.png)
 
-示意图包含填充、滚动和排空，上半图展示允许的重叠，下半图展示同 item 的就绪依赖；省略反向归还和核内 Mutex。图中的 epoch 是本核循环编号，色块宽度不是实测耗时。
+上部按本核 epoch 排列，每列先左后右：AIC 发射 C1(e)、C2(e−R+1)，AIV 发射 V1(e−1)、V2(e−R)，越界阶段留空。这样可看到 V1 比同 item 的 C1 晚一轮、V2 比 C2 晚一轮的调度错位；同号 epoch 不代表跨核同时执行。括线标出首个 C2 前的 R 次 C1，橙色表示 C2/V2，粗边框跟踪 item 0。空白不是实测等待。中部画同 item 就绪依赖，底部用三个状态展示同一对 UB 槽的复用：item 0 被读完后，两路 AIV 各自归还槽 0，AIC 确认两路均可写，再用 FIXP 写入 item 2。`X` 代表 S 或 ΔO，两者分别由 V1、V2 消费，各有独立双槽；每路 AIV 只持有自己的半块数据。灰色槽 1 的状态省略，item 1、3 同样复用该槽。C1/C2 的 MMAD 可在目标 UB 槽归还前执行，但仍受 L0C 等资源约束。
 
 ![v12 上板流水截图](../../images/pipe_trace/falite_v12_pipe.png)
 
 PipeTimeline 截图使用 `B=1,N=1,S=2048`、单 Mix 组，窗口为 `[36.456,76.456]` μs。
 
-长序列统一口径下，本版 Task Duration 为 10578.221680 μs，因果有效 Cube MFU 为 96.2425%；条件及完整比较见[总文档性能表](../../README.md#统一性能结果)。
+长序列统一口径下，本版 Task Duration 为 10578.221680 μs，因果有效 Cube MFU 为 96.2425%；条件及完整比较见[总文档性能表](../../README.md#整体结果)。
 
 ## 代码阅读入口
 
@@ -237,4 +237,4 @@ PipeTimeline 截图使用 `B=1,N=1,S=2048`、单 Mix 组，窗口为 `[36.456,76
 | 同文件：`CopyPWorkToL1`、`FusedDivCastInplaceVF` | NZ 填充跳过、两路 P 地址、OAcc 原地压缩 |
 | [同步封装](kernel/falite_kernel_common.h) | HANDOFF/P_READY 编号、mode2 聚合与 mode4 双路封装 |
 
-从仓库根目录可构建 `cmake --build build --target falite_v12 -j`，运行 `./build/Samples/2_Performance/flash_attn_lite_story/falite_v12 --core-num 1 --size 1 1 641`，覆盖不足 R 的短 task、首次 V/P/alpha 回卷及序列尾块。完整配置与精度标准见[编译、运行与复现](../../README.md#编译运行与复现)。
+从仓库根目录可构建 `cmake --build build --target falite_v12 -j`，运行 `./build/Samples/2_Performance/flash_attn_lite_story/falite_v12 --core-num 1 --size 1 1 641`，覆盖不足 R 的短 task、首次 V/P/alpha 回卷及序列尾块。完整配置与精度标准见[验证与复现](../../README.md#验证与复现)。
