@@ -131,12 +131,14 @@ def evaluate_pass_criteria(sample: dict[str, Any], results: list[CommandResult])
 
 
 def select_samples(manifest: dict[str, Any], sample_ids: set[str] | None) -> list[dict[str, Any]]:
-    selected: list[dict[str, Any]] = []
-    for sample in manifest.get("samples", []):
-        if sample_ids and sample["id"] not in sample_ids:
-            continue
-        selected.append(sample)
-    return selected
+    samples = manifest.get("samples", [])
+    if sample_ids:
+        available_ids = {sample["id"] for sample in samples}
+        unknown_ids = sorted(sample_ids - available_ids)
+        if unknown_ids:
+            unknown = ", ".join(unknown_ids)
+            raise ValueError(f"unknown sample id(s): {unknown}")
+    return [sample for sample in samples if not sample_ids or sample["id"] in sample_ids]
 
 
 def run_sample(sample: dict[str, Any], artifact_root: Path | None) -> dict[str, Any]:
@@ -195,7 +197,11 @@ def main() -> int:
         artifact_root.mkdir(parents=True, exist_ok=True)
 
     sample_ids = set(args.sample) if args.sample else None
-    samples = select_samples(manifest, sample_ids)
+    try:
+        samples = select_samples(manifest, sample_ids)
+    except ValueError as exc:
+        print(f"Invalid sample selection: {exc}", file=sys.stderr)
+        return 2
     if not samples:
         print("No samples selected.", file=sys.stderr)
         return 2
