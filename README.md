@@ -20,7 +20,7 @@
   <a href="#环境部署">🛠️ 环境部署</a> ·
   <a href="#环境自检">✅ 环境自检</a> ·
   <a href="#快速入门">🚀 快速入门</a> ·
-  <a href="#样例列表">📦 样例列表</a> ·
+  <a href="#目录结构">📦 目录结构</a> ·
   <a href="https://gitcode.com/cann/cann-samples/issues">💬 社区讨论</a>
 </p>
 
