@@ -71,7 +71,7 @@ private:
     uint16_t validBitTail;
     uint16_t elementCountListTail[4];
     uint32_t listSortedNums[4];
-    LocalTensor<float> tmpUbInputs[4];
+    LocalTensor<float> *tmpUbInputs[4];
 
     // 核内流水同步 mutex（ISASI），取代原 SetFlag/WaitFlag
     uint8_t sortMte3Mte2Mutex_;   // MTE3 -> 下一轮 MTE2
@@ -88,7 +88,7 @@ __aicore__ inline void MoeMrgsortOut::ClearCache()
 
 __aicore__ inline void MoeMrgsortOut::SetInput(GlobalTensor<float> &gmInput, LocalTensor<float> &ubInput)
 {
-    this->gmInputs[listNum] = gmInput;
+    this->gmInputs[listNum].SetGlobalBuffer(gmInput.GetPhyAddr(0), gmInput.GetSize());
     this->ubInputs[listNum] = ubInput;
     this->listNum += 1;
 }
@@ -96,11 +96,11 @@ __aicore__ inline void MoeMrgsortOut::SetInput(GlobalTensor<float> &gmInput, Loc
 __aicore__ inline void MoeMrgsortOut::SetOutput(GlobalTensor<int32_t> &gmOutput1, GlobalTensor<int32_t> &gmOutput2,
                                                 LocalTensor<float> &ubOutput1, LocalTensor<float> &ubOutput2)
 {
-    this->gmOutput1 = gmOutput1;
+    this->gmOutput1.SetGlobalBuffer(gmOutput1.GetPhyAddr(0), gmOutput1.GetSize());
     this->ubOutput1 = ubOutput1;
     this->ubOutputInt1 = ubOutput1.ReinterpretCast<int32_t>();
 
-    this->gmOutput2 = gmOutput2;
+    this->gmOutput2.SetGlobalBuffer(gmOutput2.GetPhyAddr(0), gmOutput2.GetSize());
     this->ubOutput2 = ubOutput2.ReinterpretCast<uint32_t>();
     this->ubOutputInt2 = ubOutput2.ReinterpretCast<int32_t>();
 }
@@ -136,7 +136,7 @@ __aicore__ inline void MoeMrgsortOut::CopyIn()
         if (lengths[i] > 0) {
             DataCopy(this->ubInputs[i], this->gmInputs[i][offsets[i]],
                      Align(GetSortLen<float>(lengths[i]), sizeof(float)));
-            tmpUbInputs[j] = this->ubInputs[i];
+            tmpUbInputs[j] = &this->ubInputs[i];
             elementCountListTail[j] = lengths[i];
             this->remainListNum += 1;
             j++;
@@ -150,18 +150,19 @@ __aicore__ inline void MoeMrgsortOut::MrgsortCompute()
     AscendC::Mutex::Lock<PIPE_V>(sortMte2VMutex_); // V 等 MTE2 数据就绪（原 MTE2_V）
     AscendC::Mutex::Lock<PIPE_V>(sortVMte3Mutex_); // V 等上一轮 MTE3 写完输出（护 ubOutput 的 WAR）
     if (this->remainListNum == MERGE_LIST_TWO) {
-        MrgSortSrcList sortListTail = MrgSortSrcList(tmpUbInputs[0], tmpUbInputs[1], tmpUbInputs[0], tmpUbInputs[0]);
+        MrgSortSrcList sortListTail = MrgSortSrcList(*tmpUbInputs[0], *tmpUbInputs[1], *tmpUbInputs[0],
+                                                     *tmpUbInputs[0]);
         MrgSort<float, true>(this->tempBuffer, sortListTail, elementCountListTail, listSortedNums, validBitTail, 1);
     } else if (this->remainListNum == MERGE_LIST_THREE) {
         MrgSortSrcList sortListTail =
-            MrgSortSrcList(tmpUbInputs[0], tmpUbInputs[1], tmpUbInputs[MERGE_LIST_IDX_TWO], tmpUbInputs[0]);
+            MrgSortSrcList(*tmpUbInputs[0], *tmpUbInputs[1], *tmpUbInputs[MERGE_LIST_IDX_TWO], *tmpUbInputs[0]);
         MrgSort<float, true>(this->tempBuffer, sortListTail, elementCountListTail, listSortedNums, validBitTail, 1);
     } else if (this->remainListNum == MERGE_LIST_FOUR) {
-        MrgSortSrcList sortListTail = MrgSortSrcList(tmpUbInputs[0], tmpUbInputs[1], tmpUbInputs[MERGE_LIST_IDX_TWO],
-                                                     tmpUbInputs[MERGE_LIST_IDX_THREE]);
+        MrgSortSrcList sortListTail = MrgSortSrcList(*tmpUbInputs[0], *tmpUbInputs[1], *tmpUbInputs[MERGE_LIST_IDX_TWO],
+                                                     *tmpUbInputs[MERGE_LIST_IDX_THREE]);
         MrgSort<float, true>(this->tempBuffer, sortListTail, elementCountListTail, listSortedNums, validBitTail, 1);
     } else {
-        DataCopy(this->tempBuffer, this->tmpUbInputs[0],
+        DataCopy(this->tempBuffer, *this->tmpUbInputs[0],
                  Align(GetSortLen<float>(elementCountListTail[0]), sizeof(float)));
         listSortedNums[0] = elementCountListTail[0];
     }
