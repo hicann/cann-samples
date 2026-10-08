@@ -12,19 +12,35 @@
 
 #include "acl/acl.h"
 
-#include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <type_traits>
 #include <vector>
+
+inline void CheckAclStatus(aclError status, const char* operation)
+{
+    if (status != ACL_SUCCESS) {
+        std::fprintf(stderr, "[HOST][ERROR] %s failed with ACL error %d\n", operation, static_cast<int>(status));
+        std::abort();
+    }
+}
+
+inline void CheckHostCondition(bool condition, const char* message)
+{
+    if (!condition) {
+        std::fprintf(stderr, "[HOST][ERROR] %s\n", message);
+        std::abort();
+    }
+}
 
 class AclRuntimeGuard {
 public:
     explicit AclRuntimeGuard(int32_t deviceId = 0) : deviceId_(deviceId), stream_(nullptr)
     {
-        assert(aclInit(nullptr) == ACL_SUCCESS);
-        assert(aclrtSetDevice(deviceId_) == ACL_SUCCESS);
-        assert(aclrtCreateStream(&stream_) == ACL_SUCCESS);
+        CheckAclStatus(aclInit(nullptr), "aclInit");
+        CheckAclStatus(aclrtSetDevice(deviceId_), "aclrtSetDevice");
+        CheckAclStatus(aclrtCreateStream(&stream_), "aclrtCreateStream");
     }
 
     ~AclRuntimeGuard()
@@ -51,7 +67,7 @@ class DeviceBuffer {
 public:
     explicit DeviceBuffer(size_t elemNum) : ptr_(nullptr), elemNum_(elemNum), bytes_(elemNum * sizeof(T))
     {
-        assert(aclrtMalloc(reinterpret_cast<void**>(&ptr_), bytes_, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS);
+        CheckAclStatus(aclrtMalloc(reinterpret_cast<void**>(&ptr_), bytes_, ACL_MEM_MALLOC_HUGE_FIRST), "aclrtMalloc");
     }
 
     ~DeviceBuffer()
@@ -73,14 +89,16 @@ public:
 
     void CopyFromHost(const std::vector<T>& host)
     {
-        assert(host.size() == elemNum_);
-        assert(aclrtMemcpy(ptr_, bytes_, host.data(), bytes_, ACL_MEMCPY_HOST_TO_DEVICE) == ACL_SUCCESS);
+        CheckHostCondition(host.size() == elemNum_, "CopyFromHost requires the allocated element count");
+        CheckAclStatus(
+            aclrtMemcpy(ptr_, bytes_, host.data(), bytes_, ACL_MEMCPY_HOST_TO_DEVICE), "host-to-device aclrtMemcpy");
     }
 
     void CopyToHost(std::vector<T>& host) const
     {
-        assert(host.size() == elemNum_);
-        assert(aclrtMemcpy(host.data(), bytes_, ptr_, bytes_, ACL_MEMCPY_DEVICE_TO_HOST) == ACL_SUCCESS);
+        CheckHostCondition(host.size() == elemNum_, "CopyToHost requires the allocated element count");
+        CheckAclStatus(
+            aclrtMemcpy(host.data(), bytes_, ptr_, bytes_, ACL_MEMCPY_DEVICE_TO_HOST), "device-to-host aclrtMemcpy");
     }
 
 private:
@@ -136,8 +154,9 @@ int CountMismatches(const char* caseName, const std::vector<T>& actual, Expected
         T expected = expectedFn(static_cast<int>(i));
         if (!ValuesMatch(actual[i], expected, tolerance)) {
             if (failed < 4) {
-                printf("[HOST][%s][MISMATCH] idx=%zu expected=%.6f actual=%.6f\n",
-                    caseName, i, ToReportValue(expected), ToReportValue(actual[i]));
+                printf(
+                    "[HOST][%s][MISMATCH] idx=%zu expected=%.6f actual=%.6f\n", caseName, i, ToReportValue(expected),
+                    ToReportValue(actual[i]));
             }
             ++failed;
         }
@@ -146,12 +165,14 @@ int CountMismatches(const char* caseName, const std::vector<T>& actual, Expected
 }
 
 template <typename T, typename ExpectedFn>
-int CountSampleMismatches(const std::vector<T>& actual, const std::vector<int>& samples,
-    ExpectedFn expectedFn, double tolerance = 0.001)
+int CountSampleMismatches(
+    const std::vector<T>& actual, const std::vector<int>& samples, ExpectedFn expectedFn, double tolerance = 0.001)
 {
     int failed = 0;
     for (int idx : samples) {
-        assert(idx >= 0 && static_cast<size_t>(idx) < actual.size());
+        CheckHostCondition(
+            idx >= 0 && static_cast<size_t>(idx) < actual.size(),
+            "CountSampleMismatches requires in-range sample indices");
         T expected = expectedFn(idx);
         if (!ValuesMatch(actual[idx], expected, tolerance)) {
             ++failed;
@@ -161,16 +182,17 @@ int CountSampleMismatches(const std::vector<T>& actual, const std::vector<int>& 
 }
 
 template <typename T, typename ExpectedFn>
-void PrintCaseResult(const char* caseName, const char* status, int n, const std::vector<T>& actual,
-    ExpectedFn expectedFn, const std::vector<int>& samples, int mismatches = 0)
+void PrintCaseResult(
+    const char* caseName, const char* status, int n, const std::vector<T>& actual, ExpectedFn expectedFn,
+    const std::vector<int>& samples, int mismatches = 0)
 {
     printf("[HOST][%s] status=%s N=%d mismatches=%d samples={", caseName, status, n, mismatches);
     for (size_t i = 0; i < samples.size(); ++i) {
         int idx = samples[i];
-        assert(idx >= 0 && static_cast<size_t>(idx) < actual.size());
+        CheckHostCondition(
+            idx >= 0 && static_cast<size_t>(idx) < actual.size(), "PrintCaseResult requires in-range sample indices");
         T expected = expectedFn(idx);
         printf("%s%d:%.6f/%.6f", i == 0 ? "" : ",", idx, ToReportValue(actual[idx]), ToReportValue(expected));
     }
     printf("}\n");
 }
-
