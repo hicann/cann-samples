@@ -52,10 +52,10 @@ msprof是Ascend工具链中的性能分析工具，可以测量Kernel的执行�
 
 ```bash
 # 分析无VF融合版本性能
-msprof --application='./gelu_without_vf'
+msprof --application='./build_out/1_Features/hardware_features/vector_function/gelu_without_vf'
 
 # 分析VF优化版本性能
-msprof --application='./gelu_with_vf'
+msprof --application='./build_out/1_Features/hardware_features/vector_function/gelu_with_vf'
 ```
 
 #### 3.2 性能对比数据
