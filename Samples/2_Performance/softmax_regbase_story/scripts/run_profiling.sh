@@ -51,7 +51,12 @@ for entry in "${CASES[@]}"; do
     for r in $(seq 1 $ROUNDS); do
         prof_dir="${PROF_BASE}/${name}_r${r}"
         rm -rf "$prof_dir"
-        msprof --application="./${exe}" --output="${prof_dir}" > /dev/null 2>&1
+        if [[ "$exe" == /* ]]; then
+            application="$exe"
+        else
+            application="./${exe}"
+        fi
+        msprof --application="${application}" --output="${prof_dir}" > /dev/null 2>&1
 
         t=$(find "${prof_dir}" -name "task_time_*.csv" -exec grep "AI_VECTOR_CORE" {} \; | head -1 | cut -d',' -f6)
         if [ -z "$t" ]; then
