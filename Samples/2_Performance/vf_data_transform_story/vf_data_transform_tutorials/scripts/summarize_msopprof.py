@@ -7,10 +7,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
-"""Print per-stage msopprof Task Duration values and their median."""
+"""Print finite, non-negative per-stage msopprof durations and their median."""
 
 import argparse
 import csv
+import math
 import statistics
 from pathlib import Path
 
@@ -20,7 +21,10 @@ def parse_duration(csv_path: Path) -> float:
         rows = list(csv.DictReader(csv_file))
     if len(rows) != 1 or "Task Duration(us)" not in rows[0]:
         raise ValueError(f"unexpected OpBasicInfo schema: {csv_path}")
-    return float(rows[0]["Task Duration(us)"])
+    duration = float(rows[0]["Task Duration(us)"])
+    if not math.isfinite(duration) or duration < 0:
+        raise ValueError(f"invalid Task Duration(us) in {csv_path}: expected a finite, non-negative value")
+    return duration
 
 
 def main() -> int:

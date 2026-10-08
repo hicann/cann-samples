@@ -143,6 +143,16 @@ python3 Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorial
   /tmp/vf_data_transform_msopprof
 ```
 
+汇总脚本要求每份 `OpBasicInfo.csv` 仅有一条记录，且 `Task Duration(us)` 是有限的非负数。NaN、Inf、浮点解析溢出或负耗时会带文件路径报错并返回非零，避免将无效采集记录写成该阶段的性能结论；零耗时保留。有效记录的原始顺序、六位小数显示和中位数计算保持不变。
+
+可在不安装 CANN 的 Host Python 3.10+ 环境验证汇总脚本：
+
+```bash
+python3 Samples/2_Performance/vf_data_transform_story/vf_data_transform_tutorials/scripts/test_summarize_msopprof.py
+```
+
+该检查生成临时 CSV 并调用实际汇总 CLI，覆盖损坏数值、各 run 位置、正常中位数、BOM 和既有 schema/缺失数据错误；不执行 msopprof、npusim、CANN 构建或 NPU 测量，也不提供设备性能结论。
+
 npusim 的 VF 局部收益和真机端到端收益应分别解读；GM 搬运或 kernel 固定开销占主导时，两者不会按相同比例变化。
 
 ## 通用优化方法
