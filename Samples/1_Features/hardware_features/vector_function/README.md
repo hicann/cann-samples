@@ -203,7 +203,7 @@ __simd_vf__ inline void gelu_vf(__ubuf__ float *xAddr, __ubuf__ float *yAddr, ui
         AscendC::MicroAPI::Adds(cubeReg, cubeReg, 1.0f, pMask);
         AscendC::MicroAPI::Div(yReg, xReg, cubeReg, pMask);
         // 最终结果写回UB（一次）
-        // StoreDist::DIST_NORM_B32: 连续对齐搬出模式，B32表示32Byte对齐
+        // StoreDist::DIST_NORM_B32: 连续对齐搬出模式，B32表示32bit数据类型（此处为float），UB地址须32Byte对齐
         AscendC::MicroAPI::DataCopy<float, AscendC::MicroAPI::StoreDist::DIST_NORM_B32>(
             (__ubuf__ float *)yAddr + i * vectorLength, yReg, pMask);
     }
@@ -218,6 +218,8 @@ __aicore__ inline void gelu_compute(...)
     asc_vf_call<gelu_vf>(xAddr, yAddr, static_cast<uint32_t>(n), loopNum);
 }
 ```
+
+`DIST_NORM_B32` 的 `B32` 表示32bit元素类型；本例使用4Byte的 `float`。`DIST_NORM_B8`、`DIST_NORM_B16` 和 `DIST_NORM_B32` 的UB地址均要求32Byte对齐，不能把地址对齐要求当作元素位宽；改用其它数据类型时，应同时匹配对应的搬出分布模式。
 
 **优化亮点**：
 1. 消除中间结果UB写回（7次→0次）
