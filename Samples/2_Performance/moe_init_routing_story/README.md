@@ -887,6 +887,10 @@ python3 ./Samples/2_Performance/moe_init_routing_story/scripts/gen_data.py -n 20
 python3 ./Samples/2_Performance/moe_init_routing_story/scripts/verify_result.py
 ```
 
+校验按标杆文件检查全部元素：特征为 float32、行索引为 int32、专家计数为 int64，三个输出均要求长度与标杆一致、文件字节数按类型对齐且数值有限，并使用精确相等比较。
+匹配的空路由数据仍按标杆处理；缺失元素、非有限值或不完整元素会返回非零退出码，不将有效前缀或整数差值溢出视为成功。
+Host 回归可执行 `python3 -m unittest discover -s Samples/2_Performance/moe_init_routing_story/scripts -p test_verify_result.py -v`，无需 CANN SDK 或 NPU；该测试验证 Python 校验器，不代表样例 kernel 的硬件验证。
+
 执行结束后会在控制台输出精度比对结果，如：
 
 ```bash
