@@ -1,5 +1,5 @@
 ---
-name: cann-samples-find
+name: samples
 description: 当用户需要 Ascend C（AscendC）最佳实践、算子性能优化建议或参考示例时使用，提供适用于当前算子的优化方向及对应的 cann-samples 源码示例。
 ---
 
