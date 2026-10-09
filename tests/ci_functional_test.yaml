@@ -33,9 +33,9 @@ samples:
     pass_criteria:
       exit_code: 0
       stdout_contains:
-        - "matmul run successfully!"
+        - "[PASS] NPU results are consistent with CPU."
       stdout_not_contains:
-        - "matmul run failed!"
+        - "[ERROR] NPU results differ from CPU."
 
   - id: hif8_quantize
     setup:
