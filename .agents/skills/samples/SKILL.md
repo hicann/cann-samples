@@ -1,9 +1,9 @@
 ---
 name: samples
-description: 当用户需要 Ascend C（AscendC）最佳实践、算子性能优化建议或参考示例时使用，提供适用于当前算子的优化方向及对应的 cann-samples 源码示例。
+description: 查找样例、了解特性用法、获取算子优化建议
 ---
 
-# Ascend C 优化示例检索
+# cann-samples 样例检索
 
 ## 确认本地样例仓库
 
