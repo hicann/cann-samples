@@ -25,7 +25,12 @@ endif()
 set(SHMEM_PREPARE_COMMANDS)
 if(GIT_FOUND)
     list(APPEND SHMEM_PREPARE_COMMANDS
-        COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive third_party/shmem
+        COMMAND ${CMAKE_COMMAND}
+            "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+            "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
+            -DSUBMODULE_PATH=third_party/shmem
+            -DRECURSIVE=ON
+            -P "${CMAKE_CURRENT_LIST_DIR}/update_submodule.cmake"
     )
 endif()
 

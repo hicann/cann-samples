@@ -25,7 +25,11 @@ endif()
 set(TENSOR_API_PREPARE_COMMANDS)
 if(GIT_FOUND)
     list(APPEND TENSOR_API_PREPARE_COMMANDS
-        COMMAND ${GIT_EXECUTABLE} submodule update --init third_party/asc-devkit
+        COMMAND ${CMAKE_COMMAND}
+            "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+            "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
+            -DSUBMODULE_PATH=third_party/asc-devkit
+            -P "${CMAKE_CURRENT_LIST_DIR}/update_submodule.cmake"
     )
 endif()
 

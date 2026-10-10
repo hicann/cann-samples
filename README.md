@@ -132,6 +132,9 @@ toolkit 安装包文件名格式如下：
      git submodule update --init third_party/asc-devkit
      ```
      若未提前初始化子模块，CMake在构建依赖`cann_samples::tensor_api`的目标时也会尝试执行上述子模块更新命令。
+     Tensor API 与 SHMEM 的自动子模块更新通过 Git common directory 中的共同锁串行执行，
+     避免并行构建竞争写入 Git 配置；后续 SHMEM 编译仍可并行。锁等待最多 600 秒，Git 失败会中止对应依赖目标。
+     不依赖 CANN/NPU 的 Host 集成验证命令与范围见 [cmake/tests/README.md](cmake/tests/README.md)。
    - **Toolkit要求**：Tensor API相关样例会使用`third_party/asc-devkit`下的Tensor API头文件以及Toolkit中的Ascend C头文件，因此必须安装完整的CANN Toolkit并先执行`source ${install_path}/ascend-toolkit/set_env.sh`。当前请使用上表中已验证通过的版本构建；Toolkit版本过旧、仅安装Run包或环境变量未生效时，可能出现头文件缺失、符号未定义或编译选项报错。
    - **NPU架构**：`matmul_story`、`grouped_matmul_story`额外要求`NPU_ARCH=dav-3510`（Ascend 950）；使用`dav-2201`全量配置工程时，这两项样例会被跳过，属预期行为。
 
