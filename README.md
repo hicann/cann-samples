@@ -119,7 +119,7 @@ toolkit 安装包文件名格式如下：
    编译用到的依赖如下，请确保已安装并且满足版本要求：
 
    - cmake >= 3.16.0
-   - python >= 3.8.0
+   - python >= 3.10.0
    - zip
    - git
    - python三方库依赖：通过`pip3 install -r requirements.txt`安装
