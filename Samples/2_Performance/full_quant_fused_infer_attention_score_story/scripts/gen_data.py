@@ -18,6 +18,12 @@ import torch_npu
 import os
 
 
+def save_bf16_bin(tensor, file_path):
+    """Write BF16 storage bits, matching the sample kernel's output type."""
+    bf16_tensor = tensor.detach().cpu().to(torch.bfloat16)
+    bf16_tensor.view(torch.int16).numpy().tofile(file_path)
+
+
 
 def gen_golden_data_simple():
     b = 1
@@ -69,7 +75,7 @@ def gen_golden_data_simple():
                                                             query_dtype=torch_npu.float8_e4m3fn,
                                                             key_dtype=torch_npu.float8_e4m3fn,
                                                             value_dtype=torch_npu.float8_e4m3fn)
-    npu_out[0].cpu().numpy().tofile("./output/golden_out.bin")
+    save_bf16_bin(npu_out[0], "./output/golden_out.bin")
 
 
 if __name__ == "__main__":

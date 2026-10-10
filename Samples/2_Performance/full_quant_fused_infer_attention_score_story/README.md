@@ -68,7 +68,7 @@ per-block全量化主要计算流程：
 | queryDtype       | 用于在PTA接口中指定query的dtype | FP8 per-block全量化场景支持`FLOAT8_E4M3FN` | NA       | NA                          |
 | keyDtype       | 用于在PTA接口中指定key的dtype | FP8 per-block全量化场景支持`FLOAT8_E4M3FN` | NA         | NA                           |
 | valueDtype       | 用于在PTA接口中指定value的dtype | FP8 per-block全量化场景支持`FLOAT8_E4M3FN` | NA         | NA                          |
-| attentionOut       | 公式中的输出 | `FLOAT16` | ND         | `(B,N1,S1,D)`                          |
+| attentionOut       | 公式中的输出 | `BFLOAT16` | ND         | `(B,N1,S1,D)`                          |
 
 
 ### 算子实现流程说明
@@ -428,6 +428,24 @@ DN方案时，Bmm1的结果所在基本块转置，第i行是原版ND基本块�
 4. **参数调优**：调整tiling参数，优化缓冲区使用
 5. **效果验证**：对比优化前后的性能数据
 6. **迭代优化**：根据结果进一步调整优化策略
+
+## BF16 数据文件与 Host 回归
+
+此样例的 `fia_entry.h` 使用 `bfloat16_t` 输出。`gen_data.py` 的
+`save_bf16_bin` 将 PTA golden 转为 BF16 后按原始 16 位存储写入；
+`verify_result.py` 的 `load_bf16_bin` 按位重解释为 BF16，再做数值比较。
+不能把存储位模式当作 uint16 数值转换，否则相邻 BF16 位模式可能被整数舍入合并，产生假通过。
+
+从仓库根目录可运行不依赖 NPU 的格式回归（需 CPU PyTorch、NumPy、pytest）：
+
+```bash
+python3 -m pytest Samples/2_Performance/full_quant_fused_infer_attention_score_story/scripts/test_bf16_io.py -q
+```
+
+该回归已在 macOS Host、Python 3.12、CPU PyTorch 2.14.1、NumPy 2.3.5 验证，
+覆盖 golden 写入、读取位模式、1024/1032 的错误判定与正负零。它使用临时文件，
+仅替换未执行的 NPU 生成依赖；未验证 CANN/NPU 计算或样例编译。
+正式设备生成和执行仍需本样例声明的 dav-3510/CANN 环境。
 
 ## 总结
 

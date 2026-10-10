@@ -23,13 +23,13 @@ def load_bf16_bin(file_path):
     # 读取原始字节
     with open(file_path, 'rb') as f:
         data_bytes = f.read()
-    
+
     # 转为 uint16 数组（每个 bf16 占 2 字节）
-    uint16_array = np.frombuffer(data_bytes, dtype=np.uint16)
+    uint16_array = np.frombuffer(data_bytes, dtype=np.uint16).copy()
 
     # 转换为 torch.bfloat16
-    # 注意：numpy 不支持 bf16，所以要用 torch.from_numpy + to
-    bf16_tensor = torch.from_numpy(uint16_array).to(torch.bfloat16)
+    # 按原始位模式重解释，不能把 uint16 的整数值转换为浮点数。
+    bf16_tensor = torch.from_numpy(uint16_array).view(torch.bfloat16)
 
     return bf16_tensor
 
@@ -110,4 +110,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(e)
         sys.exit(1)
-        
+
