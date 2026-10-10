@@ -45,9 +45,14 @@ tilingEngine->GetTilingData(m, n, k, dataTypeSize, transA, transB, tilingData, f
 2. **DPSK 模式**：
    - M 和 N 需为 256 的倍数
    - K 维度需足够大（建议 K ≥ 8192）
-   - M 和 N 的块数乘积满足特定的负载均衡条件
+   - M 和 N 的总切分块数大于 AIC 核数，尾轮块数不超过 AIC 核数的一半
 
-如果输入参数不满足上述条件，直接运行 `matmul_a32w32_streamk` 将会报错退出。建议使用算法推荐脚本自动选择适合当前形状的算法。
+M 和 N 切分块数的计算：
+$$
+totalNum = \frac{N}{baseN} \times \frac{M}{baseM}
+$$
+
+如果输入参数不满足上述条件，直接运行 `matmul_a16w16_streamk` 将会报错退出，详细条件判断可以参考[具体tiling计算](../../include/tiling/matmul_tiling_streamk.h)。建议使用算法推荐脚本自动选择适合当前形状的算法。
 
 ## 支持架构
 
