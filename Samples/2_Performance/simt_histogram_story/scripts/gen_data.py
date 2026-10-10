@@ -45,9 +45,7 @@ def compute_histogram(x, min_val, max_val, bins):
     min_val = np.float32(min_val)
     max_val = np.float32(max_val)
 
-    if min_val == max_val:
-        min_val = np.float32(min_val - np.float32(1.0))
-        max_val = np.float32(max_val + np.float32(1.0))
+    is_constant_range = min_val == max_val
 
     min_max_range = np.float32(max_val - min_val)
     bins_f32 = np.float32(bins)
@@ -55,7 +53,10 @@ def compute_histogram(x, min_val, max_val, bins):
     for val in x.flat:
         v = np.float32(val)
         if v >= min_val and v <= max_val:
-            idx = int(np.float32(np.float32(v - min_val) * bins_f32) / min_max_range)
+            if is_constant_range:
+                idx = bins // 2
+            else:
+                idx = int(np.float32(np.float32(v - min_val) * bins_f32) / min_max_range)
             if idx == bins:
                 idx = bins - 1
             golden[idx] += 1

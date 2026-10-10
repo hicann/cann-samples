@@ -44,7 +44,10 @@ simt_histogram_story/
 y = [0] * bins
 for each val in x:
     if min_val <= val <= max_val:
-        idx = floor((val - min_val) * bins / (max_val - min_val))
+        if min_val == max_val:
+            idx = bins // 2
+        else:
+            idx = floor((val - min_val) * bins / (max_val - min_val))
         if idx == bins: idx = bins - 1
         y[idx] += 1
 ```
