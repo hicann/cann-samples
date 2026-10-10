@@ -65,27 +65,26 @@ struct HostMemGuard {
  * 2. Host-Device 连接类型为 PCIe（ACL_HOST_DEVICE_CONNECT_TYPE_PCIE）
  * 3. Host地址到Device地址是否映射成功
  */
-bool IsPcieThrough(uint32_t deviceId, void *deviceAddr)
+aclError IsPcieThrough(uint32_t deviceId, void* deviceAddr, bool& isPcieThrough)
 {
-    bool isPcieThrough = false;
-    const char *pcieThroughEnv = std::getenv("OP_PCIE_THROUGH_ACCESS_HOST_MEM_CHECK_ENABLE");
+    isPcieThrough = false;
+    const char* pcieThroughEnv = std::getenv("OP_PCIE_THROUGH_ACCESS_HOST_MEM_CHECK_ENABLE");
     int64_t pcieThroughValue = (pcieThroughEnv != nullptr && std::string(pcieThroughEnv) == "1") ? 1 : 0;
     if (!pcieThroughValue) {
-        return false;
+        return ACL_SUCCESS;
     }
 
     int64_t hdConnectType = -1;
     aclError ret = aclrtGetDeviceInfo(deviceId, ACL_DEV_ATTR_HD_CONNECT_TYPE, &hdConnectType);
     if (ret != ACL_SUCCESS) {
-        std::fprintf(stderr, "aclrtGetDeviceInfo failed, ret=%d\n", ret);
-        return false;
+        return ret;
     }
 
     if (hdConnectType == ACL_HOST_DEVICE_CONNECT_TYPE_PCIE) {
         isPcieThrough = deviceAddr != nullptr;
     }
 
-    return isPcieThrough;
+    return ACL_SUCCESS;
 }
 
 void PrintResult(const float *hostPtr, int64_t count)
@@ -231,6 +230,68 @@ int32_t VerifyAndPrint(HostMemGuard &xMem, HostMemGuard &idxMem, HostMemGuard &o
     return ok ? 0 : 1;
 }
 
+void CleanupHostMemory(HostMemGuard &xMem, HostMemGuard &idxMem, HostMemGuard &outMem)
+{
+    if (outMem.registered) { aclrtHostUnregister(outMem.ptr); }
+    if (idxMem.registered) { aclrtHostUnregister(idxMem.ptr); }
+    if (xMem.registered) { aclrtHostUnregister(xMem.ptr); }
+    if (outMem.ptr != nullptr) { aclrtFreeHost(outMem.ptr); }
+    if (idxMem.ptr != nullptr) { aclrtFreeHost(idxMem.ptr); }
+    if (xMem.ptr != nullptr) { aclrtFreeHost(xMem.ptr); }
+}
+
+int32_t RunRegisteredSample(int32_t deviceId, HostMemGuard &xMem, HostMemGuard &idxMem,
+                            HostMemGuard &outMem, aclrtStream stream, bool &cleanupHostMemory)
+{
+    bool isPcieThrough = false;
+    aclError deviceInfoStatus = IsPcieThrough(static_cast<uint32_t>(deviceId), xMem.devPtr, isPcieThrough);
+    if (deviceInfoStatus != ACL_SUCCESS) {
+        std::fprintf(stderr, "[PCIeThrough] Device connection query failed, ret=%d\n", deviceInfoStatus);
+        cleanupHostMemory = true;
+        return 1;
+    }
+    if (!isPcieThrough) {
+        std::printf("[PCIeThrough] Non-PCIe scenario\n");
+        return 0;
+    }
+
+    cleanupHostMemory = true;
+    int32_t ret = ExecuteGatherV2(xMem, idxMem, outMem, stream);
+    return ret == 0 ? VerifyAndPrint(xMem, idxMem, outMem) : ret;
+}
+
+int32_t PrepareAndRunSample(int32_t deviceId, HostMemGuard &xMem, HostMemGuard &idxMem,
+                            HostMemGuard &outMem, aclrtStream stream, bool &cleanupHostMemory)
+{
+    if (PrepareHostMemory(xMem, idxMem, outMem) != 0) {
+        return 1;
+    }
+    if (RegisterHostMemory(xMem, idxMem, outMem) != 0) {
+        return 1;
+    }
+    return RunRegisteredSample(deviceId, xMem, idxMem, outMem, stream, cleanupHostMemory);
+}
+
+int32_t RunSample(int32_t deviceId)
+{
+    aclrtStream stream = nullptr;
+    CHECK_ACL(aclrtCreateStream(&stream));
+
+    HostMemGuard xMem;
+    HostMemGuard idxMem;
+    HostMemGuard outMem;
+    bool cleanupHostMemory = false;
+    int32_t ret = PrepareAndRunSample(deviceId, xMem, idxMem, outMem, stream, cleanupHostMemory);
+
+    aclrtDestroyStream(stream);
+    if (cleanupHostMemory) {
+        CleanupHostMemory(xMem, idxMem, outMem);
+    }
+    aclrtResetDevice(deviceId);
+    aclFinalize();
+    return ret;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -242,51 +303,5 @@ int main(int argc, char **argv)
     int32_t deviceId = 0;
     CHECK_ACL(aclrtSetDevice(deviceId));
     std::printf("[Init] ACL initialized, device=%d\n", deviceId);
-
-    aclrtStream stream = nullptr;
-    CHECK_ACL(aclrtCreateStream(&stream));
-
-    HostMemGuard xMem;
-    HostMemGuard idxMem;
-    HostMemGuard outMem;
-
-    if (PrepareHostMemory(xMem, idxMem, outMem) != 0) {
-        aclrtDestroyStream(stream);
-        aclrtResetDevice(deviceId);
-        aclFinalize();
-        return 1;
-    }
-
-    if (RegisterHostMemory(xMem, idxMem, outMem) != 0) {
-        aclrtDestroyStream(stream);
-        aclrtResetDevice(deviceId);
-        aclFinalize();
-        return 1;
-    }
-
-    if (!IsPcieThrough(static_cast<uint32_t>(deviceId), xMem.devPtr)) {
-        std::printf("[PCIeThrough] Non-PCIe scenario\n");
-        aclrtDestroyStream(stream);
-        aclrtResetDevice(deviceId);
-        aclFinalize();
-        return 0;
-    }
-
-    int32_t ret = ExecuteGatherV2(xMem, idxMem, outMem, stream);
-
-    if (ret == 0) {
-        ret = VerifyAndPrint(xMem, idxMem, outMem);
-    }
-
-    aclrtDestroyStream(stream);
-    if (outMem.registered) { aclrtHostUnregister(outMem.ptr); }
-    if (idxMem.registered) { aclrtHostUnregister(idxMem.ptr); }
-    if (xMem.registered) { aclrtHostUnregister(xMem.ptr); }
-    if (outMem.ptr != nullptr) { aclrtFreeHost(outMem.ptr); }
-    if (idxMem.ptr != nullptr) { aclrtFreeHost(idxMem.ptr); }
-    if (xMem.ptr != nullptr) { aclrtFreeHost(xMem.ptr); }
-    aclrtResetDevice(deviceId);
-    aclFinalize();
-
-    return ret;
+    return RunSample(deviceId);
 }
