@@ -90,9 +90,18 @@ inline int InitAcl(int32_t deviceId, aclrtStream* stream)
     auto ret = aclInit(nullptr);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclInit failed. ERROR: %d\n", ret); return ret);
     ret = aclrtSetDevice(deviceId);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclrtSetDevice failed. ERROR: %d\n", ret); return ret);
+    if (ret != ACL_SUCCESS) {
+        LOG_PRINT("aclrtSetDevice failed. ERROR: %d\n", ret);
+        aclFinalize();
+        return ret;
+    }
     ret = aclrtCreateStream(stream);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclrtCreateStream failed. ERROR: %d\n", ret); return ret);
+    if (ret != ACL_SUCCESS) {
+        LOG_PRINT("aclrtCreateStream failed. ERROR: %d\n", ret);
+        aclrtResetDevice(deviceId);
+        aclFinalize();
+        return ret;
+    }
     return ACL_SUCCESS;
 }
 
@@ -150,22 +159,48 @@ inline int CompareFloat(
     return errorCount;
 }
 
-template <int kStep>
-inline int RunSample(void (*launchKernel)(uint32_t, aclrtStream, uint8_t*, uint8_t*), const std::string& sampleName)
-{
-    const char* devEnv = std::getenv("SAMPLE_DEVICE_ID");
-    int32_t deviceId = devEnv ? std::atoi(devEnv) : 7;
+struct SampleRuntime {
+    int32_t deviceId;
     aclrtStream stream = nullptr;
-    auto ret = InitAcl(deviceId, &stream);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("Init acl failed. ERROR: %d\n", ret); return ret);
+    uint8_t* dIn = nullptr;
+    uint8_t* dOut = nullptr;
+    bool streamSynchronized = false;
+    bool streamSyncFailed = false;
 
-    std::string exeDir = GetExeDir();
-    ret = GenerateData(exeDir);
-    CHECK_RET(ret == 0, return ret);
+    void Cleanup()
+    {
+        if (stream != nullptr && !streamSynchronized && !streamSyncFailed) {
+            streamSynchronized = aclrtSynchronizeStream(stream) == ACL_SUCCESS;
+            streamSyncFailed = !streamSynchronized;
+        }
+        if (stream != nullptr && streamSyncFailed) {
+            // A failed stream sync leaves the stream unsafe to destroy directly.
+            aclrtResetDevice(deviceId);
+            stream = nullptr;
+            dIn = nullptr;
+            dOut = nullptr;
+            aclFinalize();
+            return;
+        }
+        if (dIn != nullptr) {
+            aclrtFree(dIn);
+            dIn = nullptr;
+        }
+        if (dOut != nullptr) {
+            aclrtFree(dOut);
+            dOut = nullptr;
+        }
+        if (stream != nullptr) {
+            aclrtDestroyStream(stream);
+            stream = nullptr;
+        }
+        aclrtResetDevice(deviceId);
+        aclFinalize();
+    }
+};
 
-    size_t bytes = TOTAL_M * TOTAL_N * sizeof(float);
-    std::vector<float> hostIn;
-    std::vector<float> golden;
+inline int ReadSampleData(const std::string& exeDir, std::vector<float>& hostIn, std::vector<float>& golden)
+{
     try {
         ReadBin(exeDir + "/input/input_x.bin", hostIn);
         ReadBin(exeDir + "/output/golden.bin", golden);
@@ -173,37 +208,75 @@ inline int RunSample(void (*launchKernel)(uint32_t, aclrtStream, uint8_t*, uint8
         std::cerr << "Read input/golden failed: " << e.what() << std::endl;
         return 1;
     }
+    return 0;
+}
 
-    uint8_t *dIn = nullptr, *dOut = nullptr;
-    ret = aclrtMalloc(reinterpret_cast<void**>(&dIn), bytes, ACL_MEM_MALLOC_HUGE_FIRST);
-    CHECK_RET(ret == ACL_SUCCESS, return ret);
-    ret = aclrtMalloc(reinterpret_cast<void**>(&dOut), bytes, ACL_MEM_MALLOC_HUGE_FIRST);
-    CHECK_RET(ret == ACL_SUCCESS, aclrtFree(dIn); return ret);
-
-    ret = aclrtMemcpy(dIn, bytes, hostIn.data(), bytes, ACL_MEMCPY_HOST_TO_DEVICE);
-    CHECK_RET(ret == ACL_SUCCESS, aclrtFree(dIn); aclrtFree(dOut); return ret);
-
-    launchKernel(BLOCKS, stream, dIn, dOut);
-    ret = aclrtSynchronizeStream(stream);
+inline int AllocateSampleBuffers(SampleRuntime& runtime, size_t bytes, const std::vector<float>& hostIn)
+{
+    auto ret = aclrtMalloc(reinterpret_cast<void**>(&runtime.dIn), bytes, ACL_MEM_MALLOC_HUGE_FIRST);
     if (ret != ACL_SUCCESS) {
-        LOG_PRINT("aclrtSynchronizeStream failed. ERROR: %d\n", ret);
-        aclrtFree(dIn); aclrtFree(dOut);
         return ret;
     }
+    ret = aclrtMalloc(reinterpret_cast<void**>(&runtime.dOut), bytes, ACL_MEM_MALLOC_HUGE_FIRST);
+    if (ret != ACL_SUCCESS) {
+        return ret;
+    }
+    return aclrtMemcpy(runtime.dIn, bytes, hostIn.data(), bytes, ACL_MEMCPY_HOST_TO_DEVICE);
+}
 
+inline int LaunchSample(void (*launchKernel)(uint32_t, aclrtStream, uint8_t*, uint8_t*), SampleRuntime& runtime,
+    uint32_t blocks, size_t bytes, std::vector<float>& hostOut)
+{
+    launchKernel(blocks, runtime.stream, runtime.dIn, runtime.dOut);
+    auto ret = aclrtSynchronizeStream(runtime.stream);
+    if (ret != ACL_SUCCESS) {
+        LOG_PRINT("aclrtSynchronizeStream failed. ERROR: %d\n", ret);
+        runtime.streamSyncFailed = true;
+        return ret;
+    }
+    runtime.streamSynchronized = true;
+    return aclrtMemcpy(hostOut.data(), bytes, runtime.dOut, bytes, ACL_MEMCPY_DEVICE_TO_HOST);
+}
+
+inline int ExecuteSample(int step, void (*launchKernel)(uint32_t, aclrtStream, uint8_t*, uint8_t*),
+    const std::string& sampleName, SampleRuntime& runtime)
+{
+    const auto exeDir = GetExeDir();
+    auto ret = GenerateData(exeDir);
+    if (ret != 0) {
+        return ret;
+    }
+    std::vector<float> hostIn;
+    std::vector<float> golden;
+    ret = ReadSampleData(exeDir, hostIn, golden);
+    if (ret != 0) {
+        return ret;
+    }
+    const size_t bytes = TOTAL_M * TOTAL_N * sizeof(float);
+    ret = AllocateSampleBuffers(runtime, bytes, hostIn);
+    if (ret != ACL_SUCCESS) {
+        return ret;
+    }
     std::vector<float> hostOut(TOTAL_M * TOTAL_N);
-    ret = aclrtMemcpy(hostOut.data(), bytes, dOut, bytes, ACL_MEMCPY_DEVICE_TO_HOST);
-    CHECK_RET(ret == ACL_SUCCESS, aclrtFree(dIn); aclrtFree(dOut); return ret);
-
+    ret = LaunchSample(launchKernel, runtime, BLOCKS, bytes, hostOut);
+    if (ret != ACL_SUCCESS) {
+        return ret;
+    }
     int errors = CompareFloat("output", hostOut.data(), golden, COMPARE_TOL);
-    std::cout << "[" << sampleName << "] step " << kStep << (errors == 0 ? " PASSED" : " FAILED") << std::endl;
+    std::cout << "[" << sampleName << "] step " << step << (errors == 0 ? " PASSED" : " FAILED") << std::endl;
+    return errors == 0 ? ACL_SUCCESS : 1;
+}
 
-    aclrtFree(dIn);
-    aclrtFree(dOut);
-    aclrtDestroyStream(stream);
-    aclrtResetDevice(deviceId);
-    aclFinalize();
-    return errors == 0 ? 0 : 1;
+template <int kStep>
+inline int RunSample(void (*launchKernel)(uint32_t, aclrtStream, uint8_t*, uint8_t*), const std::string& sampleName)
+{
+    const char* devEnv = std::getenv("SAMPLE_DEVICE_ID");
+    SampleRuntime runtime{devEnv ? std::atoi(devEnv) : 7};
+    auto ret = InitAcl(runtime.deviceId, &runtime.stream);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("Init acl failed. ERROR: %d\n", ret); return ret);
+    ret = ExecuteSample(kStep, launchKernel, sampleName, runtime);
+    runtime.Cleanup();
+    return ret;
 }
 
 } // namespace SoftmaxRegbaseSample
