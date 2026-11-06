@@ -21,7 +21,7 @@ cd "${PROJECT_ROOT}"
 MANIFEST_PATH="${MANIFEST_PATH:-tests/ci_functional_test.yaml}"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-test_artifacts/ci_functional}"
 
-bash .ci/build.sh
+bash .ci/build.sh "${NPU_ARCH:-dav-3510}"
 
 python3 .ci/run_ci_functional.py \
     --manifest "${MANIFEST_PATH}" \

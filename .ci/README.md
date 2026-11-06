@@ -41,6 +41,12 @@ bash .ci/run_ci_functional.sh
 bash .ci/run_ci_functional.sh --sample vector_add
 ```
 
+在支持 `dav-2201` 的环境中，可通过环境变量选择构建架构（默认 `dav-3510`）：
+
+```bash
+NPU_ARCH=dav-2201 bash .ci/run_ci_functional.sh --sample vector_add
+```
+
 覆盖清单路径或产物目录：
 
 ```bash
