@@ -194,17 +194,38 @@ def check_python_deps():
 def check_repo_deps():
     _logger.info(f"\n{INFO} Checking repository dependencies ...")
     repo_root = Path(__file__).resolve().parent.parent
-    third_party = repo_root / "third_party"
+    modules_file = repo_root / ".gitmodules"
+    git_path = _try_find_command("git")
+    if git_path is None:
+        _logger.info(f"  {FAIL} `git` not found in PATH")
+        return False
+    try:
+        result = subprocess.run(
+            [str(Path(git_path).resolve()), "config", "--file", str(modules_file),
+             "--get-regexp", r"^submodule\..*\.path$"],
+            capture_output=True, text=True, encoding="utf-8", timeout=5,
+        )
+    except (OSError, UnicodeError, subprocess.TimeoutExpired) as error:
+        _logger.info(f"  {FAIL} Cannot read submodule paths: {error}")
+        return False
+    if result.returncode != 0:
+        _logger.info(f"  {FAIL} Cannot read submodule paths from {modules_file}")
+        return False
+
     has_missing = False
-    if third_party.is_dir():
-        for entry in sorted(third_party.iterdir()):
-            if not entry.is_dir():
-                continue
-            if any(entry.iterdir()):
-                _logger.info(f"  {PASS} third_party/{entry.name}/ is populated")
-            else:
-                has_missing = True
-                _logger.info(f"  {FAIL} third_party/{entry.name}/ exists but is empty")
+    for line in result.stdout.splitlines():
+        fields = line.split(None, 1)
+        if len(fields) != 2 or not fields[1].strip():
+            has_missing = True
+            _logger.info(f"  {FAIL} Malformed submodule path entry: {line!r}")
+            continue
+        relative_path = fields[1]
+        entry = repo_root / relative_path
+        if entry.is_dir() and any(child.name != ".git" for child in entry.iterdir()):
+            _logger.info(f"  {PASS} {relative_path}/ is populated")
+        else:
+            has_missing = True
+            _logger.info(f"  {FAIL} {relative_path}/ is missing or empty")
     if has_missing:
         _logger.info("     -> Please run: git submodule update --init --recursive")
         return False
