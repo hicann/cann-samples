@@ -20,13 +20,13 @@
 #include <iostream>
 #include "acl/acl.h"
 
-#define CHECK_ACL(call)                                                                              \
-    do {                                                                                             \
-        aclError err = (call);                                                                       \
-        if (err != ACL_SUCCESS) {                                                                    \
+#define CHECK_ACL(call) \
+    do { \
+        aclError err = (call); \
+        if (err != ACL_SUCCESS) { \
             std::cerr << "ACL error: " << err << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
-            return 1;                                                                                \
-        }                                                                                            \
+            return 1; \
+        } \
     } while (0)
 
 constexpr int64_t DATA_BYTES = 56LL * 64 * 1024 * 1024;
@@ -48,5 +48,13 @@ constexpr int64_t DEFAULT_QUE_BYTES_LIST[] = {
     1024, 2 * 1024, 4 * 1024, 8 * 1024, 16 * 1024,
 };
 // clang-format on
+
+inline bool ExceedsUbBudget(int64_t queBytes, int32_t bufNum, uint64_t queueNum, uint64_t ubSize)
+{
+    if (queBytes <= 0 || bufNum <= 0 || queueNum == 0) {
+        return true;
+    }
+    return static_cast<uint64_t>(queBytes) > ubSize / static_cast<uint64_t>(bufNum) / queueNum;
+}
 
 #endif // BW_COMMON_H
