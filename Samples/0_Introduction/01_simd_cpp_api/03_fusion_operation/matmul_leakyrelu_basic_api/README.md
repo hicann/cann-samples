@@ -556,7 +556,7 @@ msOpProf工具是单算子性能分析工具。包含msopprof和msopprof simulat
     ```
 
     - 性能数据说明  
-      命令完成后，会在默认目录下生成以“OPPROF_{timestamp}_XXX”命名的文件夹,性能数据文件夹结构示例如下：
+      命令完成后，会在默认目录下生成以“OPPROF_{timestamp}_XXX”命名的文件夹，性能数据文件夹结构示例如下：
 
       ```bash
       ├──dump                       # 原始的性能数据，用户无需关注

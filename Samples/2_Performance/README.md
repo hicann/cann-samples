@@ -1,6 +1,6 @@
 # Performance
 
-最佳实践, 从Baseline到极致性能的调优实践。
+最佳实践，从Baseline到极致性能的调优实践。
 
 ### [grouped_matmul_story](./grouped_matmul_story)
 分组矩阵乘性能优化专题，覆盖 grouped matmul 的 tiling、数据搬运与 kernel 实现，并提供 MXFP4/MXFP8 可运行示例及数据校验流程。
