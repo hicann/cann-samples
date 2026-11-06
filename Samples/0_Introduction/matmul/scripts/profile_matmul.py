@@ -10,6 +10,7 @@
 
 import os
 import csv
+import math
 import shutil
 import subprocess
 import sys
@@ -69,7 +70,11 @@ class CandidateResult:
 
     @property
     def succeeded(self) -> bool:
-        return self.return_code == 0 and self.kernel_time_us is not None and self.profile_metrics is not None
+        return (
+            self.return_code == 0
+            and self.kernel_time_us is not None
+            and self.profile_metrics is not None
+        )
 
 
 def print_usage(program_name: str) -> None:
@@ -200,7 +205,9 @@ def resolve_latest_prof_directory(msprof_output_dir: Path) -> Path:
 def resolve_op_summary_csv(prof_dir: Path) -> Path:
     profiler_output_dir = prof_dir / "mindstudio_profiler_output"
     if not profiler_output_dir.is_dir():
-        raise FileNotFoundError(f"mindstudio_profiler_output was not found in {prof_dir}")
+        raise FileNotFoundError(
+            f"mindstudio_profiler_output was not found in {prof_dir}"
+        )
 
     csv_files = sorted(
         profiler_output_dir.glob(MSPROF_OP_SUMMARY_GLOB),
@@ -208,11 +215,15 @@ def resolve_op_summary_csv(prof_dir: Path) -> Path:
         reverse=True,
     )
     if not csv_files:
-        raise FileNotFoundError(f"No {MSPROF_OP_SUMMARY_GLOB} file was found in {profiler_output_dir}")
+        raise FileNotFoundError(
+            f"No {MSPROF_OP_SUMMARY_GLOB} file was found in {profiler_output_dir}"
+        )
     return csv_files[0]
 
 
-def parse_metric_value(raw_value: Optional[str], column_name: str, csv_path: Path) -> float:
+def parse_metric_value(
+    raw_value: Optional[str], column_name: str, csv_path: Path
+) -> float:
     if raw_value is None:
         raise ValueError(f"{column_name} column was not found in {csv_path}")
 
@@ -224,9 +235,17 @@ def parse_metric_value(raw_value: Optional[str], column_name: str, csv_path: Pat
         raise ValueError(f"{column_name} is empty in {csv_path}")
 
     try:
-        return float(normalized_value)
+        value = float(normalized_value)
     except ValueError as error:
-        raise ValueError(f"Failed to parse {column_name} value '{raw_value}' from {csv_path}") from error
+        raise ValueError(
+            f"Failed to parse {column_name} value '{raw_value}' from {csv_path}"
+        ) from error
+
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(
+            f"Invalid {column_name} in {csv_path}: expected a finite, non-negative value"
+        )
+    return value
 
 
 def parse_profile_metrics_from_csv(csv_path: Path) -> ProfileMetrics:
@@ -241,25 +260,42 @@ def parse_profile_metrics_from_csv(csv_path: Path) -> ProfileMetrics:
         raise ValueError(f"CSV data row is missing in {csv_path}")
 
     metric_values = {
-        field_name: parse_metric_value(first_row.get(column_name), column_name, csv_path)
+        field_name: parse_metric_value(
+            first_row.get(column_name), column_name, csv_path
+        )
         for field_name, _display_name, column_name in PROFILE_METRIC_SPECS
     }
     metric_values["icache_miss_rate"] *= 100.0
+    if not math.isfinite(metric_values["icache_miss_rate"]):
+        raise ValueError(
+            f"Invalid aic_icache_miss_rate in {csv_path}: expected a finite, non-negative percentage"
+        )
     return ProfileMetrics(**metric_values)
 
 
-def resolve_candidate_msprof_output_dir(script_dir: Path, executable_path: Path) -> Path:
+def resolve_candidate_msprof_output_dir(
+    script_dir: Path, executable_path: Path
+) -> Path:
     return script_dir / MSPROF_OUTPUT_DIR_NAME / executable_path.stem
 
 
-def run_candidate_with_msprof(script_dir: Path, executable_path: Path, m: int, k: int, n: int) -> ProfileMetrics:
+def run_candidate_with_msprof(
+    script_dir: Path, executable_path: Path, m: int, k: int, n: int
+) -> ProfileMetrics:
     msprof_output_dir = resolve_candidate_msprof_output_dir(script_dir, executable_path)
     cleanup_msprof_output_dir(msprof_output_dir)
     msprof_output_dir.parent.mkdir(parents=True, exist_ok=True)
     application = f"./{executable_path.name}"
     with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as log_file:
         result = subprocess.run(
-            ["msprof", f"--output={msprof_output_dir}", f"{application}", f"{m}", f"{k}", f"{n}"],
+            [
+                "msprof",
+                f"--output={msprof_output_dir}",
+                f"{application}",
+                f"{m}",
+                f"{k}",
+                f"{n}",
+            ],
             cwd=script_dir,
             text=True,
             stdout=log_file,
@@ -267,23 +303,33 @@ def run_candidate_with_msprof(script_dir: Path, executable_path: Path, m: int, k
             check=False,
         )
         if result.returncode != 0:
-            raise RuntimeError(format_command_output("[msprof]", read_command_log(log_file)))
+            raise RuntimeError(
+                format_command_output("[msprof]", read_command_log(log_file))
+            )
 
         try:
             prof_dir = resolve_latest_prof_directory(msprof_output_dir)
             op_summary_csv = resolve_op_summary_csv(prof_dir)
             return parse_profile_metrics_from_csv(op_summary_csv)
         except Exception as error:
-            command_output = format_command_output("[msprof]", read_command_log(log_file))
-            raise RuntimeError(f"{command_output}\n[msprof parse error]\n{error}") from error
+            command_output = format_command_output(
+                "[msprof]", read_command_log(log_file)
+            )
+            raise RuntimeError(
+                f"{command_output}\n[msprof parse error]\n{error}"
+            ) from error
 
 
-def run_candidate(script_dir: Path, candidate: Candidate, m: int, k: int, n: int) -> CandidateResult:
+def run_candidate(
+    script_dir: Path, candidate: Candidate, m: int, k: int, n: int
+) -> CandidateResult:
     # Each candidate executable is profiled against the same generated input so
     # the ranking compares kernel time under identical data and shape conditions.
     executable_path = resolve_executable(script_dir, candidate.executable_name)
     try:
-        profile_metrics = run_candidate_with_msprof(script_dir, executable_path, m, k, n)
+        profile_metrics = run_candidate_with_msprof(
+            script_dir, executable_path, m, k, n
+        )
         kernel_time_us = profile_metrics.kernel_time_us
         output = ""
         return_code = 0
@@ -307,7 +353,9 @@ def format_metric_cell(value: float) -> str:
     return f"{value:.3f}"
 
 
-def build_ascii_table(headers: List[str], rows: List[List[str]], right_aligned_columns: set[int]) -> List[str]:
+def build_ascii_table(
+    headers: List[str], rows: List[List[str]], right_aligned_columns: set[int]
+) -> List[str]:
     widths = []
     for column_index, header in enumerate(headers):
         column_values = [row[column_index] for row in rows]
@@ -333,18 +381,26 @@ def build_ascii_table(headers: List[str], rows: List[List[str]], right_aligned_c
 
 
 def print_profile_table(results: List[CandidateResult]) -> None:
-    headers = ["candidate"] + [display_name for _field_name, display_name, _column_name in PROFILE_METRIC_SPECS]
+    headers = ["candidate"] + [
+        display_name for _field_name, display_name, _column_name in PROFILE_METRIC_SPECS
+    ]
     rows = []
     for result in results:
         if result.profile_metrics is None:
-            raise ValueError(f"Profile metrics are missing for candidate {result.label}")
+            raise ValueError(
+                f"Profile metrics are missing for candidate {result.label}"
+            )
         metric_row = [result.label]
         for field_name, _display_name, _column_name in PROFILE_METRIC_SPECS:
-            metric_row.append(format_metric_cell(getattr(result.profile_metrics, field_name)))
+            metric_row.append(
+                format_metric_cell(getattr(result.profile_metrics, field_name))
+            )
         rows.append(metric_row)
 
     print("\n[Profile Breakdown]")
-    for line in build_ascii_table(headers, rows, right_aligned_columns=set(range(1, len(headers)))):
+    for line in build_ascii_table(
+        headers, rows, right_aligned_columns=set(range(1, len(headers)))
+    ):
         print(line)
 
 
@@ -353,7 +409,9 @@ def print_ranking(results: List[CandidateResult]) -> None:
     # printed list only contains compatible algorithms.
     ranked_results = sorted(
         [item for item in results if item.succeeded],
-        key=lambda item: item.kernel_time_us if item.kernel_time_us is not None else float("inf"),
+        key=lambda item: item.kernel_time_us
+        if item.kernel_time_us is not None
+        else float("inf"),
     )
 
     print("\n[Recommended Algorithm Ranking]")
