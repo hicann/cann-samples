@@ -53,7 +53,9 @@ def ensure_path_exists(path: Path, description: str) -> None:
         raise FileNotFoundError(f"{description} does not exist: {path}")
 
 
-def run_command(entry: dict[str, Any], phase: str, artifact_dir: Path | None) -> CommandResult:
+def run_command(
+    entry: dict[str, Any], phase: str, artifact_dir: Path | None
+) -> CommandResult:
     name = entry["name"]
     cmd = entry["cmd"]
     cwd = REPO_ROOT / entry["cwd"]
@@ -85,9 +87,15 @@ def run_command(entry: dict[str, Any], phase: str, artifact_dir: Path | None) ->
     if artifact_dir is not None:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         stem = f"{phase}__{name}"
-        (artifact_dir / f"{stem}.stdout.log").write_text(result.stdout, encoding="utf-8")
-        (artifact_dir / f"{stem}.stderr.log").write_text(result.stderr, encoding="utf-8")
-        (artifact_dir / f"{stem}.exit_code").write_text(f"{result.exit_code}\n", encoding="utf-8")
+        (artifact_dir / f"{stem}.stdout.log").write_text(
+            result.stdout, encoding="utf-8"
+        )
+        (artifact_dir / f"{stem}.stderr.log").write_text(
+            result.stderr, encoding="utf-8"
+        )
+        (artifact_dir / f"{stem}.exit_code").write_text(
+            f"{result.exit_code}\n", encoding="utf-8"
+        )
 
     return result
 
@@ -103,8 +111,44 @@ def check_contains(text: str, patterns: list[str], negate: bool) -> list[str]:
     return failures
 
 
-def evaluate_pass_criteria(sample: dict[str, Any], results: list[CommandResult]) -> list[str]:
-    failures: list[str] = []
+def validate_pass_criteria(criteria: Any) -> list[str]:
+    if not isinstance(criteria, dict):
+        return ["pass_criteria must be a mapping"]
+    supported = {
+        "exit_code",
+        "all_steps_exit_zero",
+        "stdout_contains",
+        "stdout_not_contains",
+        "final_stdout_contains",
+    }
+    unknown = set(criteria) - supported
+    if unknown:
+        return [f"unknown pass_criteria: {', '.join(sorted(map(str, unknown)))}"]
+    errors: list[str] = []
+    for key in ("stdout_contains", "stdout_not_contains", "final_stdout_contains"):
+        patterns = criteria.get(key, [])
+        if not isinstance(patterns, list) or any(
+            not isinstance(pattern, str) for pattern in patterns
+        ):
+            errors.append(f"pass_criteria.{key} must be a list of strings")
+    if "all_steps_exit_zero" in criteria and not isinstance(
+        criteria["all_steps_exit_zero"], bool
+    ):
+        errors.append("pass_criteria.all_steps_exit_zero must be a boolean")
+    if "exit_code" in criteria and (
+        not isinstance(criteria["exit_code"], int)
+        or isinstance(criteria["exit_code"], bool)
+    ):
+        errors.append("pass_criteria.exit_code must be an integer")
+    return errors
+
+
+def evaluate_pass_criteria(
+    sample: dict[str, Any], results: list[CommandResult]
+) -> list[str]:
+    failures = validate_pass_criteria(sample.get("pass_criteria", {}))
+    if failures:
+        return failures
     criteria = sample.get("pass_criteria", {})
     if not results:
         return ["no commands were executed"]
@@ -124,13 +168,27 @@ def evaluate_pass_criteria(sample: dict[str, Any], results: list[CommandResult])
                     f"{result.phase}:{result.name} exit code is {result.exit_code}, expected 0"
                 )
 
-    failures.extend(check_contains(final_result.stdout, criteria.get("stdout_contains", []), negate=False))
-    failures.extend(check_contains(final_result.stdout, criteria.get("stdout_not_contains", []), negate=True))
-    failures.extend(check_contains(final_result.stdout, criteria.get("final_stdout_contains", []), negate=False))
+    failures.extend(
+        check_contains(
+            final_result.stdout, criteria.get("stdout_contains", []), negate=False
+        )
+    )
+    failures.extend(
+        check_contains(
+            final_result.stdout, criteria.get("stdout_not_contains", []), negate=True
+        )
+    )
+    failures.extend(
+        check_contains(
+            final_result.stdout, criteria.get("final_stdout_contains", []), negate=False
+        )
+    )
     return failures
 
 
-def select_samples(manifest: dict[str, Any], sample_ids: set[str] | None) -> list[dict[str, Any]]:
+def select_samples(
+    manifest: dict[str, Any], sample_ids: set[str] | None
+) -> list[dict[str, Any]]:
     samples = manifest.get("samples", [])
     if sample_ids:
         available_ids = {sample["id"] for sample in samples}
@@ -138,12 +196,32 @@ def select_samples(manifest: dict[str, Any], sample_ids: set[str] | None) -> lis
         if unknown_ids:
             unknown = ", ".join(unknown_ids)
             raise ValueError(f"unknown sample id(s): {unknown}")
-    return [sample for sample in samples if not sample_ids or sample["id"] in sample_ids]
+    return [
+        sample for sample in samples if not sample_ids or sample["id"] in sample_ids
+    ]
 
 
 def run_sample(sample: dict[str, Any], artifact_root: Path | None) -> dict[str, Any]:
     sample_id = sample["id"]
-    sample_artifact_dir = artifact_root / sample_id if artifact_root is not None else None
+    steps = sample.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return {
+            "id": sample_id,
+            "status": "failed",
+            "errors": ["steps must be a non-empty list"],
+            "results": [],
+        }
+    criteria_errors = validate_pass_criteria(sample.get("pass_criteria", {}))
+    if criteria_errors:
+        return {
+            "id": sample_id,
+            "status": "failed",
+            "errors": criteria_errors,
+            "results": [],
+        }
+    sample_artifact_dir = (
+        artifact_root / sample_id if artifact_root is not None else None
+    )
 
     results: list[CommandResult] = []
     try:
@@ -151,7 +229,9 @@ def run_sample(sample: dict[str, Any], artifact_root: Path | None) -> dict[str, 
             result = run_command(entry, "setup", sample_artifact_dir)
             results.append(result)
             if result.exit_code != 0:
-                raise RuntimeError(f"setup:{result.name} failed with exit code {result.exit_code}")
+                raise RuntimeError(
+                    f"setup:{result.name} failed with exit code {result.exit_code}"
+                )
         for entry in sample.get("steps", []):
             results.append(run_command(entry, "step", sample_artifact_dir))
     except Exception as exc:
@@ -172,7 +252,9 @@ def run_sample(sample: dict[str, Any], artifact_root: Path | None) -> dict[str, 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run manifest-driven CI functional tests.")
+    parser = argparse.ArgumentParser(
+        description="Run manifest-driven CI functional tests."
+    )
     parser.add_argument(
         "--manifest",
         default="tests/ci_functional_test.yaml",
@@ -223,11 +305,18 @@ def main() -> int:
     if artifact_root is not None:
         summary_path = artifact_root / "summary.json"
         summary_path.write_text(
-            json.dumps({"manifest": args.manifest, "results": summary}, indent=2, ensure_ascii=False) + "\n",
+            json.dumps(
+                {"manifest": args.manifest, "results": summary},
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
             encoding="utf-8",
         )
 
-    print(f"Summary: {len(samples) - failed} passed, {failed} failed, {len(samples)} total")
+    print(
+        f"Summary: {len(samples) - failed} passed, {failed} failed, {len(samples)} total"
+    )
     return 1 if failed else 0
 
 
