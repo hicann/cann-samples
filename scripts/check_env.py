@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 import importlib
+import importlib.metadata
 import logging
 import os
 import re
@@ -67,32 +68,50 @@ def check_command(cmd_name, min_version=None, version_args=None):
         return True
     args = version_args or ["--version"]
     try:
-        result = subprocess.run([cmd_path] + args, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            [cmd_path] + args, capture_output=True, text=True, timeout=5
+        )
         version_text = result.stdout + result.stderr
         if result.returncode != 0:
-            _logger.warning(f"  {WARN} `{cmd_name}` version query exited with status "
-                            f"{result.returncode}; skipping version comparison")
+            _logger.warning(
+                f"  {WARN} `{cmd_name}` version query exited with status "
+                f"{result.returncode}; skipping version comparison"
+            )
             return True
     except subprocess.TimeoutExpired:
-        _logger.warning(f"  {WARN} `{cmd_name}` found at {cmd_path} but version query timed out")
+        _logger.warning(
+            f"  {WARN} `{cmd_name}` found at {cmd_path} but version query timed out"
+        )
         return True
     except Exception:
-        _logger.warning(f"  {WARN} `{cmd_name}` found at {cmd_path} but failed to query version")
+        _logger.warning(
+            f"  {WARN} `{cmd_name}` found at {cmd_path} but failed to query version"
+        )
         return True
+    return _check_command_version(cmd_name, cmd_path, min_version, version_text)
+
+
+def _check_command_version(cmd_name, cmd_path, min_version, version_text):
     version = _parse_version(version_text)
     min_ver = _parse_version(min_version)
     if version is None:
-        _logger.warning(f"  {WARN} `{cmd_name}` version could not be parsed from: "
-                        f"{version_text.strip()!r}; skipping version comparison")
+        _logger.warning(
+            f"  {WARN} `{cmd_name}` version could not be parsed from: "
+            f"{version_text.strip()!r}; skipping version comparison"
+        )
         return True
     if min_ver is None:
-        _logger.warning(f"  {WARN} `{cmd_name}` min_version {min_version!r} could not be parsed; "
-                        "skipping version comparison")
+        _logger.warning(
+            f"  {WARN} `{cmd_name}` min_version {min_version!r} could not be parsed; "
+            "skipping version comparison"
+        )
         return True
     version_str = ".".join(map(str, version))
     if _older_than(version, min_ver):
-        _logger.info(f"  {FAIL} `{cmd_name}` found at {cmd_path}  "
-                     f"(version: {version_str}, required >= {min_version})")
+        _logger.info(
+            f"  {FAIL} `{cmd_name}` found at {cmd_path}  "
+            f"(version: {version_str}, required >= {min_version})"
+        )
         return False
     _logger.info(f"  {PASS} `{cmd_name}` found at {cmd_path}  (version: {version_str})")
     return True
@@ -103,22 +122,30 @@ def check_cann_env():
     ascend_home = os.environ.get("ASCEND_HOME_PATH", "")
     if not ascend_home:
         _logger.info(f"  {FAIL} ASCEND_HOME_PATH is not set")
-        _logger.info(f"     -> Please run: source <install_path>/ascend-toolkit/set_env.sh")
+        _logger.info(
+            "     -> Please run: source <install_path>/ascend-toolkit/set_env.sh"
+        )
         return False
     _logger.info(f"  {PASS} ASCEND_HOME_PATH = {ascend_home}")
     set_env_sh = os.path.join(ascend_home, "set_env.sh")
     if not os.path.isfile(set_env_sh):
-        set_env_sh = os.path.join(os.path.dirname(ascend_home), "ascend-toolkit", "set_env.sh")
+        set_env_sh = os.path.join(
+            os.path.dirname(ascend_home), "ascend-toolkit", "set_env.sh"
+        )
     if os.path.isfile(set_env_sh):
         _logger.info(f"  {PASS} set_env.sh found at {set_env_sh}")
     else:
-        _logger.warning(f"  {WARN} ASCEND_HOME_PATH is set but set_env.sh not found at expected location")
+        _logger.warning(
+            f"  {WARN} ASCEND_HOME_PATH is set but set_env.sh not found at expected location"
+        )
     ld_library = os.environ.get("LD_LIBRARY_PATH", "")
     if "ascend" in ld_library.lower():
         _logger.info(f"  {PASS} LD_LIBRARY_PATH includes Ascend paths")
     else:
-        _logger.warning(f"  {WARN} LD_LIBRARY_PATH may not include Ascend libraries. "
-                        "Ensure set_env.sh has been sourced")
+        _logger.warning(
+            f"  {WARN} LD_LIBRARY_PATH may not include Ascend libraries. "
+            "Ensure set_env.sh has been sourced"
+        )
     return True
 
 
@@ -129,23 +156,38 @@ def check_python_deps():
     if not req_file.is_file():
         _logger.warning(f"  {WARN} requirements.txt not found at {req_file}")
         return False
-    missing = []
-    with open(req_file) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            pkg_name = line.split("==")[0].split(">=")[0].split("<=")[0].strip()
-            pkg_spec = line.strip()
-            try:
-                importlib.import_module(pkg_name.replace("-", "_"))
-            except ImportError:
-                missing.append(pkg_spec)
-    if missing:
-        _logger.info(f"  {FAIL} {len(missing)} package(s) missing: {', '.join(missing)}")
+    try:
+        from packaging.requirements import InvalidRequirement, Requirement
+        from packaging.version import InvalidVersion
+    except ImportError:
+        _logger.info(f"  {FAIL} `packaging` is required to check dependency versions")
         _logger.info(f"     -> Please run: pip3 install -r {req_file}")
         return False
-    _logger.info(f"  {PASS} All packages in requirements.txt can be imported")
+
+    unmet = []
+    for line in req_file.read_text(encoding="utf-8").splitlines():
+        line = line.partition(" #")[0].strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            requirement = Requirement(line)
+            if requirement.marker and not requirement.marker.evaluate():
+                continue
+            importlib.import_module(requirement.name.replace("-", "_"))
+            installed = importlib.metadata.version(requirement.name)
+            if requirement.specifier and installed not in requirement.specifier:
+                unmet.append(f"{line} (installed {installed})")
+        except (InvalidRequirement, ImportError, InvalidVersion):
+            unmet.append(line)
+    if unmet:
+        _logger.info(
+            f"  {FAIL} {len(unmet)} package requirement(s) unmet: {', '.join(unmet)}"
+        )
+        _logger.info(f"     -> Please run: pip3 install -r {req_file}")
+        return False
+    _logger.info(
+        f"  {PASS} All packages in requirements.txt are importable and satisfy version requirements"
+    )
     return True
 
 
@@ -164,7 +206,7 @@ def check_repo_deps():
                 has_missing = True
                 _logger.info(f"  {FAIL} third_party/{entry.name}/ exists but is empty")
     if has_missing:
-        _logger.info(f"     -> Please run: git submodule update --init --recursive")
+        _logger.info("     -> Please run: git submodule update --init --recursive")
         return False
     return True
 
@@ -174,8 +216,10 @@ def check_npu_runtime():
     npu_smi = _try_find_command("npu-smi")
     if npu_smi is None:
         _logger.warning(f"  {WARN} npu-smi not found. Cannot verify NPU devices.")
-        _logger.warning("     -> A runnable NPU is required to execute compiled samples, "
-                        "but not required for compilation")
+        _logger.warning(
+            "     -> A runnable NPU is required to execute compiled samples, "
+            "but not required for compilation"
+        )
         return True
     _logger.info(f"  {PASS} npu-smi found at {npu_smi}")
     _logger.info("     -> Run `npu-smi info` to check NPU device status")
@@ -202,7 +246,9 @@ def main():
     if ok:
         _logger.info(f"  {PASS} All checks passed. You are ready to build samples!")
     else:
-        _logger.info(f"  {FAIL} Some checks failed. Please fix the issues above before building.")
+        _logger.info(
+            f"  {FAIL} Some checks failed. Please fix the issues above before building."
+        )
     _logger.log(logging.INFO, "SEP")
     sys.exit(0 if ok else 1)
 
