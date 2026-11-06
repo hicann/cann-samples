@@ -150,7 +150,7 @@ inline bool WriteFile(const std::string &filePath, const void *buffer, size_t si
     return returnVal;
 }
 
-inline int32_t test_set_attr(int32_t my_pe, int32_t n_pes, uint64_t local_mem_size, const char *ip_port, aclshmemx_uniqueid_t default_flag_uid,
+inline int32_t test_set_attr(int32_t my_pe, int32_t n_pes, uint64_t local_mem_size, const char *ip_port,
                        aclshmemx_init_attr_t *attributes)
 {
     attributes->my_pe = my_pe;
@@ -168,11 +168,6 @@ inline int32_t test_set_attr(int32_t my_pe, int32_t n_pes, uint64_t local_mem_si
 
     attributes->local_mem_size = local_mem_size;
 
-    int attr_version = (1 << 16) + sizeof(aclshmemx_init_attr_t);
-    attributes->option_attr = {attr_version, ACLSHMEM_DATA_OP_MTE, DEFAULT_TIMEOUT, 
-                               DEFAULT_TIMEOUT, DEFAULT_TIMEOUT};
-
-    attributes->comm_args = reinterpret_cast<void *>(&default_flag_uid);
     return ACLSHMEM_SUCCESS;
 }
 
