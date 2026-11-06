@@ -15,17 +15,48 @@
 
 #pragma once
 #include <cstdio>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
 #define ERROR_LOG(fmt, args...) fprintf(stdout, "[ERROR]  " fmt "\n", ##args)
-#define CHECK_COND(cond, msg)                                                                                  \
-    do {                                                                                                       \
-        if (!(cond)) {                                                                                         \
-            throw std::runtime_error(                                                                          \
-                std::string("Error: ") + msg + "\nFile: " + __FILE__ + "\nLine: " + std::to_string(__LINE__)); \
-        }                                                                                                      \
+#define CHECK_COND(cond, msg) \
+    do { \
+        if (!(cond)) { \
+            throw std::runtime_error(std::string("Error: ") + msg + "\nFile: " + __FILE__ + \
+                                     "\nLine: " + std::to_string(__LINE__)); \
+        } \
     } while (0)
+
+inline int ParseTutorialDimension(const char* arg)
+{
+    const std::string value(arg);
+    if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos) {
+        throw std::invalid_argument("ERROR: m k n must be positive integers");
+    }
+    const int parsed = std::stoi(value);
+    if (parsed <= 0) {
+        throw std::invalid_argument("ERROR: m k n must be positive");
+    }
+    return parsed;
+}
+
+inline void ParseTutorialDimensions(int argc, char* argv[], int& m, int& k, int& n)
+{
+    if (argc != 4) {
+        throw std::invalid_argument("ERROR: Expected exactly three arguments: m k n");
+    }
+    m = ParseTutorialDimension(argv[1]);
+    k = ParseTutorialDimension(argv[2]);
+    n = ParseTutorialDimension(argv[3]);
+    if (k % 2 != 0) {
+        throw std::invalid_argument("ERROR: k must be an even number");
+    }
+    const int maxElements = std::numeric_limits<int>::max();
+    if (m > maxElements / k || n > maxElements / k || m > maxElements / n) {
+        throw std::invalid_argument("ERROR: Tensor element counts must not exceed INT_MAX");
+    }
+}
 
 template <typename T>
 inline T CeilDiv(T a, T b)
@@ -33,7 +64,7 @@ inline T CeilDiv(T a, T b)
     if (b == 0) {
         return a;
     }
-    return (a + b - 1) / b;
+    return a / b + static_cast<T>(a % b != 0);
 }
 
 template <typename T>
@@ -62,4 +93,3 @@ T GetSizeWithDataTypeFP4(T shape)
 {
     return (shape + 1) >> 1;
 }
-
