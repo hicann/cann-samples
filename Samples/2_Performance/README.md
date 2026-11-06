@@ -8,6 +8,9 @@
 ### [matmul_story](./matmul_story)
 矩阵乘性能优化专题，覆盖 MatMul 与量化 MatMul（如 MXFP4）两类实践，包含性能分析文档、可运行的 recipe 示例（A16W16、quant_matmul_mxfp4），以及按架构组织的分步教程 matmul_tutorials：arch35（dav-3510，MXFP4：baseline→SWAT→尾轮负载均衡→UnitFlag）与 arch22（dav-2201，纯 MatMul ：单核向量→Cube 多核→蛇形窗口→错位分核→低阶逐 tile 流水→4buf+错位）。
 
+### [matmul_leakyrelu_fusion_story](./matmul_leakyrelu_fusion_story)
+MatMul+LeakyReLU 融合算子性能优化专题（Ascend 910B4，`dav-2201`）：以 `y = leaky_relu(a @ b)` 为例，从单核向量实现出发，按"观测 → 定位瓶颈 → 优化 → 验证"逐轮推进，在 4096×4096×4096 下从 6214 ms 优化至 1.38 ms（约 99.6 TFLOPS）；覆盖从高级 API（Cube/mix）到低阶 API（Nd2Nz/LoadData/Mmad/Fixpipe）的手工流水、多级缓冲与 ASWT 窗口调度等优化手段，附融合与拆分实现的实测耗时对照、任意 shape 泛化支持，以及 fusion_tutorials/ 下 9 个分步可执行工程。
+
 ### [rms_norm_quant_story](./rms_norm_quant_story)
 以 Ascend 950PR/950DT 训练/推理系列产品为例，介绍 RmsNormQuant 算子的完整性能优化实践。包括多核并行与数据预加载、内存带宽优化、核内流水线排布、硬件特性适配等优化策略，从理论分析到代码实践的端到端调优指南。
 
